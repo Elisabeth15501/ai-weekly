@@ -1,6 +1,6 @@
 # AI Weekly 优化方案
 
-> 最后更新：2026-08-10 | 状态：工程债 P0/P1 已清零，X 系列跨框架兼容已落地
+> 最后更新：2026-08-10 | 状态：工程债 P0/P1 已清零，X 系列跨框架兼容已落地，Agent Plugins 1.0.0 已确认
 
 ---
 
@@ -74,6 +74,7 @@
 
 - **北极星**：为 AI 从业者提供情报，**定时稳定推送到飞书/钉钉**，让情报在"工作者已在用的地方"被消费
 - **四模块路线**：①内容层（结构化 `report.json`）→ ②分发层（飞书 Webhook + 钉钉）→ ③调度层（自动化周更）→ ④受众度量（UTM 打开率）
-- **短期（P1）**：补充 `plugin.json`（OpenAI Agent Plugins 兼容，5 分钟工作量）
+- **短期（P1）**：补充 `plugin.json`（OpenAI Agent Plugins 1.0.0 兼容，约 5 分钟工作量）——完成此项后 ai-weekly 将覆盖全部 9 种跨平台形态
 - **中期（P2）**：ClawHub 发布 + 飞书推送头条卡
-- **格式格局**：SKILL.md 已成为 Agent 技能事实标准，ai-weekly 已在最优赛道。详见 `docs/agent-skill-format-landscape.md`
+- **格式格局**：SKILL.md 已成为 Agent 技能事实标准——2026-08-06 OpenAI/Microsoft/Amazon/Cursor/Vercel 联合发布 Agent Plugins 1.0.0（`plugin.json` + `skills/SKILL.md` + `mcp.json`），六大客户端 day-1 支持（ChatGPT、Codex CLI、Cursor、GitHub Copilot、VS Code、Kiro/AWS）。加上原有的 OpenClaw（5700+ 技能，天禧AI/Lenovo 企业集成）、GitHub Copilot Skills、Coze——**SKILL.md 已是跨平台通用标准**，ai-weekly 已在最优赛道。详见 `docs/agent-skill-format-landscape.md`。
+- **跨框架兼容全景**（2026-08-10 核实）：AgentSkills ✅ · OpenClaw/ClawHub ✅ · 天禧AI ✅ · WorkBuddy ✅ · SkillHub ✅ · GitHub Copilot Skills ✅ · Coze ✅ · OpenAI Agent Plugins ⚠️（缺 plugin.json，5 分钟工作）· Dify/LangGraph（manifest.json 合规）

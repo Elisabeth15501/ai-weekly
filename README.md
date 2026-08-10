@@ -1,6 +1,6 @@
 # AI Weekly Report Skill
 
-> 生成**可搜索、可筛选、支持暗色模式**的 AI 行业新闻单文件 HTML 网站的 Agent 技能。核心引擎为纯 Python（11 模块），零 Agent SDK 依赖，产物为单文件 HTML——可被任意框架复用。
+> 生成**可搜索、可筛选、支持暗色模式**的 AI 行业新闻单文件 HTML 网站的 Agent 技能。核心引擎为纯 Python（10 模块），零 Agent SDK 依赖，产物为单文件 HTML——可被任意框架复用。SKILL.md 格式，兼容 AgentSkills / OpenClaw / Agent Plugins / Copilot / Coze / WorkBuddy 六大生态。
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-green.svg)](https://www.python.org/)
@@ -64,7 +64,7 @@ ai-weekly/
 │   ├── validate_report.py        # 产出校验（结构 / ISO8601 / 体量 / 看点 / 市场 / 合作守护）
 │   ├── deploy_report.py          # 部署辅助（提取摘要 + 框架无关通知文本）
 │   ├── accumulate_data.py        # 数据累积（可选遗留工具）
-│   └── aiweekly/                 # 内部 Python 包（11 模块）
+│   └── aiweekly/                 # 内部 Python 包（10 模块）
 │       ├── __init__.py           # 包入口 + 公开 API
 │       ├── news.py               # RSS 抓取 / 解析 / 分类 / 去重
 │       ├── leaderboard.py        # 排行榜合并 / 资料卡权威覆盖（P0#13）
@@ -94,7 +94,7 @@ ai-weekly/
 
 核心执行引擎**不依赖任何 Agent SDK**，产物为**单文件 HTML**——可被任意 Agent 框架当作普通脚本 + 普通文件复用。
 
-**SKILL.md 正在成为 Agent 技能的事实标准。** Anthropic 的 AgentSkills 规范已被 OpenClaw、Coze、OpenAI Agent Plugins 三方采纳，形成「一格式三生态」格局。ai-weekly 当前基于此格式，已处于最优赛道。
+**SKILL.md 已成为 Agent 技能的事实标准。** 2026-08-06，OpenAI/Microsoft/Amazon/Cursor/Vercel 联合发布 **Agent Plugins 1.0.0** 规范，以 `plugin.json` + `skills/SKILL.md` + `mcp.json` 统一打包，六大客户端（ChatGPT、Codex、Cursor、GitHub Copilot、VS Code、Kiro）day-1 支持。至此，Anthropic 首创的 SKILL.md 格式已被 **OpenClaw（5700+ 技能）、OpenAI Agent Plugins、GitHub Copilot、Coze** 四方生态采纳，形成跨平台通用标准。
 
 | 形态 / 市场 | 入口文件 | 格式依据 | 状态 |
 |---|---|---|---|
@@ -103,9 +103,10 @@ ai-weekly/
 | **SkillHub** | `SKILL.md`（根，同上） | AgentSkills + SemVer `version` + `displayName` | ✅ 合规 |
 | **OpenClaw / ClawHub** | `openclaw-edition/SKILL.md` | AgentSkills + `metadata.openclaw`（`emoji` / `requires` / 安装器） | ✅ 合规 |
 | **天禧AI（联想）** | 从 ClawHub 安装 | OpenClaw 兼容 → 完全兼容 | ✅ 兼容 |
+| **GitHub Copilot Skills** | `SKILL.md`（`.github/skills/` 或 `~/.copilot/skills/`） | AgentSkills SKILL.md 兼容（name + description） | ✅ 兼容（放入对应目录即可） |
 | **OpenAI Agent Plugins 1.0.0** | `plugin.json`← 待补 | `plugin.json` + `skills/SKILL.md` + `mcp.json` | ⚠️ 需补充 `plugin.json`（5 分钟工作量） |
 | **Coze（字节跳动）** | `SKILL.md`（根） | AgentSkills SKILL.md 兼容 | ✅ 兼容（可手动导入） |
-| **通用框架（LangGraph / Dify 等）** | `manifest.json` | `entry` / `args` / `deps` / `runtime` / `compatibility` | ✅ 合规 |
+| **通用框架（Dify / LangGraph 等）** | `manifest.json` | `entry` / `args` / `deps` / `runtime` / `compatibility` | ✅ 合规 |
 
 - **引擎层零耦合（可复核）**：以下 grep 应无任何命中：
   ```bash
@@ -116,7 +117,7 @@ ai-weekly/
 
 > **ClawHub 独立发布提示**：`openclaw-edition/SKILL.md` 通过 `../scripts/...` 引用父目录引擎。若 ClawHub / OpenClaw 仅安装该子目录，发布前请执行 `cp -r scripts openclaw-edition/scripts` 把引擎打进子目录，并将命令中的 `../scripts` 改为 `./scripts`。格式本身合规，此为打包 / 分发缺口。
 >
-> **OpenAI Agent Plugins 兼容（P1 建议）**：只需在项目根目录添加一个 `plugin.json` 指向 `skills/` 与 `mcp.json`（5 分钟工作量），ai-weekly 即可同时被 ChatGPT 和 Codex CLI 识别安装。详见 `docs/agent-skill-format-landscape.md`。
+> **OpenAI Agent Plugins 1.0.0**（2026-08-06 发布）：六大客户端 day-1 支持（ChatGPT、Codex CLI、Cursor、GitHub Copilot、VS Code、Kiro/AWS）。只需在项目根目录添加一个 `plugin.json` 指向 `skills/` 与 `mcp.json`（5 分钟工作量），ai-weekly 即可被全部六个客户端识别安装。详见 `docs/agent-skill-format-landscape.md`。
 
 ### 能力分级：核心（全框架通用）vs 框架增强（依赖具体环境）
 
