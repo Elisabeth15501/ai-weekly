@@ -66,7 +66,19 @@ ai-weekly/
   ```
 - **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行。
 - **产物框架无关**：`generate_site.py` 输出**单文件 HTML**（CSS/JS/Chart.js 全部内联），不依赖 WorkBuddy 运行时，可被任意 Agent 返回给用户或托管到静态站点。
-- **可选能力分级**：`--translate-en`（英文报道中文总结，依赖本机 Ollama）与 `deploy_report.py`（部署辅助）为**框架增强**能力，不影响核心抓取→生成→校验链路；核心链路 `fetch_ai_news.py → generate_site.py → validate_report.py` 全框架通用。
+
+### 能力分级：核心（全框架通用） vs 框架增强（依赖具体环境）
+
+| 类别 | 能力 | 触发 / 入口 | 依赖 |
+|---|---|---|---|
+| **核心** | RSS 新闻抓取 | `fetch_ai_news.py` | 仅 `feedparser` + 外网 |
+| **核心** | 单文件 HTML 生成（含排行榜 / 市场 / 看点） | `generate_site.py` | `requests` / `bs4` |
+| **核心** | 产出校验 | `validate_report.py` | 无 |
+| **框架增强** | 英文报道中文总结 | `generate_site.py --translate-en` | 本机 Ollama（`AIWEEKLY_OLLAMA_URL` + 模型） |
+| **框架增强** | 摘要提取 / 通知文本 | `deploy_report.py` | 无（纯文本拼装，推送由调用方做） |
+
+> **要点**：核心链路 `fetch_ai_news.py → generate_site.py → validate_report.py` **不依赖任何 Agent SDK**，任何框架（OpenClaw / LangGraph / Dify / Coze）直接调用即可。
+> `--translate-en` 与 `deploy_report.py` 属**框架增强**——没有 Ollama 或不做推送时跳过即可，不影响核心产出。这也是 `openclaw-edition/SKILL.md` 与根 `manifest.json` 的区分依据。
 
 ## 许可
 

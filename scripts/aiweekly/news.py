@@ -5,7 +5,7 @@ C0 内容归一化的核心实现。所有函数仅做归一/排序/标记，不
 import re
 from datetime import datetime
 
-from aiweekly.utils import _parse_date_arg
+from aiweekly.utils import _parse_date_arg, _parse_iso_datetime
 
 # ============ 内容编辑归一化（C0：摘要 / 信源 / 重要度）============
 # 目标：把 RSS 原始搬运水平提升为「编辑视角」——摘要压缩为事实句、信源归一短名、
@@ -185,12 +185,7 @@ def _score_news(items: list, report_date: str = None, top_n: int = MUSTREAD_TOP_
     """
     if not items:
         return items
-    rd = None
-    if report_date:
-        try:
-            rd = _parse_date_arg(report_date)
-        except Exception:
-            rd = None
+    rd = _parse_date_arg(report_date) if report_date else None
     if rd is None:
         rd = datetime.now()
 
@@ -202,16 +197,14 @@ def _score_news(items: list, report_date: str = None, top_n: int = MUSTREAD_TOP_
         rec = 0.5
         pub = it.get("publishedAt", "")
         if pub:
-            try:
-                pd = datetime.fromisoformat(pub.replace("Z", "+00:00"))
+            pd = _parse_iso_datetime(pub)
+            if pd is not None:
                 if pd.tzinfo is not None:
                     pd = pd.replace(tzinfo=None)
                 age_days = (rd - pd).total_seconds() / 86400.0
                 if age_days < 0:
                     age_days = 0
                 rec = max(0.2, 1.0 - age_days * 0.1)  # 24h 内=1.0，7天=0.4，更久→0.2
-            except Exception:
-                rec = 0.5
         s = auth * 0.5 + cat * 0.3 + rec * 0.2
         it["score"] = round(s, 3)
         scores.append(s)

@@ -926,6 +926,48 @@ def check_iso8601(source_dir: str) -> dict:
     return {"ok": ok, "warn": False, "problems": problems, "msg": msg}
 
 
+def check_module_size(source_dir: str, main_max: int = 500, mod_max: int = 800) -> dict:
+    """P0#4 守护：屎山防线——单文件行数硬上限，防止拆分后再次膨胀成巨石。
+
+    输入：
+        source_dir — scripts/ 目录；扫描其自身与 aiweekly/ 子包的 .py。
+        main_max   — `generate_site.py` 主入口上限（默认 500 行，P1#1 目标值）。
+        mod_max    — 引擎子模块上限（默认 800 行）。
+    输出：`{ok, warn, problems, msg, sizes}`；超限即 ok=False。
+    异常：不抛（读不到的文件直接跳过）。
+    示例：
+        >>> check_module_size("scripts")["ok"]                    # doctest: +SKIP
+        True
+
+    作用域：仅约束「生成引擎」——`generate_site.py` 主入口 + `aiweekly/` 子包。
+    顶层 dev/QA 脚本（validate_report.py / fetch_ai_news.py / deploy_report.py /
+    accumulate_data.py）是独立工具，仅记录行数、不参与 ≤800 上限判定。
+    """
+    # 顶层 dev/QA 脚本豁免（仅记录，不判定上限）
+    _EXEMPT = {"validate_report.py", "fetch_ai_news.py", "deploy_report.py", "accumulate_data.py"}
+    sizes, problems = {}, []
+    for f in _iter_source_files(source_dir):
+        if f.name.endswith((".bak", ".bak2")) or f.name == "__init__.py":
+            continue
+        try:
+            n = len(f.read_text(encoding="utf-8").splitlines())
+        except OSError:
+            continue
+        key = f"{f.parent.name}/{f.name}" if f.parent.name == "aiweekly" else f.name
+        sizes[key] = n
+        # 仅生成引擎（generate_site.py + aiweekly/*）参与上限判定
+        is_engine = (f.parent.name == "aiweekly") or (f.name == "generate_site.py")
+        limit = main_max if f.name == "generate_site.py" else mod_max
+        if is_engine and n > limit:
+            problems.append(f"{key}: {n} 行 > 上限 {limit}")
+    ok = not problems
+    biggest = max(sizes.items(), key=lambda kv: kv[1]) if sizes else ("-", 0)
+    msg = (f"模块体量达标（{len(sizes)} 个文件，最大 {biggest[0]}={biggest[1]} 行，"
+           f"主入口上限 {main_max} / 模块上限 {mod_max}）✅"
+           if ok else "；".join(problems[:4]))
+    return {"ok": ok, "warn": False, "problems": problems, "msg": msg, "sizes": sizes}
+
+
 def validate(html_path: Path, opts: dict = None) -> dict:
     opts = opts or {}
     min_news = opts.get("min_news", 20)
@@ -939,6 +981,7 @@ def validate(html_path: Path, opts: dict = None) -> dict:
     if src_dir:
         src_res["source_no_bare_except"] = check_no_bare_except(src_dir)
         src_res["source_iso8601"] = check_iso8601(src_dir)
+        src_res["source_module_size"] = check_module_size(src_dir)
 
     try:
         content = html_path.read_text(encoding="utf-8")
@@ -1059,6 +1102,7 @@ def print_report(results: dict) -> None:
             ("本周数字看板(C2#8)", results.get("weekly_dashboard", {})),
             ("无裸except(P0#19)", results.get("source_no_bare_except", {})),
             ("ISO8601日期(P0#19)", results.get("source_iso8601", {})),
+            ("模块体量(P0#4)", results.get("source_module_size", {})),
             ("数据来源", results.get("sources", {})),
         ]
     else:

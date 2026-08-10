@@ -1,10 +1,20 @@
 """aiweekly · AI 周报生成器内部包。
 
 设计原则：
-- 按职责垂直切分：utils（日期/网络/区域）/ translate（Ollama）/ news（抓取·归一·评分）
-  / market（市场数据·图表）/ leaderboard（多源榜）/ insights（看点·关键词·看板）。
+- 按职责垂直切分（P1#1 已全部落地，7 模块）：
+    types       — TypedDict 数据契约（NewsItem / LeaderboardRow / LeaderboardSlot）
+    utils       — 日期解析 / 网络 IO / 代理 / 区域探测 / 重试退避
+    translate   — 本地 Ollama 英文中译 + 健康探测
+    news        — 外部合并 / 信源归一 / 摘要压缩 / 语言判定 / 重要度评分
+    leaderboard — 多源榜抓取池 / 快照兜底 / 成本与档案富化 / 选型结论
+    market      — 市场规模与融资数据 / Chart.js 构建 / 本周信号 × 趋势洞察桥接
+    insights    — 看点卡 / 导语 / 关键词彩标 / 受众 chips（全部服务端预渲染）
 - 公开 API 通过包级 re-export 暴露；外部仍可用 `from generate_site import generate`（兼容垫层）。
+  体量较大的 leaderboard / market / insights 不在包级 re-export，按需
+  `from aiweekly.leaderboard import fetch_all_leaderboards` 或经 generate_site 垫层取用。
 - 模块内部私有函数以下划线前缀，模块级 `__all__` 显式声明对外接口。
+- 可测试性（P1#6）：`_http_get` / `_probe` / `_detect_region` / `_retry_fetch` /
+  `_ollama_translate` 均接受注入参数（opener / probe / sleeper / client），单测可脱网。
 
 变更请同步更新 AI_Weekly_Optimization_Plan.md 第十二章。
 """
@@ -25,6 +35,8 @@ from aiweekly.utils import (
 from aiweekly.translate import (
     _ollama_translate,
     translate_en_summaries,
+    ollama_health,
+    _ollama_base_url,
 )
 from aiweekly.news import (
     SUMMARY_MAX,
@@ -54,7 +66,7 @@ __all__ = [
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_date_arg", "_parse_snapshot_date",
     # translate
-    "_ollama_translate", "translate_en_summaries",
+    "_ollama_translate", "translate_en_summaries", "ollama_health", "_ollama_base_url",
     # news
     "SUMMARY_MAX", "SUMMARY_TARGET", "MUSTREAD_TOP_N", "LEADERBOARD_STALE_DAYS",
     "SOURCE_ALIASES", "SOURCE_AUTHORITY", "CATEGORY_WEIGHT",

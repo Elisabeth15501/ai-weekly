@@ -2,15 +2,16 @@
 """
 deploy_report.py
 
-将生成的 AI 周报 HTML 文件部署到云端，返回可分享的 URL。
-由 WorkBuddy Agent 在自动化任务中调用，也可以单独运行测试。
+从生成的 AI 周报 HTML 文件提取结构化摘要，并生成一段**框架无关**的通知文本，
+可被粘贴到任意 IM / 推送通道（飞书、钉钉、Email、OpenClaw 通知等）。
 
-依赖：WorkBuddy 内置的 workbuddy_cloudstudio_deploy 工具（由 Agent 调用，本脚本不直接调用）
+本脚本只做"提取 + 文本拼装"，**不依赖任何 Agent SDK / 云端部署工具**——
+具体的推送（Webhook / 云部署）由调用方决定，从而保持跨框架可移植。
 
 本脚本负责：
   1. 读取 HTML 报告文件
   2. 提取报告摘要（前3条新闻标题 + KPI 数据）
-  3. 输出摘要 JSON，供 Agent 在通知用户时使用
+  3. 输出摘要 JSON + 框架无关的通知文本
 
 用法：
   python deploy_report.py --html AI_Weekly_Report_2026_W27.html
@@ -113,10 +114,25 @@ def extract_summary(html_path: Path) -> dict:
     }
 
 
-def generate_workbuddy_notification(summary: dict) -> str:
-    """生成 WorkBuddy 通知消息文本。"""
+def generate_notification(summary: dict, platform: str = "generic") -> str:
+    """生成框架无关的通知消息文本。
+
+    不绑定任何 Agent / IM 平台；输出纯文本，调用方可自行包裹为
+    飞书卡片 / 钉钉 Markdown / Email / OpenClaw 通知等格式。
+
+    参数:
+        summary: extract_summary() 的返回值（含 week_label / kpi_summary / top_news / report_file）
+        platform: 仅用于可选前缀文案（"generic" | "workbuddy" | "feishu" | "dingtalk" ...），不影响正文结构
+    返回:
+        多行纯文本通知体
+    """
+    title_prefix = {
+        "workbuddy": "📊 AI行业周报",
+        "feishu": "📊 AI 行业周报",
+        "dingtalk": "📊 AI 行业周报",
+    }.get(platform, "📊 AI 行业周报")
     lines = [
-        f"📊 AI行业周报 · {summary['week_label']}",
+        f"{title_prefix} · {summary['week_label']}",
         "",
         "本周核心数据：",
     ]
@@ -130,6 +146,14 @@ def generate_workbuddy_notification(summary: dict) -> str:
     lines.append("")
     lines.append(f"完整报告：{summary['report_file']}")
     return "\n".join(lines)
+
+
+def generate_workbuddy_notification(summary: dict) -> str:
+    """[已弃用别名] 请改用 generate_notification(summary, platform="workbuddy")。
+
+    保留仅为向后兼容旧调用方；新代码统一用 generate_notification。
+    """
+    return generate_notification(summary, platform="workbuddy")
 
 
 def main():
@@ -148,7 +172,7 @@ def main():
     print(f"📖 正在读取报告：{html_path.name}")
 
     summary = extract_summary(html_path)
-    notification = generate_workbuddy_notification(summary)
+    notification = generate_notification(summary, platform="generic")
 
     # 输出摘要 JSON
     out_path = Path(args.output) if args.output else html_path.with_suffix(".summary.json")
@@ -158,8 +182,8 @@ def main():
     )
     print(f"✅ 摘要已保存：{out_path}")
 
-    # 输出通知文本
-    print("\n📱 WorkBuddy 通知内容：")
+    # 输出通知文本（框架无关，可粘贴至任意 IM / 推送通道）
+    print("\n📱 通知内容（可粘贴至任意 IM / 推送通道）：")
     print("─" * 40)
     print(notification)
     print("─" * 40)

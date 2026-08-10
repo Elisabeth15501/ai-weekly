@@ -18,3 +18,7 @@ audience_summary.json
 audience_summary.txt
 cn_leaderboard_snapshot.json
 keyword_search_sources.json
+
+# Python 字节码缓存（构建产物，绝不入库）
+__pycache__/
+*.pyc

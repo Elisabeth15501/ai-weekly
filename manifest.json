@@ -1,0 +1,58 @@
+{
+  "name": "ai-weekly",
+  "version": "3.0.0",
+  "displayName": "AI Weekly Report",
+  "description": "生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）",
+  "entry": "scripts/generate_site.py",
+  "args": [
+    "--api-json",
+    "--insights-json",
+    "--date",
+    "--output",
+    "--data-snapshot",
+    "--external-news-json",
+    "--market-data",
+    "--funding-data",
+    "--translate-en",
+    "--no-live-ranking",
+    "--health-check"
+  ],
+  "deps": [
+    "feedparser",
+    "requests",
+    "beautifulsoup4"
+  ],
+  "runtime": "python3 >= 3.10",
+  "output": {
+    "type": "single-file-html",
+    "description": "所有 CSS/JS/Chart.js 内联，无外部依赖，可被任意 Agent 返回或托管"
+  },
+  "optional": {
+    "ollama_translate": {
+      "env": "AIWEEKLY_OLLAMA_URL",
+      "default": "http://localhost:11434/api/generate",
+      "args": ["--translate-en"],
+      "requires": "本地 Ollama + 模型（如 qwen2.5:7b）"
+    },
+    "cloud_deploy": {
+      "script": "scripts/deploy_report.py",
+      "args": ["--html"],
+      "note": "仅提取摘要 + 框架无关通知文本，实际推送由调用方实现"
+    }
+  },
+  "subcommands": {
+    "fetch": {
+      "entry": "scripts/fetch_ai_news.py",
+      "args": ["--output", "--week"]
+    },
+    "validate": {
+      "entry": "scripts/validate_report.py",
+      "args": ["--html", "--source-dir"]
+    }
+  },
+  "compatibility": {
+    "workbuddy": "SKILL.md（仓库根，WorkBuddy 原生 frontmatter）",
+    "openclaw": "openclaw-edition/SKILL.md（OpenClaw 格式 metadata.openclaw）",
+    "generic": "本 manifest.json（LangGraph / Dify / Coze 等框架的最小接口描述）"
+  }
+}

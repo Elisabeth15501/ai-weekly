@@ -1,5 +1,12 @@
 ---
 name: ai-weekly
+slug: ai-weekly
+version: 3.0.0
+displayName: AI Weekly Report
+summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
+tags: [ai, news, report, rss, weekly, 人工智能, 周报]
+homepage: https://github.com/Elisabeth15501/ai-weekly
+license: MIT
 description: >
   AI 行业新闻网站生成工具。生成一个可搜索、可筛选、支持暗色模式的 AI 新闻网站（单文件 HTML）。
   新闻默认全部来自 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，自治无单点依赖）；技能**不内置任何第三方商业 API**。
