@@ -1189,7 +1189,7 @@ function renderCards(items) {
         <div class="card-summary${isEnCn ? ' no-clamp' : ''}">${summaryHtml}</div>
         ${enOrigHtml}
         <div class="card-meta">
-          <a class="card-source" href="${n.url}" target="_blank" rel="noopener"
+          <a class="card-source" href="${escapeHtml(safeUrl(n.url))}" target="_blank" rel="noopener"
              onclick="event.stopPropagation()">
             ${escapeHtml(n.source)} →
           </a>
@@ -1220,6 +1220,14 @@ function getCategoryLabel(cat) {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 仅放行 http(s)/mailto 协议，阻断 javascript:/data: 等危险协议（RSS/外部 URL 不可信）
+function safeUrl(u) {
+  if (!u) return '#';
+  const s = String(u).trim();
+  if (/^(https?:|mailto:)/i.test(s)) return s;
+  return '#';
 }
 
 // ===== Time formatting =====
@@ -1742,7 +1750,7 @@ function renderInsights() {
       : '';
     const related = (it.related && it.related.length)
       ? `<div class="insight-related">${it.related.map(r =>
-          `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)} →</a>`
+          `<a href="${escapeHtml(safeUrl(r.url))}" target="_blank" rel="noopener">${escapeHtml(r.title)} →</a>`
         ).join('')}</div>`
       : '';
     return `<article class="insight-card">

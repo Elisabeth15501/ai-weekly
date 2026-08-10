@@ -19,8 +19,7 @@ from aiweekly.news import (
 )
 from aiweekly.translate import translate_en_summaries
 from aiweekly.leaderboard import (
-    fetch_all_leaderboards, sync_model_profiles,
-    _apply_profile_as_truth, _leaderboard_freshness, DEFAULT_PROFILES,
+    _apply_profile_as_truth, _leaderboard_freshness,
 )
 from aiweekly.market import (
     build_charts, BASE_SOURCES,
@@ -40,6 +39,40 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 
 __all__ = ["generate", "TEMPLATE_PATH", "SKILL_DIR"]
+
+
+def _json_script_safe(obj) -> str:
+    """把对象序列化为可安全嵌入 <script> 的 JSON 字符串。
+
+    关键安全修复：RSS / 外部新闻内容是不可信输入，若其中含 ``</script>``，
+    Python 默认的 ``json.dumps`` 不会转义，会被 HTML 解析器识别为脚本块结束，
+    从而突破 <script> 上下文执行任意 JS（存储型 XSS）。这里把 < > & 转义为
+    Unicode 形式（\\u003c 等），既阻止 ``</script>`` 突破，又保证之后经
+    innerHTML + escapeHtml 渲染时按纯文本显示。
+    """
+    return (json.dumps(obj, ensure_ascii=False)
+            .replace("<", "\\u003c")
+            .replace(">", "\\u003e")
+            .replace("&", "\\u0026"))
+
+
+def _js_str(s: str) -> str:
+    """转义为 JS 字符串字面量（用于 ``const X = "[...]"`` 上下文）。"""
+    if not s:
+        return ""
+    return (s.replace("\\", "\\\\").replace('"', '\\"')
+             .replace("\n", "\\n").replace("\r", "\\r")
+             .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
+
+
+def _safe_url(u: str) -> str:
+    """仅放行 http(s)/mailto 协议的 URL，其余回退 '#'（防 javascript: 等危险协议）。"""
+    from urllib.parse import urlparse
+    try:
+        scheme = urlparse(u or "").scheme.lower()
+    except ValueError:
+        return "#"
+    return u if scheme in ("http", "https", "mailto") else "#"
 
 
 def generate(api_data: dict, ranking: list = None, output_path: str = None,
@@ -169,9 +202,9 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
 
     # 替换占位符
     template = template.replace("[NEWS_DATA_PLACEHOLDER]",
-                                json.dumps(news_items, ensure_ascii=False, indent=2))
+                                _json_script_safe(news_items))
     template = template.replace("[LEADERBOARD_DATA_PLACEHOLDER]",
-                                json.dumps(final_leaderboard, ensure_ascii=False))
+                                _json_script_safe(final_leaderboard))
     template = template.replace("[CHART_DATA_PLACEHOLDER]", chart_code)
 
     if not date_range:
@@ -203,17 +236,20 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
     template = template.replace("[DATA_SNAPSHOT]", data_snapshot)
 
     # 页脚数据来源：基础列表 + 用户自备的外部 API（仅当用户显式提供）
-    sources = list(BASE_SOURCES)
+    # 外部来源名/URL 由用户 CLI 提供，按不可信输入处理：转义 + 仅放行安全协议
+    sources = [(html.escape(n), _safe_url(u)) for n, u in BASE_SOURCES]
     news_extra = ""
     if external_source and external_source[0]:
         ext_name, ext_url = external_source[0], (external_source[1] or "")
-        if ext_url:
-            sources.append((ext_name, ext_url))
-            news_extra = f' 与 <a href="{ext_url}" target="_blank">{ext_name}</a>'
+        safe_url = _safe_url(ext_url) if ext_url else ""
+        ext_name_e = html.escape(ext_name)
+        if safe_url:
+            sources.append((ext_name_e, safe_url))
+            news_extra = f' 与 <a href="{html.escape(safe_url, quote=True)}" target="_blank" rel="noopener">{ext_name_e}</a>'
         else:
-            news_extra = f' 与 {ext_name}'
+            news_extra = f' 与 {ext_name_e}'
     all_sources_html = '、'.join(
-        f'<a href="{u}" target="_blank">{n}</a>' for n, u in sources
+        f'<a href="{html.escape(u, quote=True)}" target="_blank" rel="noopener">{n}</a>' for n, u in sources
     )
     template = template.replace("[ALL_SOURCES]", all_sources_html)
     template = template.replace("[NEWS_SOURCE_EXTRA]", news_extra)
@@ -251,20 +287,20 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
         if _kw:
             print(f"🏷️ 未传入有效关键词，已自动派生 {len(_kw)} 个带标签关键词")
     template = template.replace("[INSIGHTS_KEYWORDS_PLACEHOLDER]",
-                                json.dumps(_kw or [], ensure_ascii=False))
+                                _json_script_safe(_kw or []))
     template = template.replace("[INSIGHTS_DATA_PLACEHOLDER]",
-                                json.dumps(_insights or [], ensure_ascii=False))
+                                _json_script_safe(_insights or []))
     # C2#8：本周数字看板（JSON 注入，模板 JS 渲染；服务端兜底也写入静态 HTML）
     template = template.replace("[WEEKLY_STATS_PLACEHOLDER]",
-                                json.dumps(weekly_stats or {}, ensure_ascii=False))
-    template = template.replace("[LEAD]", _lead or "")
+                                _json_script_safe(weekly_stats or {}))
+    template = template.replace("[LEAD]", html.escape(_lead or ""))
     # 受众结论：未传入则回退内置默认三段（开发者/PM/自媒体），确保「给本周的你」始终出现
     template = template.replace("AUDIENCE_SUMMARY_PLACEHOLDER",
-                                json.dumps(audience_summary or _DEFAULT_AUDIENCE_SUMMARY, ensure_ascii=False))
+                                _json_script_safe(audience_summary or _DEFAULT_AUDIENCE_SUMMARY))
     template = template.replace("KEYWORD_SEARCH_SOURCES_PLACEHOLDER",
                                 keyword_search_sources or '{"baidu":"https://www.baidu.com/s?wd=","google":"https://www.google.com/search?q=","arxiv":"https://arxiv.org/search/?query="}')
     # 关键词网页搜索基址（默认百度；搜索词 = 「词语 AI 行业」）
-    template = template.replace("[KEYWORD_SEARCH_BASE]", keyword_search_base)
+    template = template.replace("[KEYWORD_SEARCH_BASE]", _js_str(keyword_search_base))
 
     # 服务端静态预渲染：把「给本周的你」受众卡 + 关键词（含分类标签）直接写进 HTML，
     # 即使客户端 JS 不执行/出错，这两块也一定出现在页面里（不再依赖 renderInsights）。
