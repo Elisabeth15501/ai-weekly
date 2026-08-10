@@ -89,7 +89,12 @@ def merge_external_news(base_items: list, external_items: list) -> list:
 
 
 def format_news_items(api_data: dict) -> list:
-    """将 API 数据格式化为 JS 数组需要的格式（含信源/摘要归一化）。"""
+    """将 API 数据格式化为 JS 数组需要的格式（含信源/摘要归一化）。
+
+    Args:
+        api_data: 抓取或外部 API 返回的 news 数据（{"items": [...]}）
+    返回: 归一化后的新闻列表（NewsItem 形态：含 lang / score / cn_summary 等编辑字段）。
+    """
     items = []
     for item in api_data.get("items", []):
         items.append({

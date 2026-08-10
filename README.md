@@ -56,6 +56,18 @@ ai-weekly/
 
 若希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，请**自行**获取数据并导出 JSON，以 `--external-news-json` 注入；页脚会自动署名。是否启用完全由你决定，并须遵守对应服务条款、自行承担合规风险。使用任何第三方 API 时请保留其署名与授权。
 
+## 兼容性（跨 Agent / 框架可移植性）
+
+> 核心执行引擎（`scripts/` 下的 Python 脚本）**不依赖任何 WorkBuddy SDK**，产物为**单文件 HTML**——可被任意 Agent 框架（OpenClaw / LangGraph / Dify / Coze 等）当作普通脚本 + 普通文件复用。跨框架复用的唯一障碍在"包装层"（`SKILL.md` frontmatter / 启动器路径 / 调度概念），详见 `AI_Weekly_Optimization_Plan.md` 第十三章。
+
+- **引擎层零耦合（可复核）**：以下 grep 应无任何命中：
+  ```bash
+  grep -rn "import workbuddy\|from workbuddy\|skill_executor" scripts/ || echo "零耦合 ✅"
+  ```
+- **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行。
+- **产物框架无关**：`generate_site.py` 输出**单文件 HTML**（CSS/JS/Chart.js 全部内联），不依赖 WorkBuddy 运行时，可被任意 Agent 返回给用户或托管到静态站点。
+- **可选能力分级**：`--translate-en`（英文报道中文总结，依赖本机 Ollama）与 `deploy_report.py`（部署辅助）为**框架增强**能力，不影响核心抓取→生成→校验链路；核心链路 `fetch_ai_news.py → generate_site.py → validate_report.py` 全框架通用。
+
 ## 许可
 
 [MIT](./LICENSE) © 2026 Elisabeth15501

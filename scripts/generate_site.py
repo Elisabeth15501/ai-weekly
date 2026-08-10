@@ -639,16 +639,18 @@ def _load_cn_snapshot() -> dict:
 
 
 def _leaderboard_freshness(leaderboard: dict, report_date) -> dict:
-    """计算排行榜各源快照距报告日的天数，判断是否需要「非本周抓取」告警。
+    """计算排行榜各源快照距报告日的时效，判断是否需要「非本周抓取」告警。
 
-    返回 dict：{max_age, stale, per_source: {key: age}, worst_source, worst_age}
+    返回 dict：{max_age, stale, per_source, per_source_age, worst_source, worst_age}
     - max_age: 所有源中最大天数（无快照则为 -1）
     - stale: 是否存在超龄（> LEADERBOARD_STALE_DAYS）源
+    - per_source: {key: ISO 8601 快照串 or None}（P1#21：语义明确、可对比、可排序）
+    - per_source_age: {key: 距报告日天数 or None}（兼容模板渲染，向前端提供现成天数差）
     """
     # report_date 可能是 str（CLI --date）或 datetime，统一解析为 datetime
     if isinstance(report_date, str):
         report_date = _parse_date_arg(report_date)
-    per_source = {}
+    per_source, per_source_age = {}, {}
     worst_key, worst_age = None, -1
     groups = [
         ("comprehensive.lmarena", leaderboard.get("comprehensive", {}).get("lmarena", {})),
@@ -661,17 +663,20 @@ def _leaderboard_freshness(leaderboard: dict, report_date) -> dict:
         d = _parse_snapshot_date(snap)
         if d is None:
             per_source[key] = None
+            per_source_age[key] = None
             continue
         age = (report_date.date() - d).days
-        per_source[key] = age
+        per_source[key] = str(snap).strip()  # P1#21：保留原始 ISO 8601 快照串
+        per_source_age[key] = age
         if age > worst_age:
             worst_key, worst_age = key, age
-    max_age = max((a for a in per_source.values() if a is not None), default=-1)
-    stale = any((a is not None and a > LEADERBOARD_STALE_DAYS) for a in per_source.values())
+    max_age = max((a for a in per_source_age.values() if a is not None), default=-1)
+    stale = any((a is not None and a > LEADERBOARD_STALE_DAYS) for a in per_source_age.values())
     return {
         "max_age": max_age,
         "stale": stale,
         "per_source": per_source,
+        "per_source_age": per_source_age,
         "worst_source": worst_key,
         "worst_age": worst_age if worst_age >= 0 else None,
     }
@@ -911,7 +916,7 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     proxy = _resolved_proxy()
     print(f"  🌐 网络环境判定：{detected}" + (f"（代理：{proxy}）" if proxy else ""))
 
-    snapshot = datetime.now().strftime("%Y-%m-%d")
+    snapshot = datetime.now().astimezone().strftime("%Y-%m-%d")
     cache = _load_cache()
     cn_snap = _load_cn_snapshot()
 
@@ -1827,6 +1832,7 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
     final_leaderboard["meta"]["snapshot_max_age"] = _lb_fresh["max_age"]
     final_leaderboard["meta"]["snapshot_stale"] = _lb_fresh["stale"]
     final_leaderboard["meta"]["snapshot_per_source"] = _lb_fresh["per_source"]
+    final_leaderboard["meta"]["snapshot_per_source_age"] = _lb_fresh["per_source_age"]
     if _lb_fresh["stale"]:
         print(f"  ⚠️ 排行榜快照时效告警：最新快照距本期 {_lb_fresh['worst_age']} 天"
               f"（阈值 {LEADERBOARD_STALE_DAYS} 天），部分榜单为「非本周抓取」——"
@@ -1864,7 +1870,7 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
 
     if not date_range:
         today = (_parse_date_arg(report_date) if report_date
-                 else datetime.now())
+                 else datetime.now().astimezone())
         week_ago = today - timedelta(days=7)
         date_range = f"{week_ago.year}/{week_ago.month}/{week_ago.day}–{today.month}/{today.day}"
     template = template.replace("[DATE_RANGE]", date_range)
@@ -1887,7 +1893,7 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
     # 市场数据快照日期（让读者明确这是静态快照而非实时数据）
     if not data_snapshot:
         data_snapshot = (_parse_date_arg(report_date).strftime("%Y-%m-%d")
-                         if report_date else datetime.now().strftime("%Y-%m-%d"))
+                         if report_date else datetime.now().astimezone().strftime("%Y-%m-%d"))
     template = template.replace("[DATA_SNAPSHOT]", data_snapshot)
 
     # 页脚数据来源：基础列表 + 用户自备的外部 API（仅当用户显式提供）
@@ -2636,12 +2642,64 @@ def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
     return base
 
 
+class _CountingWriter:
+    """P1#12：包装 stdout，统计本次运行的 ⚠️/❌ 出现次数（供 run.log 聚合）。"""
+
+    def __init__(self, stream):
+        self._stream = stream
+        self.warns = 0
+        self.errors = 0
+
+    def write(self, s: str) -> int:
+        self.warns += s.count("⚠️")
+        self.errors += s.count("❌")
+        return self._stream.write(s)
+
+    def flush(self):
+        return self._stream.flush()
+
+
+def _run_health_check(args):
+    """P1#13：CLI `--health-check` —— 只探测网络与榜源可达性，不抓取、不生成（CI/定时任务前置）。
+
+    注意：不做真实排行榜抓取（不可达源 + 指数退避会让检查卡数分钟），
+    一律用 `_probe`（6s 超时）探测 URL 可达性，秒级返回。
+    """
+    print("🧪 健康检查（只探测，不生成报告）", flush=True)
+    region = _detect_region()
+    print(f"  🌐 网络环境判定：{region}", flush=True)
+    probes = [
+        ("百度（国内哨兵）", "https://www.baidu.com"),
+        ("OpenCompass（国内榜源）", "https://rank.opencompass.org.cn/leaderboard-llm"),
+        ("LMArena（国外综合榜）", "https://lmarena.ai/leaderboard"),
+        ("Hugging Face（国外榜源）", "https://huggingface.co"),
+    ]
+    for name, url in probes:
+        ok = _probe(url, timeout=6)
+        print(f"  {'✅' if ok else '❌'} {name}: {'可达' if ok else '不可达'}", flush=True)
+    if not args.no_live_ranking:
+        for name, url in [
+            ("排行榜·LMArena", "https://lmarena.ai/leaderboard"),
+            ("排行榜·AA", "https://artificialanalysis.ai/"),
+            ("排行榜·LLM-Stats", "https://llm-stats.com/leaderboards/open-llm-leaderboard"),
+            ("排行榜·HuggingFace", "https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard"),
+        ]:
+            ok = _probe(url, timeout=6)
+            print(f"  {'✅' if ok else '❌'} {name}: {'可达' if ok else '不可达'}", flush=True)
+        print("  ℹ️ 生成时会按多源池自动回退快照/缓存，单项不可达不阻断。", flush=True)
+    else:
+        print("  ⏭️ 已跳过排行榜探测（--no-live-ranking）", flush=True)
+    print("🧪 健康检查结束。", flush=True)
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     parser = argparse.ArgumentParser(description="生成 AI 新闻网站 HTML")
+    _counter = _CountingWriter(sys.stdout)  # P1#12：聚合本次运行的 ⚠️/❌ 计数
+    sys.stdout = _counter
     parser.add_argument("--api-json", help="新闻 JSON 文件路径（RSS 抓取结果，AI HOT 兼容 schema）")
     parser.add_argument("--output", "-o", help="输出 HTML 文件路径")
     parser.add_argument("--dry-run", action="store_true", help="仅显示数据摘要，不生成")
@@ -2700,9 +2758,16 @@ def main():
     parser.add_argument("--keyword-search-sources",
                         default='{"baidu":"https://www.baidu.com/s?wd=","google":"https://www.google.com/search?q=","arxiv":"https://arxiv.org/search/?query="}',
                         help="可切换的搜索源 JSON {name:url}；默认百度/谷歌/ arXiv")
+    parser.add_argument("--health-check", action="store_true",
+                        help="只探测网络/榜源可达性，不生成报告（CI/定时任务前置探测）")
 
     args = parser.parse_args()
     _configure_proxy()  # 应用 HTTPS_PROXY / --proxy（含 SOCKS）到本次运行
+
+    # P1#13：健康检查子命令——只探测，不生成
+    if args.health_check:
+        _run_health_check(args)
+        return
 
     # 获取新闻数据（默认仅 RSS 自治抓取结果；不内置任何第三方 API）
     if args.api_json:
@@ -2871,6 +2936,18 @@ def main():
         leaderboard_data.get("open_source", {}).get("hf", {}).get("rows")))
     print(f"✅ 已生成 {output}（{len(html.encode('utf-8'))} bytes，{count} 条新闻，"
           f"双排行榜: {'已填充' if _lb_ok else '暂无实时数据'}）")
+
+    # P1#12：错误聚合报告——把本次运行的 ⚠️/❌ 计数写入 <output>.run.log（供无人值守复盘）
+    run_log = Path(output).with_suffix(".run.log")
+    run_log.write_text(
+        f"ai-weekly generate run @ {datetime.now().astimezone().isoformat(timespec='seconds')}\n"
+        f"output: {output}\n"
+        f"news: {count}\n"
+        f"warnings: {_counter.warns}\n"
+        f"errors: {_counter.errors}\n",
+        encoding="utf-8",
+    )
+    print(f"📝 运行日志已保存：{run_log}（warnings={_counter.warns} / errors={_counter.errors}）")
 
     # Chart.js 已内联进 HTML(见上方 [CHARTJS_LIB_PLACEHOLDER] 替换),无需附带外部 js 文件
 

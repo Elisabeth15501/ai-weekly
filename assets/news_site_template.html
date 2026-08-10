@@ -1472,7 +1472,7 @@ function renderRanking() {
     snapTxt += ' ｜ 网络环境：' + rlabel;
   }
   // C1#5：快照时效标注——超龄源显式标「非本周抓取」，并在区段顶部出告警横幅
-  const perSrc = meta.snapshot_per_source || {};
+  const perSrc = meta.snapshot_per_source_age || meta.snapshot_per_source || {};
   const staleKeys = Object.keys(perSrc).filter(k => perSrc[k] != null && perSrc[k] > 3);
   if (staleKeys.length) {
     const staleTxt = staleKeys.map(k => {
