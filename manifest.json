@@ -52,7 +52,9 @@
   },
   "compatibility": {
     "workbuddy": "SKILL.md（仓库根，WorkBuddy 原生 frontmatter）",
-    "openclaw": "openclaw-edition/SKILL.md（OpenClaw 格式 metadata.openclaw）",
+    "agent-plugins": "plugin.json（OpenAI Agent Plugins v1.0.0 规范，兼容 ChatGPT/Codex CLI）",
+    "claude": "skills/ai-weekly/SKILL.md（Anthropic AgentSkills 规范，兼容 Claude Code/Claude.ai）",
+    "openclaw": "openclaw-edition/SKILL.md（OpenClaw/ClawHub/天禧AI 兼容包装）",
     "generic": "本 manifest.json（LangGraph / Dify / Coze 等框架的最小接口描述）"
   }
 }

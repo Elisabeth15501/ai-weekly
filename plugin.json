@@ -1,0 +1,66 @@
+{
+  "name": "ai-weekly",
+  "version": "3.0.0",
+  "description": "Generates a self-contained, searchable, filterable, dark-mode-ready HTML website of the week's AI industry news. Aggregates from 14 RSS feeds, renders multi-source leaderboards with automatic fallback, and produces a single-file deliverable with inline CSS/JS/Chart.js — zero hardcoded third-party commercial APIs.",
+  "license": "MIT",
+  "homepage": "https://github.com/Elisabeth15501/ai-weekly",
+  "repository": "https://github.com/Elisabeth15501/ai-weekly",
+  "author": "Elisabeth15501",
+  "skills": "./skills/",
+  "mcpServers": {},
+  "interface": {
+    "displayName": "AI Weekly Report",
+    "category": "Productivity",
+    "capabilityLabels": ["News Aggregation", "Report Generation", "Data Visualization"],
+    "brandColor": "#10a37f",
+    "starterPrompts": [
+      "Generate this week's AI industry news report",
+      "Create an AI weekly newsletter with leaderboards",
+      "Pull the latest AI model rankings and news"
+    ]
+  },
+  "metadata": {
+    "agentPluginsVersion": "1.0.0",
+    "compatibility": {
+      "chatgpt": "Plugins directory (ChatGPT Work / Codex CLI)",
+      "codex": "Codex CLI /plugins browser",
+      "openclaw": "openclaw-edition/SKILL.md (OpenClaw / ClawHub / 天禧AI)",
+      "claude": "skills/ai-weekly/SKILL.md (Claude Code / Claude.ai AgentSkills)",
+      "workbuddy": "SKILL.md (WorkBuddy native frontmatter)",
+      "generic": "manifest.json (LangGraph / Dify / Coze minimal interface)"
+    },
+    "engine": {
+      "runtime": "python3 >= 3.10",
+      "entry": "scripts/generate_site.py",
+      "dependencies": ["feedparser", "requests", "beautifulsoup4"],
+      "optional": {
+        "ollama_translate": {
+          "env": "AIWEEKLY_OLLAMA_URL",
+          "default": "http://localhost:11434/api/generate",
+          "requires": "Local Ollama + model (e.g. qwen2.5:7b)"
+        }
+      }
+    },
+    "subcommands": {
+      "fetch": {
+        "description": "Fetch AI news from RSS feeds",
+        "entry": "scripts/fetch_ai_news.py",
+        "args": ["--output", "--week"]
+      },
+      "validate": {
+        "description": "Validate generated HTML report",
+        "entry": "scripts/validate_report.py",
+        "args": ["--html", "--source-dir"]
+      },
+      "deploy": {
+        "description": "Extract summary and notification text from generated report",
+        "entry": "scripts/deploy_report.py",
+        "args": ["--html"]
+      }
+    },
+    "healthCheck": {
+      "entry": "scripts/generate_site.py",
+      "args": ["--health-check"]
+    }
+  }
+}
