@@ -1905,7 +1905,7 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
     )
     template = template.replace("[ALL_SOURCES]", all_sources_html)
     template = template.replace("[NEWS_SOURCE_EXTRA]", news_extra)
-    template = template.replace("[GEN_DATE]", datetime.now().isoformat(timespec="minutes"))  # P0#16
+    template = template.replace("[GEN_DATE]", datetime.now().astimezone().isoformat(timespec="minutes"))  # P0#16
 
     # 在排行榜标题旁标注数据来源
     source_label = {
