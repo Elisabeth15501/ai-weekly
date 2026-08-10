@@ -4,6 +4,7 @@
 外部使用仍可通过 `from generate_site import _http_get`（兼容垫层）。
 """
 import os
+import random
 import ssl
 import time
 import urllib.error
@@ -111,31 +112,48 @@ def _detect_region() -> str:
     return "unknown"
 
 
-def _retry_fetch(fn, attempts: int = 2):
-    """简单重试：失败再试 1 次，仍失败返回 None（best-effort，不抛异常给上层）。"""
+def _retry_fetch(fn, attempts: int = 3, base: float = 1.0, cap: float = 30.0):
+    """指数退避 + 随机抖动重试（P0#10）：best-effort，不向上层抛异常。
+
+    - 第 i 次失败后等待 `min(cap, base * 2**i) + 随机抖动` 秒，避免与上游限流同步重试；
+    - 全部尝试失败返回 None，由调用方决定兜底（缓存快照 / 标注「暂无实时数据」）。
+    """
     last_err = None
     for i in range(attempts):
         try:
             return fn()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 通用重试包装，必须吞掉所有异常
             last_err = e
             if i < attempts - 1:
-                time.sleep(1.0)
+                sleep_s = min(cap, base * (2 ** i)) + random.uniform(0, 1.0)
+                time.sleep(sleep_s)
     print(f"  ⚠️ 重试 {attempts} 次后仍失败：{last_err}")
     return None
 
 
 def _parse_date_arg(token: str):
-    """'2026-08-02' -> datetime；用于 --date 固定报告周期（便于复现）。"""
+    """日期参数 -> datetime（P0#15/16：完整 ISO 8601 或 YYYY-MM-DD）。
+
+    用于 --date 固定报告周期（便于复现）。非法输入显式抛 ValueError，
+    不再把解析失败静默吞掉。
+    """
     from datetime import datetime as _dt
-    return _dt.strptime(token.strip(), "%Y-%m-%d")
+    s = str(token).strip()
+    try:
+        return _dt.fromisoformat(s.replace("Z", "+00:00"))  # 完整 ISO 8601（含时间 / Z）
+    except ValueError:
+        pass
+    try:
+        return _dt.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"无法解析 --date 参数（需 YYYY-MM-DD 或 ISO 8601）：{token!r}")
 
 
 def _parse_snapshot_date(snap: str):
-    """快照日期字符串 -> date；解析失败回退 None。
+    """快照日期字符串 -> date；解析失败回退 None（P0#17：已支持完整 ISO 8601）。
 
     返回 `datetime.date`（非 datetime）以兼容 `_leaderboard_freshness` 的
-    `report_date.date() - d` 算术。下次升级 ISO 8601 P0 时改返回 datetime 并同步下游。
+    `report_date.date() - d` 算术；改返回 datetime 需同步下游 `.date()` 调用。
     """
     if not snap:
         return None

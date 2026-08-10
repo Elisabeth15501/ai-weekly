@@ -44,6 +44,7 @@ generate_site.py v2.0
 """
 
 import argparse
+import logging
 import html
 import json
 import os
@@ -84,12 +85,19 @@ from aiweekly.news import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 
 
 # ── 已迁移到 aiweekly.{news,translate,utils} ──
 # 见本文件顶部 `from aiweekly.* import ...`；下方保留为本文件专属逻辑（榜单 / 市场 / 看点 / 生成）。
+# 注意：抓取层（fetch_*）的 `except Exception` 为**有意的 best-effort 容错**——
+# 单源失败必须不阻断整条管线（回退缓存 / 标注「暂无实时数据」），属 P0#8 允许的
+# 「保留并加合理性注释」情形；仅数据解析 / 文件读取处的异常已收窄为具体类型
+# （json.JSONDecodeError / OSError）。
 
 
 # ============ 大模型排行榜（双榜：综合榜 + 开源模型榜）============
@@ -1897,7 +1905,7 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
     )
     template = template.replace("[ALL_SOURCES]", all_sources_html)
     template = template.replace("[NEWS_SOURCE_EXTRA]", news_extra)
-    template = template.replace("[GEN_DATE]", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    template = template.replace("[GEN_DATE]", datetime.now().isoformat(timespec="minutes"))  # P0#16
 
     # 在排行榜标题旁标注数据来源
     source_label = {
@@ -2629,6 +2637,10 @@ def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(description="生成 AI 新闻网站 HTML")
     parser.add_argument("--api-json", help="新闻 JSON 文件路径（RSS 抓取结果，AI HOT 兼容 schema）")
     parser.add_argument("--output", "-o", help="输出 HTML 文件路径")
@@ -2737,7 +2749,7 @@ def main():
         try:
             leaderboard_data = json.loads(Path(args.ranking_json).read_text(encoding="utf-8"))
             print(f"  已加载自定义排行榜数据")
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:  # P0#8 收窄：仅数据/文件错误
             print(f"  ⚠️ 读取排行榜 JSON 失败：{e}")
     elif not args.no_live_ranking:
         print("🏆 抓取双排行榜（按网络环境自适应选择国内外源）...")
@@ -2751,7 +2763,7 @@ def main():
             aa = leaderboard_data["comprehensive"]["aa"]["rows"]
             hf = leaderboard_data["open_source"]["hf"]["rows"]
             print(f"  ✅ 综合榜左 {len(lm)} 条、综合榜右 {len(aa)} 条、开源榜 {len(hf)} 条")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  best-effort 抓取，失败回退缓存/暂无实时数据
             print(f"  ⚠️ 排行榜抓取异常：{e}（将显示「暂无实时数据」）")
 
     # 模型档案同步：自动加载 canonical 档案 + 合并传入的新档案 + 检测新上榜模型
@@ -2809,7 +2821,7 @@ def main():
     if args.audience_summary:
         try:
             audience_summary_data = json.loads(Path(args.audience_summary).read_text(encoding="utf-8"))
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:  # P0#8 收窄：仅数据/文件错误
             print(f"  ⚠️ 读取 audience-summary 失败：{e}")
 
     # 读取可切换搜索源（文件路径 -> JSON 字符串；默认内联百度/谷歌/arXiv）
@@ -2817,10 +2829,11 @@ def main():
     if args.keyword_search_sources and Path(args.keyword_search_sources).exists():
         try:
             search_sources_data = Path(args.keyword_search_sources).read_text(encoding="utf-8").strip()
-        except Exception as e:
+        except OSError as e:  # P0#8 收窄：仅文件读取错误
             print(f"  ⚠️ 读取 keyword-search-sources 失败：{e}")
 
     # 生成
+    logger.info("开始渲染 HTML（新闻数=%d）", count)
     output = args.output or f"AI_News_{datetime.now().strftime('%Y-%m-%d')}.html"
     html = generate(
         api_data, output_path=output,
@@ -2860,6 +2873,11 @@ def main():
           f"双排行榜: {'已填充' if _lb_ok else '暂无实时数据'}）")
 
     # Chart.js 已内联进 HTML(见上方 [CHARTJS_LIB_PLACEHOLDER] 替换),无需附带外部 js 文件
+
+
+__all__ = [
+    "main", "generate", "fetch_all_leaderboards",
+]
 
 
 if __name__ == "__main__":

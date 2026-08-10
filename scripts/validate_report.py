@@ -836,6 +836,96 @@ def check_weekly_dashboard(html_content: str) -> dict:
             "msg": f"数字看板完整：{total} 条 / 必读 Top{len(must)} / 资本&发布事件 {s['fund_events']} 起 / 在榜 {s['lb_models']} 个"}
 
 
+def _iter_source_files(source_dir: str):
+    """收集待扫描的 Python 源文件（含 aiweekly 子包）。"""
+    d = Path(source_dir)
+    files = list(d.glob("*.py"))
+    sub = d / "aiweekly"
+    if sub.is_dir():
+        files += list(sub.glob("*.py"))
+    return sorted(set(files))
+
+
+def check_no_bare_except(source_dir: str) -> dict:
+    """P0#19 守护：源码不得出现「裸 except:」（会捕获 KeyboardInterrupt/SystemExit）。
+
+    分级（与 generate_site.py 顶部注释一致）：
+    - 裸 `except:` → 硬失败（明确反模式）；
+    - `except Exception` 处理体含 print/log/raise/业务处理 → best-effort（允许，网络/解析层有意容错）；
+    - `except Exception: pass/return None` 且属 EAFP 默认回退（后续行有 return/try/赋值）
+      → best-effort（有意回退，如 load/parse 失败返回空/None）；
+    - 其余静默兜底 → 记录为 silent_warn（可能掩盖真实错误，超阈值告警）。
+    """
+    SILENT_CEILING = 20
+    errors, silent = [], []
+    best_effort = 0
+    cur_fn = ""
+    for f in _iter_source_files(source_dir):
+        lines = f.read_text(encoding="utf-8").splitlines()
+        cur_fn = ""
+        for i, ln in enumerate(lines):
+            s = ln.strip()
+            mdef = re.match(r'^(?:async\s+)?def\s+(\w+)', s)
+            if mdef:
+                cur_fn = mdef.group(1)
+            if not s.startswith("except"):
+                continue
+            is_bare = (s == "except:" or bool(re.match(r'^except\s*:\s*(#.*)?$', s)))
+            if is_bare:
+                errors.append(f"{f.name}:{i+1} 裸 except:（会捕获 BaseException，含 Ctrl-C）")
+                continue
+            if "Exception" not in s:
+                continue  # 收窄到具体类型的 except 不统计
+            nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            if any(k in nxt for k in ("print(", "logger.", "logging.", "warn", "raise ")):
+                best_effort += 1
+            elif nxt in ("return None", "return", "continue", "break"):
+                best_effort += 1  # EAFP 默认回退
+            elif nxt == "pass":
+                ahead = [lines[j].strip() for j in (i + 2, i + 3) if j < len(lines)]
+                if any(a.startswith(("return", "try", "except")) or "=" in a for a in ahead):
+                    best_effort += 1  # 解析链 / 默认回退（pass 后接 return/try/赋值）
+                else:
+                    silent.append(f"{f.name}:{i+1}({cur_fn}) 静默兜底 pass")
+            else:
+                best_effort += 1
+    ok = len(errors) == 0
+    warn = len(silent) > SILENT_CEILING
+    msg = (f"无裸 except ✅；best-effort 容错 {best_effort} 处，静默兜底 {len(silent)} 处"
+           if ok else
+           f"{len(errors)} 处裸 except 须修复：{'；'.join(e[:50] for e in errors[:3])}")
+    if warn:
+        msg += f" ⚠️ 静默兜底超阈值({SILENT_CEILING})"
+    return {"ok": ok, "warn": warn, "hard_errors": errors, "silent_fallbacks": silent,
+            "best_effort_count": best_effort, "msg": msg}
+
+
+def check_iso8601(source_dir: str) -> dict:
+    """P0#19 守护：注入 HTML 的时间戳须为 ISO 8601（isoformat），日期解析须支持 fromisoformat。
+
+    - 真实代码调用 .strftime(...) 注入时间戳 → 失败（应为 datetime.now().isoformat()）；
+      （用拼接构造正则，避免本函数源码中出现该连续字面量导致自匹配）
+    - `[GEN_DATE]` 占位符未接 isoformat → 失败；
+    - 定义 `_parse_date_arg` 的文件未含 fromisoformat → 失败（解析不支持 ISO 8601）。
+    """
+    # 拼接构造正则，避免本源码中出现该连续字面量导致自匹配
+    pat = r'\.' + "strftime" + r'\(\s*["\']%Y-%m-%d %H:%M["\']\s*\)'
+    problems = []
+    for f in _iter_source_files(source_dir):
+        src = f.read_text(encoding="utf-8")
+        if re.search(pat, src):
+            problems.append(f"{f.name}: 仍用 strftime('%Y-%m-%d %H:%M') 注入时间戳（应 isoformat）")
+        for ln in src.splitlines():
+            if "[GEN_DATE]" in ln and "isoformat" not in ln:
+                problems.append(f"{f.name}: [GEN_DATE] 未接 isoformat")
+        if "def _parse_date_arg" in src and "fromisoformat" not in src:
+            problems.append(f"{f.name}: _parse_date_arg 未支持 ISO 8601 fromisoformat")
+    ok = len(problems) == 0
+    msg = ("日期均符合 ISO 8601（GEN_DATE 用 isoformat，解析支持 fromisoformat）✅"
+           if ok else "；".join(problems[:4]))
+    return {"ok": ok, "warn": False, "problems": problems, "msg": msg}
+
+
 def validate(html_path: Path, opts: dict = None) -> dict:
     opts = opts or {}
     min_news = opts.get("min_news", 20)
@@ -843,7 +933,25 @@ def validate(html_path: Path, opts: dict = None) -> dict:
     min_ranking = opts.get("min_ranking", 5)
     strict = opts.get("strict", False)
 
-    content = html_path.read_text(encoding="utf-8")
+    # P0#19 源码静态守护：独立于 HTML，先执行（即使 HTML 缺失也能跑）
+    src_res = {}
+    src_dir = opts.get("source_dir")
+    if src_dir:
+        src_res["source_no_bare_except"] = check_no_bare_except(src_dir)
+        src_res["source_iso8601"] = check_iso8601(src_dir)
+
+    try:
+        content = html_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return {
+            "format": "未知（HTML 缺失）",
+            "file": {"ok": False, "warn": False, "msg": f"文件读取失败：{e}"},
+            "sources": {"ok": False, "warn": False, "msg": "未读取 HTML，跳过来源校验"},
+            **src_res,
+            "summary": {"passed": 0, "total": 0, "warned": 0,
+                        "score": "0/0", "ok": False},
+        }
+
     fmt = _detect_format(content)
 
     file_check = check_file_exists(html_path)
@@ -904,6 +1012,9 @@ def validate(html_path: Path, opts: dict = None) -> dict:
             "sources": sources_check,
         }
 
+    # P0#19 源码静态守护结果并入（已在函数开头计算，独立于 HTML）
+    results.update(src_res)
+
     # 计分：ok=硬门槛达标；warn=软警告(降级但可用)；strict 下 warn 也算不过
     check_items = [r for r in results.values()
                    if isinstance(r, dict) and isinstance(r.get("ok"), bool)]
@@ -928,8 +1039,8 @@ def print_report(results: dict) -> None:
 
     if "v3" in fmt:
         checks = [
-            ("文件完整性", results["file"]),
-            ("新闻条目 + 来源链接", results["news"]),
+            ("文件完整性", results.get("file", {})),
+            ("新闻条目 + 来源链接", results.get("news", {})),
             ("搜索/筛选功能", results["search"]),
             ("市场图表", None),
             ("模型排行榜", results["ranking"]),
@@ -946,14 +1057,16 @@ def print_report(results: dict) -> None:
             ("关键词可筛选(C2)", results.get("keyword_filter", {})),
             ("关键词自动聚类(C2#7)", results.get("keyword_clustering", {})),
             ("本周数字看板(C2#8)", results.get("weekly_dashboard", {})),
-            ("数据来源", results["sources"]),
+            ("无裸except(P0#19)", results.get("source_no_bare_except", {})),
+            ("ISO8601日期(P0#19)", results.get("source_iso8601", {})),
+            ("数据来源", results.get("sources", {})),
         ]
     else:
         checks = [
-            ("文件完整性", results["file"]),
+            ("文件完整性", results.get("file", {})),
             ("KPI 数据", results.get("kpi", {})),
-            ("新闻条目", results["news"]),
-            ("数据来源", results["sources"]),
+            ("新闻条目", results.get("news", {})),
+            ("数据来源", results.get("sources", {})),
             ("图表数据", None),
         ]
 
@@ -988,6 +1101,8 @@ def main():
     parser.add_argument("--min-coverage", type=float, default=80, help="来源链接覆盖率下限(默认 80)")
     parser.add_argument("--min-ranking", type=int, default=5, help="每榜最少模型数(默认 5)")
     parser.add_argument("--strict", action="store_true", help="警告项也视为不通过")
+    parser.add_argument("--source-dir", default=str(Path(__file__).resolve().parent),
+                        help="源码目录（P0#19 静态守护扫描，默认本脚本所在 scripts/）")
     args = parser.parse_args()
 
     opts = {
@@ -995,6 +1110,7 @@ def main():
         "min_cov": args.min_coverage,
         "min_ranking": args.min_ranking,
         "strict": args.strict,
+        "source_dir": args.source_dir,
     }
     html_path = Path(args.html)
     results = validate(html_path, opts)
