@@ -56,7 +56,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 import concurrent.futures
 try:
@@ -104,9 +104,8 @@ TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 # ── P1#1 Phase 2/3：榜单 / 市场 / 看点 / 渲染 已抽到 aiweekly 子包 ──
 # L3 重构：移除 60+ 名称的 re-export 脆耦合，改为显式模块别名访问。
 # 历史上为兼容 `from generate_site import X` 的调用点保留 re-export；经全仓检索已无任何
-# 外部调用，故调用点统一带模块前缀（LB./MK./INS.），可读性与可维护性更好。
+# 外部调用，故调用点统一带模块前缀（LB./INS.），可读性与可维护性更好。
 import aiweekly.leaderboard as LB
-import aiweekly.market as MK
 import aiweekly.insights as INS
 
 from aiweekly.render import generate  # P1#1 Phase 3：渲染层已抽出

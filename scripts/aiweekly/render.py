@@ -75,7 +75,7 @@ def _safe_url(u: str) -> str:
     return u if scheme in ("http", "https", "mailto") else "#"
 
 
-def generate(api_data: dict, ranking: list = None, output_path: str = None,
+def generate(api_data: dict, output_path: str = None,
              date_range: str = None, ranking_source: str = "unavailable",
              market_data: list = None, market_labels: list = None,
              funding_data: list = None, funding_labels: list = None,
@@ -83,7 +83,6 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
              cn_market_data: list = None, cn_market_labels: list = None,
              cn_funding_data: list = None, cn_funding_labels: list = None,
              cn_market_source: str = None, cn_funding_source: str = None,
-             ranking_criteria: str = None,
              external_source: tuple = None,
              insights: list = None, lead: str = None,
              keywords: list = None,
@@ -102,7 +101,6 @@ def generate(api_data: dict, ranking: list = None, output_path: str = None,
 
     Args:
         api_data: 新闻 JSON（RSS 兼容格式，含 items[]）
-        ranking: 排行榜数据列表；None 表示无实时数据（显示"暂无排名数据"）
         output_path: 输出文件路径
         date_range: 日期范围标签
         ranking_source: 排行榜来源标签（live/json/default/unavailable）

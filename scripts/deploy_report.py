@@ -148,14 +148,6 @@ def generate_notification(summary: dict, platform: str = "generic") -> str:
     return "\n".join(lines)
 
 
-def generate_workbuddy_notification(summary: dict) -> str:
-    """[已弃用别名] 请改用 generate_notification(summary, platform="workbuddy")。
-
-    保留仅为向后兼容旧调用方；新代码统一用 generate_notification。
-    """
-    return generate_notification(summary, platform="workbuddy")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="提取 AI 周报摘要，生成通知消息体"

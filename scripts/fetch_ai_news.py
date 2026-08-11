@@ -121,15 +121,6 @@ def load_env_file() -> None:
             os.environ[key] = value
 
 
-def get_proxies() -> dict | None:
-    """从环境变量或 .env 读取代理（feedparser/urllib 通过环境变量生效）。"""
-    proxy = (os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
-             or os.environ.get("https_proxy") or os.environ.get("http_proxy"))
-    if proxy:
-        return {"http": proxy, "https": proxy}
-    return None
-
-
 # ── 工具函数 ─────────────────────────────────────────────────────
 def get_week_range(week_str: str | None = None) -> tuple[str, str, str]:
     """计算周范围（ISO 8601 周一为起点）。返回 (week_label, start, end)。"""

@@ -75,27 +75,27 @@ my-plugin/
 
 ## 四、ai-weekly 兼容策略建议
 
-### 当前状态
-ai-weekly 已完整支持 AgentSkills 规范：
-- ✅ SKILL.md（YAML frontmatter + markdown 正文）
-- ✅ scripts/ 目录（Python 脚本）
-- ✅ references/ 目录（数据文件）
-- ✅ 兼容 OpenClaw / Claude Code / WorkBuddy
+### 当前状态（2026-08-11 更新）
+ai-weekly 已 consolidated 为**单一跨平台 `SKILL.md`**（开放 Agent Skill 规范），作为唯一入口：
+- ✅ 根 `SKILL.md`（YAML frontmatter + markdown 正文，跨平台通用）
+- ✅ `scripts/` 目录（Python 引擎）+ `references/` 目录（数据/结构参考）
+- ✅ `manifest.json`（框架级引擎接口描述，供 LangGraph / Dify / Coze 调用）
+- ✅ 直接兼容 Claude Code / OpenAI Codex / OpenCode / OpenClaw（ClawHub）/ Coze / WorkBuddy —— 放入对应技能目录即可加载
+- ❌ 已移除以前的 per-agent 包装：`plugin.json`（Agent Plugins）、`skills/ai-weekly/SKILL.md`（AgentSkills 副本）、`openclaw-edition/`（ClawHub 独立包）——遵循本文核心结论「SKILL.md 即事实标准，单一源即可通吃」
 
-### 低成本兼容路径（按优先级）
+> **决策说明**：早期曾按本调研的 P1/P2 加过 `plugin.json` 与 ClawHub 独立包，但最终选择 neat-freak 式「单一跨平台 `SKILL.md`」路线——少维护、零分叉、靠开放规范直接通吃各 Agent，不再为单个市场维护专属副本。
 
-| 优先级 | 目标格式 | 工作量 | 覆盖平台 |
-|---|---|---|---|
-| P0（已完成） | AgentSkills SKILL.md | 0 | Claude Code, OpenClaw, 天禧AI, WorkBuddy |
-| P1（建议） | OpenAI Agent Plugins | 加 `plugin.json` | ChatGPT, Codex CLI |
-| P2（建议） | ClawHub 发布 | 上传现有包 | OpenClaw 全部用户（5700+ 技能生态） |
-| P3（可选） | Coze 技能商店 | 同上 + 可能的平台适配 | Coze 用户 |
+### 兼容路径（单一源）
+
+| 平台 | 入口 | 覆盖 |
+|---|---|---|
+| Claude Code / OpenAI Codex / OpenCode / OpenClaw / Coze / WorkBuddy / GitHub Copilot | 根 `SKILL.md` | 全部上述生态（放入对应技能目录即加载） |
+| LangGraph / Dify / 通用框架 | `manifest.json` | 引擎接口描述，直接调用脚本 |
 
 ### 具体行动
 
-1. **创建 `plugin.json`**（5 分钟）：在项目根目录添加符合 OpenAI Agent Plugins v1.0.0 规范的清单文件
-2. **注册 ClawHub**：将 ai-weekly 发布到 `clawhub.ai`，扩大分发
-3. **不做的**：Cursor Rules (.mdc)、Dify DSL、Gemini Gems —— 范式不同，投入产出比低
+- **单源维护**：只维护根 `SKILL.md` + `manifest.json`，不引入任何 per-agent 副本或 `plugin.json`。
+- **不做的**：Cursor Rules (.mdc)、Dify DSL、Gemini Gems、OpenAI Agent Plugins `plugin.json` —— 范式不同或属冗余包装，投入产出比低。
 
 ---
 

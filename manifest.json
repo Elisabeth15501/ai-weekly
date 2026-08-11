@@ -1,6 +1,6 @@
 {
   "name": "ai-weekly",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "displayName": "AI Weekly Report",
   "description": "生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）",
   "entry": "scripts/generate_site.py",
@@ -51,10 +51,12 @@
     }
   },
   "compatibility": {
-    "workbuddy": "SKILL.md（仓库根，WorkBuddy 原生 frontmatter）",
-    "agent-plugins": "plugin.json（OpenAI Agent Plugins v1.0.0 规范，兼容 ChatGPT/Codex CLI）",
-    "claude": "skills/ai-weekly/SKILL.md（Anthropic AgentSkills 规范，兼容 Claude Code/Claude.ai）",
-    "openclaw": "openclaw-edition/SKILL.md（OpenClaw/ClawHub/天禧AI 兼容包装）",
+    "claude-code": "SKILL.md（开放 Agent Skill 规范，Claude Code / Claude.ai 原生读取）",
+    "codex": "SKILL.md（OpenAI Codex CLI 直接读取）",
+    "opencode": "SKILL.md（OpenCode 原生）",
+    "openclaw": "SKILL.md（OpenClaw / ClawHub / 天禧AI 直接读取）",
+    "coze": "SKILL.md（Coze 技能包，SKILL.md 格式兼容）",
+    "workbuddy": "SKILL.md（WorkBuddy 原生 frontmatter）",
     "generic": "本 manifest.json（LangGraph / Dify / Coze 等框架的最小接口描述）"
   }
 }

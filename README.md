@@ -1,11 +1,11 @@
 # AI Weekly Report Skill
 
-> 生成**可搜索、可筛选、支持暗色模式**的 AI 行业新闻单文件 HTML 网站的 Agent 技能。核心引擎为纯 Python（11 模块），零 Agent SDK 依赖，产物为单文件 HTML——可被任意框架复用。SKILL.md 格式，兼容 AgentSkills / OpenClaw / Agent Plugins / ChatGPT / Claude / Copilot / Coze / WorkBuddy 全平台生态。
+> 生成**可搜索、可筛选、支持暗色模式**的 AI 行业新闻单文件 HTML 网站的 Agent 技能。核心引擎为纯 Python（11 模块），零 Agent SDK 依赖，产物为单文件 HTML——可被任意框架复用。**单一跨平台 `SKILL.md`**（开放 Agent Skill 规范），Claude Code / OpenAI Codex / OpenCode / OpenClaw / Coze / WorkBuddy 通用，无需任何平台专属包装。
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-green.svg)](https://www.python.org/)
 [![AgentSkills](https://img.shields.io/badge/spec-AgentSkills-8A2BE2)](https://github.com/anthropics/skills)
-[![OpenAI Agent Plugins](https://img.shields.io/badge/spec-Agent%20Plugins%201.0.0-10a37f)](https://developers.openai.com/apps-sdk)
+[![Cross-Platform](https://img.shields.io/badge/platform-Claude%20Code%20%7C%20Codex%20%7C%20OpenClaw%20%7C%20Coze%20%7C%20WorkBuddy-10a37f)](./SKILL.md)
 
 ---
 
@@ -49,13 +49,7 @@ bash run_report.sh scripts/validate_report.py --html AI_News.html
 
 ```
 ai-weekly/
-├── plugin.json                   # OpenAI Agent Plugins v1.0.0 清单（ChatGPT / Codex CLI / Cursor / Copilot / VS Code / Kiro 六大客户端 day-1）
-├── SKILL.md                      # 技能定义（WorkBuddy / SkillHub 入口，AgentSkills 扩展格式）
-├── skills/
-│   └── ai-weekly/
-│       └── SKILL.md              # Anthropic AgentSkills 规范标准格式（Claude Code / Claude.ai / Coze / 通用 AgentSkills）
-├── openclaw-edition/
-│   └── SKILL.md                  # OpenClaw / ClawHub / 天禧AI 包装版（含 metadata.openclaw 门控 + 安装器提示）
+├── SKILL.md                      # 单一跨平台入口（开放 Agent Skill 规范；Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy 通用）
 ├── manifest.json                 # 通用框架接口描述（LangGraph / Dify / Coze 等）
 ├── run_report.sh                 # 统一启动器（自动探测 Python + venv，CLI 参数透传）
 ├── requirements.txt              # Python 依赖（仅 3 个：feedparser / requests / beautifulsoup4）
@@ -82,8 +76,7 @@ ai-weekly/
 ├── assets/
 │   └── news_site_template.html   # 单文件 HTML 模板（含内联 Chart.js + safeUrl 守卫）
 ├── tools/                        # 独立辅助工具（不进入主生成流程）
-│   ├── accumulate_data.py        # 历史数据累积器（WoW/YoY 环比，可选工具）
-│   └── build_openclaw_bundle.sh   # 把核心引擎同步进 openclaw-edition/，生成独立 ClawHub 包
+│   └── accumulate_data.py        # 历史数据累积器（WoY/YoY 环比，可选工具）
 ├── references/                   # 数据源与报告结构参考文档
 ├── docs/
 │   └── agent-skill-format-landscape.md  # Agent 技能格式格局调研报告
@@ -100,21 +93,18 @@ ai-weekly/
 
 核心执行引擎**不依赖任何 Agent SDK**，产物为**单文件 HTML**——可被任意 Agent 框架当作普通脚本 + 普通文件复用。
 
-**SKILL.md 已成为 Agent 技能的事实标准。** 2026-08-06，OpenAI/Microsoft/Amazon/Cursor/Vercel 联合发布 **Agent Plugins 1.0.0** 规范，以 `plugin.json` + `skills/SKILL.md` + `mcp.json` 统一打包，六大客户端（ChatGPT、Codex、Cursor、GitHub Copilot、VS Code、Kiro）day-1 支持。至此，Anthropic 首创的 SKILL.md 格式已被 **OpenClaw（5700+ 技能）、OpenAI Agent Plugins、GitHub Copilot、Coze** 四方生态采纳，形成跨平台通用标准。
+**单一跨平台 `SKILL.md` 即全部入口。** 本技能遵循 Anthropic 首创、已被 OpenClaw / Coze / OpenAI Codex 等广泛采纳的开放 `SKILL.md` 规范。把技能目录放入支持该规范的任意 Agent 即可加载，无需 `plugin.json` 或任何 per-agent 副本。
 
-| 形态 / 市场 | 入口文件 | 格式依据 | 状态 |
-|---|---|---|---|
-| **AgentSkills（Claude Code / Claude.ai）** | `SKILL.md`（根） | Anthropic AgentSkills 规范 | ✅ 合规 |
-| **WorkBuddy** | `SKILL.md`（根） | AgentSkills 扩展（`slug` / `displayName` / `version`） | ✅ 合规 |
-| **SkillHub** | `SKILL.md`（根，同上） | AgentSkills + SemVer `version` + `displayName` | ✅ 合规 |
-| **OpenClaw / ClawHub** | `openclaw-edition/SKILL.md` | AgentSkills + `metadata.openclaw`（`emoji` / `requires` / 安装器） | ✅ 合规 |
-| **天禧AI（联想）** | 从 ClawHub 安装 | OpenClaw 兼容 → 完全兼容 | ✅ 兼容 |
-| **GitHub Copilot Skills** | `SKILL.md`（`.github/skills/` 或 `~/.copilot/skills/`） | AgentSkills SKILL.md 兼容（name + description） | ✅ 兼容（放入对应目录即可） |
-| **OpenAI Agent Plugins 1.0.0** | `plugin.json`（根） | `plugin.json` + `skills/SKILL.md` + `mcp.json` | ✅ 合规（2026-08-10 已补） |
-| **ChatGPT Plugins / Codex CLI** | `plugin.json`（同上） | Agent Plugins 1.0.0 → 内置插件目录识别 | ✅ 兼容 |
-| **Cursor / VS Code / GitHub Copilot / Kiro** | `plugin.json`（同上） | Agent Plugins 1.0.0 day-1 支持 | ✅ 兼容 |
-| **Coze（字节跳动）** | `SKILL.md`（根） | AgentSkills SKILL.md 兼容 | ✅ 兼容（可手动导入） |
-| **通用框架（Dify / LangGraph 等）** | `manifest.json` | `entry` / `args` / `deps` / `runtime` / `compatibility` | ✅ 合规 |
+| 形态 / 平台 | 入口文件 | 状态 |
+|---|---|---|
+| **Claude Code / Claude.ai** | `SKILL.md`（根） | ✅ 原生读取 |
+| **OpenAI Codex CLI** | `SKILL.md`（根） | ✅ 直接读取 |
+| **OpenCode** | `SKILL.md`（根） | ✅ 原生 |
+| **OpenClaw / ClawHub / 天禧AI** | `SKILL.md`（根） | ✅ 直接读取 |
+| **Coze（字节跳动）** | `SKILL.md`（根） | ✅ 兼容（可手动导入） |
+| **GitHub Copilot Skills** | `SKILL.md`（`.github/skills/` 或 `~/.copilot/skills/`） | ✅ 兼容（放入对应目录即可） |
+| **WorkBuddy** | `SKILL.md`（根） | ✅ 原生 frontmatter |
+| **通用框架（Dify / LangGraph 等）** | `manifest.json` | ✅ 引擎接口描述 |
 
 - **引擎层零耦合（可复核）**：以下 grep 应无任何命中：
   ```bash
@@ -122,10 +112,6 @@ ai-weekly/
   ```
 - **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行
 - **产物框架无关**：`generate_site.py` 输出**单文件 HTML**（CSS/JS/Chart.js 全部内联），不依赖任何 Agent 运行时，可被任意 Agent 返回给用户或托管到静态站点
-
-> **ClawHub 独立发布提示**：`openclaw-edition/` 即自包含技能包。发布到 ClawHub / OpenClaw 时，先运行仓库根的 `bash tools/build_openclaw_bundle.sh`，它会把核心引擎（`scripts/`）、模板（`assets/`）、依赖清单与数据文件同步进 `openclaw-edition/`，使其无需父目录即可独立安装；SKILL.md 命令默认 `./scripts` 即指向包内引擎副本。同步产物已被 `.gitignore` 排除，不污染主仓库。
->
-> **OpenAI Agent Plugins 1.0.0**（2026-08-06 发布）：六大客户端 day-1 支持（ChatGPT、Codex CLI、Cursor、GitHub Copilot、VS Code、Kiro/AWS）。`plugin.json` 已于 2026-08-10 补全，`skills/ai-weekly/SKILL.md` 采用 Anthropic AgentSkills 规范标准格式——ai-weekly 现可直接被全部六个客户端识别安装。
 
 ### 能力分级：核心（全框架通用）vs 框架增强（依赖具体环境）
 

@@ -1,12 +1,13 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.0.0
+version: 3.1.0
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
 homepage: https://github.com/Elisabeth15501/ai-weekly
 license: MIT
+compatibility: Claude Code, OpenAI Codex, OpenCode, OpenClaw, Coze, WorkBuddy
 description: >
   AI 行业新闻网站生成工具。生成一个可搜索、可筛选、支持暗色模式的 AI 新闻网站（单文件 HTML）。
   新闻默认全部来自 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，自治无单点依赖）；技能**不内置任何第三方商业 API**。
@@ -14,59 +15,70 @@ description: >
   --external-news-json 注入，是否启用完全由用户决定。每条新闻含原始来源链接。
   市场/融资图表数据由 WebSearch 获取后注入，未提供时明确标注「示例/估算」。
   触发词：AI周报、AI行业周报、AI新闻、weekly AI report、人工智能周报、AI行业动态、
-  生成AI报告、AI新闻网站、AI新闻站。
-  支持自动化：每周六上午9点自动生成最新版网站。
+  生成AI报告、AI新闻网站、AI新闻站。支持自动化：每周六上午 9 点自动生成最新版网站。
+metadata:
+  author: Elisabeth15501
+  version: "3.1.0"
+  homepage: https://github.com/Elisabeth15501/ai-weekly
+  tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
 
-# AI Weekly Report Skill v3.0
+# AI Weekly Report Skill
+
+> **Cross-platform Agent Skill** — Claude Code · OpenAI Codex · OpenCode · OpenClaw · Coze · WorkBuddy 通用。
+> 跨平台 `SKILL.md`，遵循开放 Agent Skill 规范（Anthropic AgentSkills / OpenClaw / Coze 共用的 `SKILL.md` 标准）。
+> 单一入口、单一真相源：本文件即为技能的全部说明，无需任何平台专属包装。
 
 生成一个**可搜索、可筛选、响应式**的 AI 行业新闻网站（单文件 HTML）。
 每条新闻附带原始报道链接，支持按分类 / 关键词筛选，桌面端和移动端均可使用。
 
-## 核心设计理念
+## 一、为什么这件事重要
 
-- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），不内置任何第三方商业 API；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担
+在 AI 协作工作流里，行业情报往往散落在十几个 RSS、公众号和付费简报里，且**大量"AI 周报"内容是模型生成的空话摘要**。
+本技能的价值是把分散信号聚合成**可溯源、有编辑判断、可交叉验证**的单文件情报页，并让它在任意支持 `SKILL.md` 的 Agent 里都能跑——
+不绑定任何商业 API、不依赖特定 Agent SDK，输出就是一份能被托管、被转发、被检索的静态 HTML。
+
+## 二、核心设计理念
+
+- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`scripts/fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），不内置任何第三方商业 API；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担
 - **单文件交付**：所有 CSS/JS 内联，Chart.js 也内联进 HTML，无需任何外部文件
 - **高可信度**：每条新闻必须附带原始报道 URL
 - **零脑补**：市场/融资图表数据必须由 Agent 从 WebSearch 获取真实值后注入；未提供时明确标注「示例/估算数据」，绝不编造模型榜单
 - **零运维**：生成后直接可用的静态 HTML
+- **跨平台单源**：本 `SKILL.md` 同时服务 Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy；引擎接口另见 `manifest.json`（LangGraph / Dify / Coze 等框架的最小接口描述）
 
----
-
-## 一、不要做（硬规则）
+## 三、不要做（硬规则）
 
 1. **不要凭训练数据脑补数字**——所有市场数据、融资金额必须有可追溯来源
 2. **不要丢掉新闻的 source URL**——每条新闻卡片必须包含可点击的原始链接
 3. **不要用 "this week" / "最近" 搜索**——搜索关键词强制带年份 + 月份
-4. **不要把旧闻当本周新闻**——检查发布日期，早于7天前的内容标注 `[n天前]`
+4. **不要把旧闻当本周新闻**——检查发布日期，早于 7 天前的内容标注 `[n天前]`
 5. **图表数据必须来自真实搜索**——市场规模/融资额由 WebSearch 获取后通过 `--market-data` / `--funding-data` 注入；**未提供时图表必须标注「示例/估算数据」**，不得伪装成实时数据
 6. **不要让新闻卡片没有来源**——每张卡片底部必须有来源名称 + 链接
 7. **不要省略任何章节**——某类别无数据时标注"暂无数据"但不删除章节
-8. **不要编造模型榜单**——LMMarketCap 抓取失败时显示「暂无实时数据」，绝不用训练数据虚构模型名
+8. **不要编造模型榜单**——排行榜抓取失败时显示「暂无实时数据」，绝不用训练数据虚构模型名
 
----
-
-## 二、数据获取路由表
+## 四、数据获取路由表
 
 | 数据类型 | 获取方式 | 优先级 |
 |---------|---------|--------|
-| 新闻列表 | `fetch_ai_news.py`（RSS：国内 量子位/36氪/机器之心/智东西/极客公园/InfoQ 中国/钛媒体 + 国外 TechCrunch/MIT TR/HF Blog/TechMeme/MIT News/VentureBeat/Google AI；国内源优先，国外源全挂也有中文地板） | **主** |
+| 新闻列表 | `scripts/fetch_ai_news.py`（RSS：国内 量子位/36氪/机器之心/智东西/极客公园/InfoQ 中国/钛媒体 + 国外 TechCrunch/MIT TR/HF Blog/TechMeme/MIT News/VentureBeat/Google AI；国内源优先，国外源全挂也有中文地板） | **主** |
 | 模型发布 | RSS（HF Blog / 关键词分类） | 主 |
 | 产品发布 | RSS（关键词分类） | 主 |
 | 行业动态 | RSS + WebSearch（政策/融资补充） | 主 |
 | 学术论文 | RSS（arXiv/MIT News 类源）+ WebSearch | 主 |
-| 市场数据（规模/采用率/份额） | **WebSearch → Statista / Gartner / IDC**，结果通过 `--market-data` 注入 | 主（需搜索） |
-| 融资并购金额 | **WebSearch → Crunchbase / 烯牛数据 / IT桔子**，结果通过 `--funding-data` 注入 | 主（需搜索） |
+| 市场数据（规模/采用率/份额） | **WebSearch → Statista / Gartner / IDC**，结果通过 `--market-data` / `--cn-market-data` 注入 | 主（需搜索） |
+| 融资并购金额 | **WebSearch → Crunchbase / 烯牛数据 / IT桔子**，结果通过 `--funding-data` / `--cn-funding-data` 注入 | 主（需搜索） |
 | 模型排行榜 | **网络环境自适应多源池**（国外源 LMArena/Artificial Analysis/Hugging Face + 国内源 OpenCompass 司南/SuperCLUE/ModelScope）；按运行环境（国内/国外）自动排序优先级，实时源全失败则回退国内快照或本地缓存，绝不空白 | 主 |
 | 政策监管 | RSS + WebSearch | 主 |
 | **外部 API 增强（可选）** | 用户自备 AI 行业知识类 API（如 AI HOT）导出 JSON，以 `--external-news-json` 注入，页脚自动署名；是否启用由用户决定 | 可选增强 |
 
-> **依赖说明**：`fetch_ai_news.py` 需要 `feedparser`、`requests`、`beautifulsoup4`（已随技能提供 `requirements.txt`）。
+> **依赖说明**：`scripts/fetch_ai_news.py` 需要 `feedparser`、`requests`、`beautifulsoup4`（随技能提供 `requirements.txt`）。
 > 运行：一律用仓库根目录的 `bash run_report.sh scripts/xxx.py ...` 启动，启动器会自动探测并复用 `aiweekly` 受管 venv；若 venv 缺失，按提示 `python -m venv` + `pip install -r requirements.txt` 即可。
 > 若这些包不可用，可手动用 WebSearch 搜集新闻后写成同样结构的 JSON，再走 `--api-json` 消费；
 > 也可用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入——**注意：使用任何第三方 API 须遵守其服务条款，并自行承担合规风险**。
 
-## 三、轻量模式与完整模式
+## 五、轻量模式与完整模式
 
 根据用户意图选择模式：
 
@@ -76,9 +88,7 @@ description: >
 | 默认（无特别说明） | **完整** | 生成完整新闻网站 HTML |
 | "生成报告" / "生成网站" / "周报" | **完整** | 生成完整新闻网站 HTML |
 
----
-
-## 四、工作流（完整模式）
+## 六、工作流（完整模式）
 
 ### 1. 确定时间范围
 
@@ -95,7 +105,7 @@ bash run_report.sh scripts/fetch_ai_news.py --output news.json
 分类已由脚本完成（`ai-models` / `ai-products` / `industry` / `paper` / `tip`）。
 
 **降级**：若 RSS 抓取不可用（缺依赖/无网络），可手动用 WebSearch 搜集后写成同样结构的 JSON，
-再走 `--api-json` 消费；或用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入。
+再走 `--api-json` 消费；也可用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入。
 
 ### 3. 补充市场/融资数据（必需搜索，结果注入图表）
 
@@ -115,15 +125,89 @@ bash run_report.sh scripts/fetch_ai_news.py --output news.json
 **新闻网站必须包含：**
 - 顶部搜索栏（实时过滤）
 - 分类标签栏（全部 / 模型 / 产品 / 行业 / 论文 / 技巧）
-- **「本周看点」编辑洞察区（头版导语，必做）**——见下方步骤 4.1
+- **「本周看点」编辑洞察区（头版导语，必做）**——见下方第七节
 - 新闻卡片网格（响应式：3列 → 2列 → 1列）
 - 每张卡片：类别色块缩略图、标题、摘要（2行截断）、来源名 + 原始链接、发布时间
-- 市场数据区（2 个 Chart.js 图表：市场规模 + 融资趋势）
+- 市场数据区（2×2 四个 Chart.js 图表：全球/中国市场规模 + 全球/中国融资趋势）
 - 模型排行榜区（表格式 Top 10，标注数据来源与排名标准）
 - 暗色模式切换按钮
 - 页脚：数据来源说明
 
-#### 4.1 撰写「本周看点」（编辑洞察 + 关键词，头版导语）
+```bash
+bash run_report.sh scripts/generate_site.py --api-json news.json \
+  --ranking-json ranking.json --profiles-json model_profiles.json \
+  --insights-json insights.json --lead "本周主线：……" \
+  -o AI_News_YYYY-MM-DD.html
+```
+
+> **推荐（强）**：尽量每次都传 `--insights-json` 与 `--lead`，这是头版核心、产品力所在。若**漏传**，`generate_site.py` 会自动从本周新闻派生基线「本周看点」（标题+摘要+分类+原文链接），**整段不再静默消失**——但自动版只是摘要级，缺少人工「编辑洞察」深度，故仍建议撰写 curated 版本覆盖。
+
+> **「本周看点」三块内容的必现保证（无需任何参数）**：
+> | 内容块 | 兜底机制 | 相关函数 |
+> |--------|---------|---------|
+> | 看点卡片 | 无 `--insights-json` 时从本周新闻按信号词打分派生 Top6 | `_auto_insights()` / `_auto_lead()` |
+> | 「给本周的你」三张受众卡 | 无 `audience_summary` 时用内置三段文案 | `_DEFAULT_AUDIENCE_SUMMARY` |
+> | 关键词的彩色分类标签 | 缺 `tag` 自动推断分类；完全无关键词时从新闻派生带标签关键词 | `_normalize_keywords()` / `_auto_keywords()` / `_infer_tag()` |
+>
+> 这三块均在**生成阶段服务端预渲染进静态 HTML**（`_render_audience_chips_html()` / `_render_keyword_chips_html()`），JS 只负责后续交互切换。因此**即使浏览器禁用 JS 或脚本报错，这些内容依然可见**——不会再出现「区块静默消失」。
+>
+> ⚠️ **排错提醒**：若重新生成后仍看不到某块内容，先确认 ① 输出路径是否就是你打开的那个文件（不要输出到 `-fixed`/`-static` 之类旁路文件名）；② 浏览器是否硬刷新（Ctrl/Shift+R）。用 `grep -c 'class="kw-tag"'` 判断**不可靠**——CSS 里有同名类定义，恒返回 ≥1；应改查 `grep -o 'class="kw-tag"[^>]*>[^<]*'` 看实际渲染内容。
+
+### 5. 质量检查
+
+生成后运行验证：
+
+```bash
+bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
+```
+
+校验器检查新闻卡片、排行榜章节、市场图表、洞察与关键词；并内置 XSS 守护（脚本上下文 JSON 无原始 `</script>`、全文无 `javascript:`/`data:` href）。
+
+### 6. 交付
+
+- 文件名：`AI_News_YYYY-MM-DD.html`（如 `AI_News_2026-07-09.html`）
+- 调用 `present_files` 展示
+- 总结核心发现（3-5 条）
+
+### 7. 自动化设置
+
+当用户要求"每周自动生成"时，创建 recurring automation：
+
+| 参数 | 值 |
+|------|-----|
+| name | `AI新闻网站自动更新` |
+| scheduleType | `recurring` |
+| rrule | `FREQ=WEEKLY;BYDAY=SA` |
+| status | `ACTIVE` |
+| prompt | 见下方自动化 Prompt 模板 |
+
+```
+你是 AI 行业新闻编辑。请生成一个 AI 新闻网站（默认 RSS 自治，不内置任何第三方商业 API）：
+
+1. 运行 RSS 抓取获取近 7 天新闻：
+   bash run_report.sh scripts/fetch_ai_news.py --output news.json
+   （若依赖缺失/失败，改为 WebSearch 手动搜集，写成相同 JSON 结构再往下走）
+2. 用 WebSearch 获取市场/融资真实数据（2-3 次搜索），记录数值与来源
+3. 读取 assets/news_site_template.html 理解结构
+4. 代入「有 AI 产品经理经验的专业科技媒体工作者」人设，基于 news.json 撰写「本周看点」：
+   - 顶部写 3-6 个 keywords（{term, tag, note}；tag 为分类彩色标签可省略——省略时生成器自动推断，note 可为字符串或按受众分述的对象 {开发者, PM, 自媒体}），渲染在「本周看点」开头、带网页搜索链接；
+   - 写 3-5 条 insight（每条覆盖：AI 产品/开发角度重点分析 + 本周 trends + 预计未来发展），务必去 AI 味、有观点锋芒；
+   - 写顶层 audience_summary（{开发者, PM, 自媒体} 各一句），渲染为「给本周的你」三张受众卡；可省略（用内置 _DEFAULT_AUDIENCE_SUMMARY 兜底，区块永不隐藏）——注意键必须与 keywords[].note 的受众键一致；
+   - 拟一句头版导语 lead。
+   写入 insights.json（schema 见第七节），insight 字段承载「编辑洞察」栏。
+5. 运行生成脚本（注入第 2 步真实图表数据 + 第 4 步洞察）：
+   bash run_report.sh scripts/generate_site.py --api-json news.json \
+     --market-data <数值> --market-source "<来源>" --funding-data <数值> --funding-source "<来源>" \
+     --insights-json insights.json --lead "<本周主线一句话>" \
+     -o AI_News_[日期].html
+6. 运行 validate_report.py 检查质量
+7. 调用 present_files 展示结果
+
+注意：默认流程不含任何外部商业 API。若用户明确要求用 AI HOT 等外部 API 增强可信度，
+     请提示用户自行从官方渠道导出 JSON，并以 --external-news-json 注入（含 --external-source-name/url 署名）。
+```
+
+## 七、「本周看点」编辑洞察（头版导语，必做）
 
 这是本技能从「新闻聚合器」升级为「科技情报产品」的关键一步。**必须由你（Agent）基于本周新闻亲自撰写**，而非简单罗列。
 
@@ -149,7 +233,7 @@ bash run_report.sh scripts/fetch_ai_news.py --output news.json
   - 用具体、口语化、带行业质感的表达（"翻一遍调用账单""把宝押在单一云""demo 更炸"），句子长短错落，像人在说话。
   - `analysis` 保持客观陈述事实，`insight` 才是编辑的主观判断——两者分工清晰，不要混成同一段。
 
-写入 JSON（ schema 与下方一致）后，用 `--insights-json` 注入；`--lead` 传导语：
+写入 JSON（schema 与下方一致）后，用 `--insights-json` 注入；`--lead` 传导语：
 
 ```json
 {
@@ -182,155 +266,7 @@ bash run_report.sh scripts/fetch_ai_news.py --output news.json
 }
 ```
 
-```bash run_report.sh scripts/generate_site.py --api-json news.json \
-  --ranking-json ranking.json --profiles-json model_profiles.json \
-  --insights-json insights.json --lead "本周主线：……" \
-  -o AI_News_YYYY-MM-DD.html
-```
-
-> **推荐（强）**：尽量每次都传 `--insights-json` 与 `--lead`，这是头版核心、产品力所在。若**漏传**，`generate_site.py` 会自动从本周新闻派生基线「本周看点」（标题+摘要+分类+原文链接），**整段不再静默消失**——但自动版只是摘要级，缺少人工「编辑洞察」深度，故仍建议撰写 curated 版本覆盖。
-
-> **「本周看点」三块内容的必现保证（无需任何参数）**：
-> | 内容块 | 兜底机制 | 相关函数 |
-> |--------|---------|---------|
-> | 看点卡片 | 无 `--insights-json` 时从本周新闻按信号词打分派生 Top6 | `_auto_insights()` / `_auto_lead()` |
-> | 「给本周的你」三张受众卡 | 无 `audience_summary` 时用内置三段文案 | `_DEFAULT_AUDIENCE_SUMMARY` |
-> | 关键词的彩色分类标签 | 缺 `tag` 自动推断分类；完全无关键词时从新闻派生带标签关键词 | `_normalize_keywords()` / `_auto_keywords()` / `_infer_tag()` |
->
-> 这三块均在**生成阶段服务端预渲染进静态 HTML**（`_render_audience_chips_html()` / `_render_keyword_chips_html()`），JS 只负责后续交互切换。因此**即使浏览器禁用 JS 或脚本报错，这些内容依然可见**——不会再出现「区块静默消失」。
->
-> ⚠️ **排错提醒**：若重新生成后仍看不到某块内容，先确认 ① 输出路径是否就是你打开的那个文件（不要输出到 `-fixed`/`-static` 之类旁路文件名）；② 浏览器是否硬刷新（Ctrl/Shift+R）。用 `grep -c 'class="kw-tag"'` 判断**不可靠**——CSS 里有同名类定义，恒返回 ≥1；应改查 `grep -o 'class="kw-tag"[^>]*>[^<]*'` 看实际渲染内容。
-
-**搜索实现**（纯客户端 JS）：
-```javascript
-// 实时过滤：匹配标题和摘要中的关键词
-function filterNews(keyword) {
-  cards.forEach(card => {
-    const text = card.querySelector('.title,.summary').textContent.toLowerCase();
-    card.style.display = text.includes(keyword.toLowerCase()) ? '' : 'none';
-  });
-}
-```
-
-### 5. 质量检查
-- 「本周看点」存在性：生成后确认 HTML 含 `const INSIGHTS_DATA = [` 且数组非空；为空仅当出现 0 条新闻时才会隐藏（自动兜底已确保有新闻即有看点）。若想用人工深度洞察覆盖自动版，传 `--insights-json`。
-
-生成后运行验证：
-
-```bash
-python scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
-```
-
-### 6. 交付
-
-- 文件名：`AI_News_YYYY-MM-DD.html`（如 `AI_News_2026-07-09.html`）
-- 调用 `present_files` 展示
-- 总结核心发现（3-5 条）
-
----
-
-## 五、新闻卡片设计规范
-
-| 元素 | 规范 |
-|------|------|
-| 卡片圆角 | `12px` |
-| 缩略图 | 分类色块（ai-models=紫 `#7c3aed`、ai-products=蓝 `#2563eb`、industry=绿 `#059669`、paper=橙 `#ea580c`、tip=灰 `#6b7280`） |
-| 标题 | 最多 2 行，超出显示省略号 |
-| 摘要 | 最多 2 行，`font-size: 13px`，灰色文字 |
-| 来源链接 | 底部 `<a href="源URL">来源名称 →</a>`，新窗口打开 |
-| 发布时间 | 相对时间（如"3小时前"、"昨天"、"7月8日"），用 JS 计算 |
-| 悬停效果 | 轻微上浮 `translateY(-2px)` + 阴影增强 |
-
-## 六、视觉设计规范
-
-| 约束项 | 规范值 |
-|--------|--------|
-| 主色 | `#2563eb`（蓝） |
-| 辅助色 | `#7c3aed`（紫）、`#059669`（绿）、`#ea580c`（橙）、`#6b7280`（灰） |
-| 背景色（亮） | `#f8fafc` |
-| 卡片背景（亮） | `#ffffff` |
-| 背景色（暗） | `#0f172a` |
-| 卡片背景（暗） | `#1e293b` |
-| 字体 | PingFang SC / Microsoft YaHei / sans-serif |
-| 响应式 | 桌面 ≥1024px=3列, 平板 ≥640px=2列, 手机=1列 |
-| 暗色模式 | `prefers-color-scheme` + 手动按钮 |
-
-## 七、自动化设置
-
-当用户要求"每周自动生成"时，创建 recurring automation：
-
-| 参数 | 值 |
-|------|-----|
-| name | `AI新闻网站自动更新` |
-| scheduleType | `recurring` |
-| rrule | `FREQ=WEEKLY;BYDAY=SA` |
-| status | `ACTIVE` |
-| prompt | 见下方自动化 Prompt 模板 |
-
-### 自动化执行 Prompt 模板
-
-```
-你是 AI 行业新闻编辑。请生成一个 AI 新闻网站（默认 RSS 自治，不内置任何第三方商业 API）：
-
-1. 运行 RSS 抓取获取近 7 天新闻：
-   python skills/ai-weekly/scripts/fetch_ai_news.py --output news.json
-   （若依赖缺失/失败，改为 WebSearch 手动搜集，写成相同 JSON 结构再往下走）
-2. 用 WebSearch 获取市场/融资真实数据（2-3 次搜索），记录数值与来源
-3. 读取 skills/ai-weekly/assets/news_site_template.html 理解结构
-4. 代入「有 AI 产品经理经验的专业科技媒体工作者」人设，基于 news.json 撰写「本周看点」：
-   - 顶部写 3-6 个 `keywords`（{term, tag, note}；tag 为分类彩色标签可省略——省略时生成器自动推断，note 可为字符串或按受众分述的对象 {开发者, PM, 自媒体}），渲染在「本周看点」开头、带网页搜索链接；
-   - 写 3-5 条 `insight`（每条覆盖：AI 产品/开发角度重点分析 + 本周 trends + 预计未来发展），务必去 AI 味、有观点锋芒；
-   - 写顶层 `audience_summary`（{开发者, PM, 自媒体} 各一句），渲染为「给本周的你」三张受众卡；可省略（用内置 _DEFAULT_AUDIENCE_SUMMARY 兜底，区块永不隐藏）——注意键必须与 keywords[].note 的受众键一致；
-   - 拟一句头版导语 lead。
-   写入 insights.json（schema 见步骤 4.1），`insight` 字段承载「编辑洞察」栏。
-5. 运行生成脚本（注入第 2 步真实图表数据 + 第 4 步洞察）：
-   python skills/ai-weekly/scripts/generate_site.py --api-json news.json \
-     --market-data <数值> --market-source "<来源>" --funding-data <数值> --funding-source "<来源>" \
-     --insights-json insights.json --lead "<本周主线一句话>" \
-     -o AI_News_[日期].html
-6. 运行 validate_report.py 检查质量
-7. 调用 present_files 展示结果
-
-注意：默认流程不含任何外部商业 API。若用户明确要求用 AI HOT 等外部 API 增强可信度，
-     请提示用户自行从官方渠道导出 JSON，并以 --external-news-json 注入（含 --external-source-name/url 署名）。
-```
-
----
-
-### 辅助脚本：`scripts/generate_site.py`
-
-将新闻 JSON（RSS 抓取结果，schema 与 AI HOT 兼容）渲染为新闻网站，**排行榜按网络环境自适应从多源池获取**，市场/融资图表由 CLI 注入：
-
-```bash
-# 从 RSS 抓取的 news.json 生成（推荐主流程，零第三方 API 依赖）
-# 默认 --region auto：自动探测国内/国外网络，优先选用可达的榜源
-bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
-
-# 强制国内网络环境（优先 OpenCompass/SuperCLUE/ModelScope，实时不可达则回退国内快照）
-bash run_report.sh scripts/generate_site.py --api-json news.json --region cn -o AI_News.html
-
-# 受限网络下让国外源可通过代理可达（如 Clash / v2ray 本地端口）
-bash run_report.sh scripts/generate_site.py --api-json news.json --proxy http://127.0.0.1:7890 -o AI_News.html
-
-# 注入真实市场/融资数据（来自 WebSearch）
-bash run_report.sh scripts/generate_site.py --api-json news.json \
-  --market-data 51,71,103,165,235,301,514,680,890 --market-labels 2020,2021,2022,2023,2024,2025,2026E,2027F,2028F --market-source "Statista 2026" \
-  --funding-data 17.4,13.1,16.2,14.9,13.8,25.6,23.5,47.2,62.2,41.8,45.1,83.2,95.0,112.0 --funding-labels 23Q1,23Q2,23Q3,23Q4,24Q1,24Q2,24Q3,24Q4,25Q1,25Q2,25Q3,25Q4,26Q1,26Q2 --funding-source "Crunchbase 2026" \
-  -o AI_News.html
-
-# 可选：叠加用户自备的外部 API 数据增强（例：用户自行导出的 AI HOT JSON）
-bash run_report.sh scripts/generate_site.py --api-json news.json \
-  --external-news-json aihot_export.json --external-source-name "AI HOT" \
-  --external-source-url "https://aihot.virxact.com" -o AI_News.html
-
-# 跳过排行榜自动获取（显示「暂无实时数据」）
-bash run_report.sh scripts/generate_site.py --api-json news.json --no-live-ranking -o AI_News.html
-
-# 仅预览数据摘要
-bash run_report.sh scripts/generate_site.py --api-json news.json --dry-run
-```
-
-### 网络环境自适应（国内 / 国外差异）
+## 八、网络环境自适应（国内 / 国外差异）
 
 不同运行环境对国内外网站的连通性差异很大，本技能对此做了显式处理：
 
@@ -374,9 +310,7 @@ bash run_report.sh scripts/generate_site.py --api-json news.json --dry-run
   4. 以 `--profiles-json 该JSON` 重新生成——脚本会将其**合并写回** `model_profiles.json`（canonical 实时更新），并自动清除 pending 清单。
 - **写入优先级**：`--profiles-json` 合并 > canonical 档案 > 资料卡留空（绝不编造字段）。
 
----
-
-## 八、发布与第三方依赖说明（合规）
+## 九、发布与第三方依赖说明（合规）
 
 本技能**默认零第三方商业 API 依赖**，可安全开源发布（GitHub / Gitee）：
 
@@ -384,24 +318,32 @@ bash run_report.sh scripts/generate_site.py --api-json news.json --dry-run
 - **不内置、不打包任何 AI HOT / 卡兹克的内容**。页脚仅保留基础参考来源链接（LMArena / Artificial Analysis / Hugging Face / OpenCompass / Gartner / IDC / Statista / Crunchbase / Stanford HAI）。
 - **外部 API 增强是用户 opt-in 的**：技能不主动调用 AI HOT 等任何外部商业 API；只有当用户自备 JSON 并以 `--external-news-json` 注入时才会参与，且页脚自动署名该来源。是否启用、遵守其服务条款均由用户自行决定。
 - **发布建议**：① 附带 `LICENSE` 文件（如 MIT / Apache-2.0）；② 如需大范围传播，建议提示用户使用外部 API 前先取得授权。
+- **跨平台分发**：本技能以单一 `SKILL.md`（开放 Agent Skill 规范）为唯一入口，直接放入支持该规范的任意 Agent 目录即可加载；框架级调用（LangGraph / Dify / Coze）参考 `manifest.json` 的引擎接口描述。无需任何平台专属包装（无 `plugin.json`、无 per-agent 副本）。
 
-> 设计原则：**自治优先、可选增强**——没有外部 API，技能也能产出完整、可信、可溯源的报告。
-
-## 九、文件清单
+## 十、文件清单
 
 | 文件 | 用途 |
 |------|------|
-| `SKILL.md` | 本文件 |
+| `SKILL.md` | 本文件（单一跨平台入口） |
+| `manifest.json` | 通用引擎接口描述（框架级调用参考） |
 | `assets/news_site_template.html` | v3.0 新闻网站 HTML 模板 |
 | `assets/report_template.html` | v2.0 周报模板（保留兼容） |
 | `assets/sample_chart_data.json` | Chart.js 示例数据 |
 | `scripts/generate_site.py` | **v3.0** 一键从 API 生成新闻站 |
-| `scripts/validate_report.py` | v3.0 质量检查（自动识别 v2/v3 格式） |
-| `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
-| `scripts/deploy_report.py` | 部署摘要提取 |
+| `scripts/validate_report.py` | v3.0 质量检查（含 XSS 守护，自动识别 v2/v3 格式） |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
+| `scripts/deploy_report.py` | 部署摘要提取（框架无关通知文本） |
+| `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
 | `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，联网核实的机构/许可证/成本等），每次生成自动加载、新模型研究后合并写回 |
 | `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（检测为空自动删除；运行方据此联网补档） |
+| `cn_leaderboard_snapshot.json` | 国内排行榜快照（实时不可达时回退） |
 | `references/data_sources.md` | 备用数据源参考 |
 | `references/report_structure.md` | v2.0 报告结构参考 |
 | `data/history.csv` | 历史指标数据 |
+
+## 参考资料
+
+- **[references/data_sources.md](references/data_sources.md)** — 备用 / 候选数据源清单
+- **[references/report_structure.md](references/report_structure.md)** — v2.0 报告结构参考
+- **[manifest.json](manifest.json)** — 通用引擎接口（框架级调用）
+- **[docs/agent-skill-format-landscape.md](docs/agent-skill-format-landscape.md)** — Agent 技能格式格局调研（为何采用单一开放 `SKILL.md`）

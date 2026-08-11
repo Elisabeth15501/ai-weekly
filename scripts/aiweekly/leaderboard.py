@@ -265,7 +265,6 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
         }
 
     comp_hits = try_board("comprehensive", 2)
-    os_hits = try_board("open_source", 1)
 
     # —— 综合榜（两列：lmarena / aa）——
     comp = {"lmarena": {"rows": []}, "aa": {"rows": []}}
