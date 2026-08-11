@@ -36,10 +36,11 @@ from aiweekly.utils import (
     _parse_snapshot_date,
 )
 from aiweekly.translate import (
-    _ollama_translate,
-    translate_en_summaries,
+    Translator,
+    OllamaUnavailable,
     ollama_health,
-    _ollama_base_url,
+    ollama_base_url,
+    _ollama_translate,
 )
 from aiweekly.news import (
     SUMMARY_MAX,
@@ -69,7 +70,7 @@ __all__ = [
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_date_arg", "_parse_snapshot_date",
     # translate
-    "_ollama_translate", "translate_en_summaries", "ollama_health", "_ollama_base_url",
+    "Translator", "OllamaUnavailable", "ollama_health", "ollama_base_url", "_ollama_translate",
     # news
     "SUMMARY_MAX", "SUMMARY_TARGET", "MUSTREAD_TOP_N", "LEADERBOARD_STALE_DAYS",
     "SOURCE_ALIASES", "SOURCE_AUTHORITY", "CATEGORY_WEIGHT",

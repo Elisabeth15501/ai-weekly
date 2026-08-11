@@ -75,7 +75,7 @@ from aiweekly.utils import (
     _parse_date_arg, _parse_snapshot_date,
 )
 from aiweekly.translate import (
-    _ollama_translate, translate_en_summaries, ollama_health, _ollama_base_url,
+    Translator, ollama_health,
 )
 from aiweekly.news import (
     SUMMARY_MAX, SUMMARY_TARGET, MUSTREAD_TOP_N, LEADERBOARD_STALE_DAYS,
@@ -234,10 +234,12 @@ def main():
                         help="为英文报道生成中文总结（调用本地 Ollama，需本机运行 Ollama；失败/超时保留英文原文）")
     parser.add_argument("--translate-model", default="qwen2.5:7b",
                         help="翻译所用本地 Ollama 模型（默认 qwen2.5:7b，非推理模型更快）")
-    parser.add_argument("--translate-workers", type=int, default=6,
-                        help="翻译并发线程数（默认 6）")
-    parser.add_argument("--translate-timeout", type=int, default=25,
-                        help="单条翻译超时秒数（默认 25）")
+    parser.add_argument("--translate-workers", type=int, default=3,
+                        help="翻译并发线程数（默认 3；CPU 本地推理下过高会互相抢资源导致超时丢条）")
+    parser.add_argument("--translate-timeout", type=int, default=45,
+                        help="单条翻译超时秒数（默认 45；CPU 本地推理较慢，过短会大量超时丢条）")
+    parser.add_argument("--translate-retries", type=int, default=2,
+                        help="单条翻译失败后的重试次数（默认 2，总尝试 = retries+1）")
     # 本周看点（编辑洞察 + 关键词）：由 Agent 基于本周新闻撰写
     parser.add_argument("--insights-json", help="本周看点 JSON 文件（{keywords:[{term,note}], insights:[{kicker,title,analysis,insight,related:[{title,url}]}]}）")
     parser.add_argument("--lead", help="本周看点顶部导语一句话（电梯演讲，可选）")
@@ -432,6 +434,7 @@ def main():
         translate_model=args.translate_model,
         translate_workers=args.translate_workers,
         translate_timeout=args.translate_timeout,
+        translate_retries=args.translate_retries,
     )
     _lb_ok = bool(leaderboard_data and (
         leaderboard_data.get("comprehensive", {}).get("lmarena", {}).get("rows") or

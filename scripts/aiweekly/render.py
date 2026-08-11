@@ -17,7 +17,7 @@ from aiweekly.utils import _parse_date_arg, _parse_snapshot_date
 from aiweekly.news import (
     MUSTREAD_TOP_N, format_news_items, _score_news,
 )
-from aiweekly.translate import translate_en_summaries
+from aiweekly.translate import Translator
 from aiweekly.leaderboard import (
     _apply_profile_as_truth, _leaderboard_freshness,
 )
@@ -95,8 +95,9 @@ def generate(api_data: dict, output_path: str = None,
              data_snapshot: str = None,
              translate_en: bool = False,
              translate_model: str = "qwen2.5:7b",
-             translate_workers: int = 6,
-             translate_timeout: int = 25) -> str:
+             translate_workers: int = 3,
+             translate_timeout: int = 45,
+             translate_retries: int = 2) -> str:
     """生成完整的新闻网站 HTML。
 
     Args:
@@ -131,15 +132,17 @@ def generate(api_data: dict, output_path: str = None,
             "[CHARTJS_LIB_PLACEHOLDER]",
             '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>')
 
-    # 英文报道中文总结（本地 Ollama，可选开启；best-effort，不阻断主流程）
+    # 英文报道中文总结：生成途中遇英文即即时中译（本地 Ollama 服务，best-effort 不阻断）
     if translate_en:
+        _tr = Translator(
+            enabled=True, model=translate_model,
+            timeout=translate_timeout, max_workers=translate_workers,
+            retries=translate_retries)
         try:
-            n_tr = translate_en_summaries(
-                api_data.get("items", []), enabled=True,
-                model=translate_model, max_workers=translate_workers, timeout=translate_timeout)
+            n_tr = _tr.translate_items(api_data.get("items", []))
             if n_tr:
                 print(f"🌐 英文报道中文总结：本地 Ollama 翻译 {n_tr} 条（模型 {translate_model}）")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  best-effort：任何异常都不阻断报告生成
             print(f"  ⚠️ 英文翻译跳过（Ollama 不可用或异常）：{e}")
 
     # 格式化新闻数据（含信源/摘要归一化 + cn_summary 透传）
