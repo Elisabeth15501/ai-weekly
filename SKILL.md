@@ -169,6 +169,29 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 - 调用 `present_files` 展示
 - 总结核心发现（3-5 条）
 
+### 6.1 分发：飞书头条卡片推送（P0，可选但推荐）
+
+生成报告后，可把**本周头条速览**推到飞书群机器人（incoming webhook 消息卡片），让情报在"工作者已在用的地方"被消费。仅用 `requests` 调飞书官方 webhook，**不引入任何第三方商业 SDK**。
+
+```bash
+# 组装 report.json 头条载荷 + 推送飞书卡片（webhook 三级回退：--webhook > $FEISHU_WEBHOOK > delivery/feishu_config.json）
+bash run_report.sh scripts/publish.py \
+  --news-json news.json \
+  --insights-json insights.json \
+  --audience-json audience_summary.json \
+  --view-url "https://<你的托管地址>/AI_News_YYYY-MM-DD.html" \
+  --output report.json
+
+# 仅构造卡片预览、不推送：
+bash run_report.sh scripts/publish.py --news-json news.json --insights-json insights.json --audience-json audience_summary.json --dry-run
+
+# 直接指定 webhook（也可写入 delivery/feishu_config.json，已被 .gitignore 忽略）：
+bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open-apis/bot/v2/hook/XXXX"
+```
+
+卡片内容：本周主线 + 🔥本周重点（按 score 取 Top5，带链接/来源）+ 💡本周看点（Top3）+ 👥分角色摘要（开发者/PM/自媒体）+ 🔖关键词 + 「查看完整周报」按钮（链接自动追加 `?src=feishu&uid=<uid>` 度量参数）。
+未配置 webhook 时自动跳过推送（exit 0，不阻断报告生成）；推送返回业务错误（非 0）时 exit 1。
+
 ### 7. 自动化设置
 
 当用户要求"每周自动生成"时，创建 recurring automation：

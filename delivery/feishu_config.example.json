@@ -1,0 +1,4 @@
+{
+  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_WITH_YOUR_TOKEN",
+  "note": "复制本文件为 feishu_config.json（已被 .gitignore 忽略，不入库），填入真实 Webhook 地址即可。也可改用环境变量 FEISHU_WEBHOOK 或 publish.py --webhook。"
+}

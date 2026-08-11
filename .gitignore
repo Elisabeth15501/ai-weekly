@@ -35,6 +35,10 @@ __pycache__/
 # 本地备份（非源码，绝不入库）
 *.bak
 
+# 飞书/钉钉 Webhook 凭证（含真实机器人地址，绝不入库；仅 feishu_config.example.json 入库）
+delivery/feishu_config.json
+delivery/dingtalk_config.json
+
 # OpenClaw 独立打包产物（由 tools/build_openclaw_bundle.sh 生成，不入库）
 openclaw-edition/scripts/
 openclaw-edition/assets/
