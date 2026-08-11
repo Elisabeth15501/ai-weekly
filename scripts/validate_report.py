@@ -408,6 +408,72 @@ def check_ranking_v3(html_content: str, min_ranking: int = 5) -> dict:
     return {"ok": True, "warn": False, "msg": "排行榜存在"}
 
 
+def _extract_leaderboard_data(html_content: str):
+    """从 HTML 中提取 LEADERBOARD_DATA 的解析对象（供质量/schema 校验复用）。"""
+    lb_idx = html_content.find('const LEADERBOARD_DATA')
+    if lb_idx < 0:
+        return None
+    brace = html_content.find('{', lb_idx)
+    if brace < 0:
+        return None
+    raw = _extract_balanced_brace(html_content, brace)
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+# L0#4 / L0#5: 排行榜质量 + 榜源 schema 校验（结构级，复用 leaderboard.validate_leaderboard_data）
+def check_leaderboard_quality(html_content: str) -> dict:
+    """对 LEADERBOARD_DATA 做质量 + schema 校验（每榜 source/url/snapshot 非空、
+    model 非空、同榜归一键去重、跨榜 rank 差 ≤ 20、selection_notes 三段、delta 覆盖、字段白名单）。
+    """
+    data = _extract_leaderboard_data(html_content)
+    if data is None:
+        return {"ok": False, "warn": False, "msg": "未找到 LEADERBOARD_DATA"}
+    try:
+        from aiweekly.leaderboard import validate_leaderboard_data
+    except Exception:
+        # 校验器独立运行时退化为自行计算（避免强依赖 aiweekly 包）
+        return _fallback_leaderboard_quality(data)
+    res = validate_leaderboard_data(data)
+    if res["ok"]:
+        cov = min((c.get("delta_coverage", 0) for c in res["checks"].values()
+                   if isinstance(c, dict) and "delta_coverage" in c), default=0)
+        return {"ok": True, "warn": False, "msg": f"排行榜质量+schema 校验通过（delta 覆盖 {cov}）✅",
+                "checks": res["checks"]}
+    return {"ok": False, "warn": False,
+            "msg": "排行榜质量/schema 问题：" + "；".join(res["issues"][:6]),
+            "checks": res["checks"], "issues": res["issues"]}
+
+
+def _fallback_leaderboard_quality(data: dict) -> dict:
+    """校验器脱离 aiweekly 包时的降级版（仅做核心断言，不依赖导入）。"""
+    issues = []
+    comp = data.get("comprehensive", {}) or {}
+    osb = data.get("open_source", {}) or {}
+    for name, slot in (("comprehensive.lmarena", comp.get("lmarena", {})),
+                       ("comprehensive.aa", comp.get("aa", {})),
+                       ("open_source.ls", osb.get("ls", {})),
+                       ("open_source.hf", osb.get("hf", {}))):
+        slot = slot or {}
+        rows = slot.get("rows", []) or []
+        if len(rows) < 5:
+            issues.append(f"[{name}] 行数 < 5")
+        if not slot.get("is_cache"):
+            for f in ("source", "url", "snapshot"):
+                if not str(slot.get(f, "")).strip():
+                    issues.append(f"[{name}] {f} 空")
+        if any(not str(r.get("model", "")).strip() for r in rows):
+            issues.append(f"[{name}] 空 model")
+    sn = data.get("selection_notes")
+    if not (isinstance(sn, dict) and all(sn.get(k) for k in ("开发者", "PM", "自媒体"))):
+        issues.append("selection_notes 缺三段")
+    if issues:
+        return {"ok": False, "warn": False, "msg": "；".join(issues[:6])}
+    return {"ok": True, "warn": False, "msg": "排行榜质量校验通过（降级版）✅"}
+
+
 # ============================================================
 # v2.0 周刊检查（保留兼容）
 # ============================================================
@@ -1046,6 +1112,7 @@ def validate(html_path: Path, opts: dict = None) -> dict:
         search_check = check_search_v3(content)
         charts_check = check_charts_v3(content)
         ranking_check = check_ranking_v3(content, min_ranking)
+        lb_quality_check = check_leaderboard_quality(content)  # L0#4/L0#5
         editorial_check = check_editorial_c0(content)
         editorial_c1_check = check_editorial_c1(content)
         market_check = check_market_disclaimer(content)
@@ -1080,6 +1147,7 @@ def validate(html_path: Path, opts: dict = None) -> dict:
             "keyword_filter": kw_filter_check,
             "keyword_clustering": kw_cluster_check,
             "weekly_dashboard": dashboard_check,
+            "lb_quality": lb_quality_check,
             "sources": sources_check,
         }
     else:
@@ -1131,6 +1199,7 @@ def print_report(results: dict) -> None:
             ("搜索/筛选功能", results["search"]),
             ("市场图表", None),
             ("模型排行榜", results["ranking"]),
+            ("排行榜质量+schema(L0#4/5)", results.get("lb_quality", {})),
             ("内容质量 C0", results.get("editorial", {})),
             ("内容质量 C1", results.get("editorial_c1", {})),
             ("市场数据署名(M0)", results.get("market", {})),

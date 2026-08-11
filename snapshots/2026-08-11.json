@@ -1,0 +1,48 @@
+{
+  "lmarena": {
+    "Claude Fable 5": 1,
+    "Claude Opus 4 6 Thinking": 2,
+    "Claude Opus 4 7 Thinking": 3,
+    "Muse Spark 1.2 (Xhigh)": 4,
+    "Claude Opus 5 High": 7,
+    "3.8 Max": 9,
+    "Muse Spark 1.1": 10
+  },
+  "aa": {
+    "Claude Opus 5 (max)": 63.1,
+    "Claude Fable 5 (with fallback)": 62.1,
+    "GPT-5.6 Sol (max)": 60.9,
+    "Kimi K3 (max)": 59.7,
+    "Muse Spark 1.2 (xhigh)": 56.8,
+    "Grok 4.5 (high)": 55.8,
+    "GLM-5.2 (max)": 52.6,
+    "DeepSeek V4 Flash 0731 (max)": 51.8,
+    "Gemini 3.6 Flash": 51.6,
+    "MiniMax-M3": 45.4
+  },
+  "ls": {
+    "Kimi K3": 1,
+    "GLM-5.2": 2,
+    "Kimi K2.6": 3,
+    "Hy3": 4,
+    "GLM 5.1": 5,
+    "Kimi K2 Thinking": 6,
+    "GLM-5": 7,
+    "Kimi K2.5": 8,
+    "Qwen3.5-27B阿里巴巴": 9,
+    "Qwen3.5-397B-A17B阿里巴巴": 10
+  },
+  "hf": {
+    "calme-3.2-instruct-78b": 1,
+    "calme-3.1-instruct-78b": 2,
+    "calme-2.4-rys-78b": 3,
+    "Qwen2.5-72B-Instruct": 4,
+    "calme-2.1-qwen2.5-72b": 5,
+    "Linkbricks-Horizon-AI-Avengers-V1-32B": 6,
+    "calme-2.2-qwen2.5-72b": 7,
+    "T3Q-Qwen2.5-14B-Instruct-1M-e3": 8,
+    "T3Q-qwen2.5-14b-v1.0-e3": 9,
+    "ultiima-72B": 10
+  },
+  "snapshot": "2026-08-11"
+}

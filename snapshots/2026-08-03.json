@@ -1,0 +1,51 @@
+{
+  "lmarena": {
+    "GPT-5.4 (high)": 1,
+    "DeepSeek-V4-Pro": 2,
+    "Claude Opus 4.7 (high)": 3,
+    "Doubao-Seed-2.0-Pro": 4,
+    "Kimi-K2.6": 5,
+    "Gemini-3.1-Pro": 6,
+    "Qwen3.6-Max": 7,
+    "DeepSeek-V4-Flash": 8,
+    "Doubao-Seed-2.0-Lite": 9,
+    "GLM-5.1": 10
+  },
+  "aa": {
+    "Claude Opus 5 (max)": 63.1,
+    "Claude Fable 5 (with fallback)": 62.1,
+    "GPT-5.6 Sol (max)": 60.9,
+    "Kimi K3 (max)": 59.7,
+    "Muse Spark 1.2 (xhigh)": 56.8,
+    "Grok 4.5 (high)": 55.8,
+    "GLM-5.2 (max)": 52.6,
+    "DeepSeek V4 Flash 0731 (max)": 51.8,
+    "Gemini 3.6 Flash": 51.6,
+    "MiniMax-M3": 45.4
+  },
+  "ls": {
+    "Kimi K3": 1,
+    "GLM-5.2": 2,
+    "Kimi K2.6": 3,
+    "Hy3": 4,
+    "GLM 5.1": 5,
+    "Kimi K2 Thinking": 6,
+    "GLM-5": 7,
+    "Kimi K2.5": 8,
+    "Qwen3.5-27B阿里巴巴": 9,
+    "Qwen3.5-397B-A17B阿里巴巴": 10
+  },
+  "hf": {
+    "DeepSeek-V4-Pro": 1,
+    "Kimi-K2.6": 2,
+    "DeepSeek-V4-Flash": 3,
+    "GLM-5.1": 4,
+    "Qwen3.5-397B-A17B": 5,
+    "Hy3-preview": 6,
+    "Ring-2.5-1T": 7,
+    "MiniMax-M2.7": 8,
+    "Step-3.5-Flash": 9,
+    "Qwen3.6-27B": 10
+  },
+  "snapshot": "2026-08-10"
+}

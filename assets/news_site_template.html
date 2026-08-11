@@ -507,9 +507,34 @@ a:hover { text-decoration: underline; }
 .lb-modal td { padding: 9px 10px; border-top: 1px solid var(--border); vertical-align: top; }
 .lb-modal td:first-child { color: var(--text-tertiary); width: 92px; white-space: nowrap; }
 .lb-modal .os-badge { margin-left: 0; }
+.lb-modal-hint { font-size: 11px; color: var(--text-tertiary); margin: 10px 0 0; text-align: right; }
 /* 行可点击（打开选型卡） */
 .ranking-table tbody tr { cursor: pointer; }
 .ranking-table tbody tr:active { background: var(--primary-light); }
+
+/* ===== L1#6: 新上榜 / 大幅上升 徽章 ===== */
+.delta .badge-new { display:inline-block; font-size:10px; font-weight:700; line-height:1; padding:2px 5px; border-radius:5px; color:#16a34a; background:#16a34a1a; border:1px solid #16a34a55; margin-right:4px; }
+.delta.big { font-size: 14px; }
+.delta.warn { color:#dc2626; }
+.delta .spark { display:inline-block; vertical-align:middle; margin-left:6px; }
+
+/* ===== L1#8: 国内可直连 行内标签 ===== */
+.cn-badge { display:inline-block; margin-left:6px; font-size:12px; line-height:1; vertical-align:middle; cursor:help; }
+
+/* ===== L1#9: 多维组合筛选 ===== */
+.lb-filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:2px 0 14px; }
+.lb-filters .lb-filter { margin:0; }
+.lb-filter-select { font-size:12px; padding:5px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); cursor:pointer; }
+.lb-filter-toggle { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-secondary); cursor:pointer; user-select:none; }
+.lb-filter-toggle.on { color:#16a34a; border-color:#16a34a55; background:#16a34a12; }
+
+/* ===== L0#3 / L1#10: 受众化选型结论 + 跨源差异上下文 ===== */
+.lb-selection-tabs { display:inline-flex; gap:4px; margin-left:8px; vertical-align:middle; }
+.lb-selection-tabs button { border:0; background:transparent; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; cursor:pointer; color:var(--text-secondary); }
+.lb-selection-tabs button.active { background:var(--primary); color:#fff; }
+.lb-cross .cd-item { display:block; margin:4px 0; }
+.lb-cross .cd-explain { display:block; color:var(--text-tertiary); font-size:11px; margin-top:1px; }
+
 @media (max-width: 720px) { .lb-cols { grid-template-columns: 1fr; } }
 .rank-badge {
   display: inline-flex; width: 28px; height: 28px; border-radius: 50%;
@@ -839,15 +864,38 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
   <h2>🏆 大模型排行榜 <span class="ranking-note">综合榜（LMArena 人类偏好 + AA 智能指数）· 开源模型榜（LLM-Stats / Hugging Face）</span></h2>
   <div class="lb-stale-warn" id="lbStaleWarn" style="display:none;"></div>
   <p class="rate-note" id="rateNote"></p>
-  <p class="lb-selection-note" id="lbSelectionNote">币种说明：国内模型直接显示官方人民币价（¥），海外模型以人民币为主、美元（$）为小字折算值。</p>
+  <p class="lb-selection-note">
+    <span id="lbSelectionNote">币种说明：国内模型直接显示官方人民币价（¥），海外模型以人民币为主、美元（$）为小字折算值。</span>
+    <span class="lb-selection-tabs" id="lbSelectionTabs" role="group" aria-label="按受众查看选型结论">
+      <button type="button" class="active" data-a="开发者">开发者</button>
+      <button type="button" data-a="PM">PM</button>
+      <button type="button" data-a="自媒体">自媒体</button>
+    </span>
+  </p>
 
   <!-- 综合榜：LMArena + AA 双列 -->
   <div class="lb-block">
     <h3 class="lb-title">📊 综合排行榜 <span class="lb-sub">哪家模型综合最强？</span></h3>
-    <div class="lb-filter" id="lbFilter" role="group" aria-label="按开源/闭源筛选">
-      <button type="button" class="lb-filter-btn active" data-f="all">全部</button>
-      <button type="button" class="lb-filter-btn" data-f="open">仅开源</button>
-      <button type="button" class="lb-filter-btn" data-f="closed">仅闭源</button>
+    <div class="lb-filters">
+      <div class="lb-filter" id="lbFilter" role="group" aria-label="按开源/闭源筛选">
+        <button type="button" class="lb-filter-btn active" data-f="all">全部</button>
+        <button type="button" class="lb-filter-btn" data-f="open">仅开源</button>
+        <button type="button" class="lb-filter-btn" data-f="closed">仅闭源</button>
+      </div>
+      <label class="lb-filter-toggle" id="lbCnToggle" title="仅显示国内可直连模型">🇨🇳 国内可直连</label>
+      <select class="lb-filter-select" id="lbLicenseSel" aria-label="按许可证筛选">
+        <option value="all">全部许可证</option>
+        <option value="permissive">宽松许可（Apache/MIT/BSD 等）</option>
+        <option value="restricted">受限许可</option>
+      </select>
+      <select class="lb-filter-select" id="lbPriceSel" aria-label="按输出单价筛选">
+        <option value="0">全部价格</option>
+        <option value="1">≤ $1 / 1M</option>
+        <option value="2">≤ $2 / 1M</option>
+        <option value="5">≤ $5 / 1M</option>
+        <option value="10">≤ $10 / 1M</option>
+      </select>
+      <button type="button" class="lb-filter-btn" id="lbFilterReset" style="border:1px solid var(--border);">重置</button>
     </div>
     <div class="lb-cols">
       <div class="lb-col">
@@ -1034,6 +1082,23 @@ function init() {
       b.addEventListener('click', ()=> setLbFilter(b.getAttribute('data-f')));
     });
   } catch (e) { console.error('lbFilter binding failed:', e); }
+  // L1#9: 多维组合筛选控件绑定
+  try {
+    const cn = document.getElementById('lbCnToggle');
+    if(cn) cn.addEventListener('click', ()=>{ _lbCnOnly=!_lbCnOnly; _syncLbFilterUI(); });
+    const ls = document.getElementById('lbLicenseSel');
+    if(ls) ls.addEventListener('change', ()=>{ _lbLicense=ls.value; _syncLbFilterUI(); });
+    const ps = document.getElementById('lbPriceSel');
+    if(ps) ps.addEventListener('change', ()=>{ _lbPriceMax=Number(ps.value)||0; _syncLbFilterUI(); });
+    const rs = document.getElementById('lbFilterReset');
+    if(rs) rs.addEventListener('click', ()=> resetLbFilter());
+  } catch (e) { console.error('lbFilters binding failed:', e); }
+  // L0#3: 受众化选型结论 tab 切换
+  try {
+    document.querySelectorAll('#lbSelectionTabs button').forEach(b=>{
+      b.addEventListener('click', ()=> setSelectionAudience(b.getAttribute('data-a')));
+    });
+  } catch (e) { console.error('lbSelectionTabs binding failed:', e); }
   try { renderInsights(); } catch (e) { console.error('renderInsights failed:', e); }
   // 新闻渲染尽早且独立执行，置于图表之前
   try { currentFilter(); } catch (e) { console.error('currentFilter failed:', e); }
@@ -1309,13 +1374,57 @@ function commCell(r){
   const yes=/可商|mit|apache|open/i.test(c);
   return `<td class="lb-commercial ${yes?'yes':'no'}">${escapeHtml(c)}</td>`;
 }
-function deltaCell(d){
+function deltaCell(d, spark){
+  // L0#2: delta 现在为 dict {wow, wow_score, new_entry}（旧缓存可能仍是 number，兼容）
   if(d===null||d===undefined) return '<td class="delta">—</td>';
-  const v=Math.abs(d);
-  if(v<0.05) return '<td class="delta">—</td>';
-  const up = d>0, cls = up?'up':'down', arrow = up?'↑':'↓';
-  const txt = (typeof d==='number' && !Number.isInteger(d)) ? v.toFixed(1) : v;
-  return `<td class="delta ${cls}">${arrow}${txt}</td>`;
+  let html='';
+  if(typeof d==='object'){
+    if(d.new_entry){ html = '<span class="badge-new">🆕 新上榜</span>'; }
+    else {
+      const wow = d.wow;
+      if(typeof wow==='number' && wow!==0){
+        const up = wow>0, cls = up?'up':'down';
+        const big = Math.abs(wow)>=5 ? ' big' : '';
+        const warn = wow<=-5 ? ' warn' : '';
+        html = `<span class="${cls}${big}${warn}">${up?'↗ +':(warn?'↘ ':'↘ ')}${Math.abs(wow)}</span>`;
+      } else if(typeof d.wow_score==='number' && d.wow_score!==0){
+        const up = d.wow_score>0, cls = up?'up':'down';
+        html = `<span class="${cls}">${up?'↑':'↓'}${Math.abs(d.wow_score).toFixed(1)}</span>`;
+      } else {
+        html = '<span>—</span>';
+      }
+    }
+  } else {
+    // 兼容旧版 number 型 delta
+    const v=Math.abs(d);
+    if(v<0.05) return '<td class="delta">—</td>';
+    const up = d>0, cls = up?'up':'down', arrow = up?'↑':'↓';
+    html = `<span class="${cls}">${arrow}${v}</span>`;
+  }
+  // L1#7: WoW 趋势迷你线（纯 SVG，最近 4 个快照）
+  if(spark && Array.isArray(spark) && spark.length>=2){
+    html += sparklineSVG(spark);
+  }
+  return `<td class="delta">${html}</td>`;
+}
+// L1#7: 生成 4 周 rank 趋势的纯 SVG sparkline（rank 越小越好，故翻转 Y 使「上升=变好」）
+function sparklineSVG(ranks){
+  const w=34, h=14, pad=2;
+  const pts = ranks.slice(-4);
+  const maxR = Math.max(...pts), minR = Math.min(...pts);
+  const span = (maxR-minR)||1;
+  const step = (w-2*pad)/(pts.length-1 || 1);
+  const coords = pts.map((r,i)=>{
+    const x = pad + i*step;
+    // rank 越小越靠上（好）
+    const y = pad + ((r-minR)/span)*(h-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const lastUp = pts.length>=2 && pts[pts.length-1] <= pts[pts.length-2];
+  const col = lastUp ? '#16a34a' : '#dc2626';
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+    + `<polyline points="${coords}" fill="none" stroke="${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>`
+    + `</svg>`;
 }
 function renderRows(tbodyId, rows, rowHtml){
   const tb=document.getElementById(tbodyId);
@@ -1328,18 +1437,48 @@ function renderRows(tbodyId, rows, rowHtml){
 }
 // 按开源/闭源筛选（只作用于综合榜；开源榜整榜开源，不过滤）
 let _lbData = null;       // {lm, aa, hf} 原始数据
-let _lbFilter = 'all';    // all | open | closed
+// ===== L1#9: 多维组合筛选（开源/闭源 + 国内可直连 + 许可证 + 价格区间）=====
+let _lbFilter = 'all';       // all | open | closed
+let _lbCnOnly = false;       // 仅国内可直连
+let _lbLicense = 'all';      // all | permissive | restricted
+let _lbPriceMax = 0;         // 0 = 不限；否则 ≤ $N/1M
+function _licenseIsPermissive(lic){
+  const l = (lic||'').toLowerCase();
+  return /(apache|mit|bsd|llama|gemma|qwen|deepseek|glm|open|permissive|mozilla|isc)/i.test(l);
+}
 function applyLbFilter(rows){
-  if(!rows || _lbFilter==='all') return rows || [];
-  return rows.filter(r => _lbFilter==='open' ? !!r.open_source : !r.open_source);
+  if(!rows) return [];
+  return rows.filter(r => {
+    if(_lbFilter==='open' && !r.open_source) return false;
+    if(_lbFilter==='closed' && r.open_source) return false;
+    if(_lbCnOnly && !(r.cn_access && /国内可直连/.test(r.cn_access))) return false;
+    if(_lbLicense==='permissive' && !_licenseIsPermissive(r.license)) return false;
+    if(_lbLicense==='restricted' && _licenseIsPermissive(r.license)) return false;
+    if(_lbPriceMax>0){
+      const p = r.price_out;
+      if(p===null||p===undefined || p>_lbPriceMax) return false;
+    }
+    return true;
+  });
+}
+function _syncLbFilterUI(){
+  document.querySelectorAll('#lbFilter .lb-filter-btn').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-f')===_lbFilter);
+  });
+  const ct = document.getElementById('lbCnToggle');
+  if(ct) ct.classList.toggle('on', _lbCnOnly);
+  const ls = document.getElementById('lbLicenseSel');
+  if(ls) ls.value = _lbLicense;
+  const ps = document.getElementById('lbPriceSel');
+  if(ps) ps.value = String(_lbPriceMax);
+  renderLbBoards();
 }
 function setLbFilter(f){
   if(f!=='all' && f!=='open' && f!=='closed') return;
-  _lbFilter = f;
-  document.querySelectorAll('#lbFilter .lb-filter-btn').forEach(b=>{
-    b.classList.toggle('active', b.getAttribute('data-f')===f);
-  });
-  renderLbBoards();
+  _lbFilter = f; _syncLbFilterUI();
+}
+function resetLbFilter(){
+  _lbFilter='all'; _lbCnOnly=false; _lbLicense='all'; _lbPriceMax=0; _syncLbFilterUI();
 }
 // 闭源 / 开源 徽标
 function typeBadge(r){
@@ -1357,48 +1496,54 @@ function orgOf(r){
 function renderLbBoards(){
   if(!_lbData) return;
   const {lm, aa, hf, ls} = _lbData;
+  // L1#8: 国内可直连行内标签
+  function cnBadge(r){
+    if(r && r.cn_access && /国内可直连/.test(r.cn_access))
+      return '<span class="cn-badge" title="'+escapeHtml(r.cn_access)+'">🇨🇳</span>';
+    return '';
+  }
   renderRows('lmBody', applyLbFilter(lm.rows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}</td>
+    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     ${costCell(r)}
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
-    ${deltaCell(r.delta)}`);
+    ${deltaCell(r.delta, r.spark)}`);
 
   renderRows('aaBody', applyLbFilter(aa.rows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}</td>
+    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     <td>${fmtScore(r.score)}</td>
     ${costCell(r)}
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
-    ${deltaCell(r.delta)}`);
+    ${deltaCell(r.delta, r.spark)}`);
 
   // 开源榜：LLM-Stats（左）
   renderRows('lsBody', (ls&&ls.rows)||[], (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}</td>
+    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     <td>${fmtScore(r.score)}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${costCell(r)}
     ${commCell(r)}
-    ${deltaCell(r.delta)}`);
+    ${deltaCell(r.delta, r.spark)}`);
 
   // 开源榜：Hugging Face（右）
   renderRows('hfBody', (hf&&hf.rows)||[], (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}</td>
+    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(r.org||'—')}</td>
     <td>${fmtScore(r.score)}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${costCell(r)}
     ${commCell(r)}
-    ${deltaCell(r.delta)}`);
+    ${deltaCell(r.delta, r.spark)}`);
 }
 function renderRanking() {
   const LB = LEADERBOARD_DATA;
@@ -1445,7 +1590,8 @@ function renderRanking() {
   renderLbBoards();
 
   // P0/P1: 选型结论 + 跨源差异 + 性价比象限
-  setText('lbSelectionNote', LB.selection_note || '');
+  // L0#3: 受众化选型结论（开发者/PM/自媒体 三段，默认显示「开发者」视角）
+  setSelectionAudience('开发者');
   renderCrossDiff(LB.cross_diff);
   renderValueChart(LB.value_chart);
 
@@ -1512,6 +1658,21 @@ function renderRanking() {
 let _lbMap = {};
 let _lbProfiles = {};   // 模型资料卡 profile（机构/许可证/成本等），由 LEADERBOARD_DATA.model_profiles 注入
 
+// L0#3: 受众化选型结论（复用 LEADERBOARD_DATA.selection_notes 三段）
+let _lbSelectionAudience = '开发者';
+function setSelectionAudience(a){
+  _lbSelectionAudience = a;
+  const el = document.getElementById('lbSelectionNote');
+  if(!el) return;
+  const LB = LEADERBOARD_DATA || {};
+  const notes = LB.selection_notes || {};
+  const note = notes[a] || LB.selection_note || '';
+  el.textContent = note;
+  document.querySelectorAll('#lbSelectionTabs button').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-a')===a);
+  });
+}
+
 // 跨源差异：同模型在 LMArena 与 AA 的排名差
 function renderCrossDiff(list){
   const el = document.getElementById('lbCross');
@@ -1522,10 +1683,12 @@ function renderCrossDiff(list){
     return;
   }
   el.style.display = '';
+  // L1#10: 每个差异行下方加「评测维度差异」上下文锚点
   el.innerHTML = '跨源差异（同模型两榜排名差）：' + list.slice(0, 5).map(d=>{
     const cls = d.diff > 0 ? 'up' : (d.diff < 0 ? 'down' : '');
     const txt = d.diff > 0 ? `AA 更高 ${d.diff} 名` : (d.diff < 0 ? `LMArena 更高 ${(-d.diff)} 名` : '两榜一致');
-    return `<span style="margin-right:14px;"><b>${escapeHtml(d.model)}</b>：${txt}</span>`;
+    const exp = d.explanation ? `<span class="cd-explain">📌 ${escapeHtml(d.explanation)}</span>` : '';
+    return `<span class="cd-item"><b>${escapeHtml(d.model)}</b>：${txt}${exp}</span>`;
   }).join('');
 }
 
@@ -1609,6 +1772,8 @@ function openLbModal(name){
   const src = (p&&p.source) ? `<a href="${escapeHtml(p.source)}" target="_blank" rel="noopener">官方 / 评测源 ↗</a>` : '—';
 
   const row = (k, v)=>`<tr><td>${k}</td><td>${v===null||v===undefined||v===''?'—':escapeHtml(String(v))}</td></tr>`;
+  // 允许预清洗 HTML 的值（如成本双行 <span class="sub">）原样注入，避免被 escapeHtml 转义成可见文本
+  const rowHtml = (k, v)=>`<tr><td>${k}</td><td>${v===null||v===undefined||v===''?'—':v}</td></tr>`;
   body.innerHTML = `
     <h3>${escapeHtml(r.model||name)}</h3>
     <div class="lb-modal-org">${escapeHtml(org)} ${typeBadge(r)}</div>
@@ -1618,21 +1783,44 @@ function openLbModal(name){
       ${row('平均分(HF)', hfTxt)}
       ${row('许可证', lic)}
       ${row('商用', comm)}
-      ${row('成本 ¥/$', cost)}
+      ${rowHtml('成本 ¥/$', cost)}
       ${row('上下文', ctx)}
       ${row('多模态', mm)}
       ${row('周变化', delta)}
       ${row('适用场景', uc)}
       <tr><td>信息源</td><td>${src}</td></tr>
-    </table>`;
+    </table>
+    <p class="lb-modal-hint">⌨️ ← / → 切换上一个 / 下一个模型 · ESC 关闭</p>`;
   mask.style.display = 'flex';
-  document.addEventListener('keydown', _lbEsc);
+  // L1#11: 键盘导航（←/→ 切换上/下个模型，ESC 关闭）
+  _lbModalList = Object.keys(_lbMap || {});
+  _lbModalIdx = _lbModalList.indexOf((name||'').toLowerCase());
+  document.addEventListener('keydown', _lbKeyNav);
 }
-function _lbEsc(e){ if(e.key==='Escape') closeLbModal(); }
+// L1#11: 模态框键盘导航
+let _lbModalList = [];
+let _lbModalIdx = -1;
+function _lbKeyNav(e){
+  if(e.key==='Escape'){ closeLbModal(); return; }
+  if(!_lbModalList.length) return;
+  // 避免在输入框/下拉里误触（本模态无输入，仍保险）
+  if(e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if(e.key==='ArrowRight' || e.key==='ArrowDown'){
+    e.preventDefault();
+    _lbModalIdx = Math.min(_lbModalList.length-1, _lbModalIdx+1);
+    const k = _lbModalList[_lbModalIdx];
+    if(k && _lbMap[k]) openLbModal(_lbMap[k].model || k);
+  } else if(e.key==='ArrowLeft' || e.key==='ArrowUp'){
+    e.preventDefault();
+    _lbModalIdx = Math.max(0, _lbModalIdx-1);
+    const k = _lbModalList[_lbModalIdx];
+    if(k && _lbMap[k]) openLbModal(_lbMap[k].model || k);
+  }
+}
 function closeLbModal(){
   const mask = document.getElementById('lbModalMask');
   if(mask) mask.style.display = 'none';
-  document.removeEventListener('keydown', _lbEsc);
+  document.removeEventListener('keydown', _lbKeyNav);
 }
 
 // ===== Insights (本周看点) =====

@@ -38,13 +38,179 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 CACHE_PATH = SKILL_DIR / "leaderboard_cache.json"
 # 国内可直连权威榜快照（OpenCompass 司南，SSR 不可达时的兜底；非实时，标注截止日）
 CN_SNAPSHOT_PATH = SKILL_DIR / "cn_leaderboard_snapshot.json"
+# 时序快照目录（L0#2）：每次生成写一份 snapshots/{date}.json，供 WoW 趋势线 / 跨周 diff
+SNAPSHOTS_DIR = SKILL_DIR / "snapshots"
+# 模型名归一别名表（L0#1）：canonical -> [variants]，取代正则后缀法的跨榜匹配
+ALIASES_PATH = SKILL_DIR / "model_aliases.json"
 
 __all__ = [
-    "CACHE_PATH", "CN_SNAPSHOT_PATH", "_load_cn_snapshot", "_leaderboard_freshness",
+    "CACHE_PATH", "CN_SNAPSHOT_PATH", "SNAPSHOTS_DIR", "ALIASES_PATH",
+    "_load_cn_snapshot", "_leaderboard_freshness",
     "LB_CRITERIA", "SOURCES", "_load_cache", "_save_cache",
     "_apply_deltas", "fetch_all_leaderboards", "_fill_from_cache", "_collect_leaderboard_models",
-    "sync_model_profiles",
+    "sync_model_profiles", "canon_key", "canon_display", "_load_aliases",
+    "_load_snapshots", "_save_snapshot", "_build_history",
+    "validate_leaderboard_data", "LB_ROW_FIELDS",
 ]
+
+
+# ---------- L0#1: 模型名归一（别名表取代正则后缀法）----------
+def _load_aliases() -> dict:
+    """加载 model_aliases.json；文件缺失或损坏时返回空表（降级为 _norm_model 兜底）。"""
+    try:
+        if ALIASES_PATH.exists():
+            return json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+_ALIASES = _load_aliases()
+# 反向索引：variant(小写) / variant 归一形 -> canonical(小写键)
+_ALIAS_REV: dict = {}
+# canonical(小写) -> canonical 展示名（即 _ALIASES 的键本身）
+_CANON_DISPLAY: dict = {}
+for _c, _vs in _ALIASES.items():
+    _CANON_DISPLAY[_c.lower()] = _c
+    for _v in (list(_vs) if isinstance(_vs, list) else []):
+        if not isinstance(_v, str):
+            continue
+        _ALIAS_REV.setdefault(_v.lower(), _c.lower())
+        _ALIAS_REV.setdefault(_norm_model(_v), _c.lower())
+
+
+def canon_key(name: str) -> str:
+    """返回模型名的跨榜归一键（小写）。先查别名表精确/归一匹配，否则回退 _norm_model。
+
+    归一键用于跨源匹配（LMArena↔AA 回填、跨源差异、性价比象限、WoW 历史），
+    保证同一模型的不同变体 / 大小写 / 日期戳写法被识别为同一实体。
+    """
+    if not name:
+        return ""
+    low = name.strip().lower()
+    if low in _ALIAS_REV:
+        return _ALIAS_REV[low]
+    norm = _norm_model(name)
+    if norm in _ALIAS_REV:
+        return _ALIAS_REV[norm]
+    return norm
+
+
+def canon_display(name: str) -> str:
+    """返回模型名的规范展示名（优先别名表中的 canonical 写法，否则原样）。"""
+    if not name:
+        return name
+    low = name.strip().lower()
+    if low in _ALIAS_REV:
+        return _CANON_DISPLAY.get(_ALIAS_REV[low], name)
+    norm = _norm_model(name)
+    if norm in _ALIAS_REV:
+        return _CANON_DISPLAY.get(_ALIAS_REV[norm], name)
+    return name
+
+
+def _dedupe_by_alias(rows: list) -> list:
+    """同一榜内按归一键去重（L0#4）：合并 "(max)" / "(pro)" 等变体双胞胎。
+
+    当两个变体归一为同一键时，保留信息更完整的那行（价格/上下文/分数更全），
+    其余丢弃；返回保序后的去重列表。
+    """
+    if not rows:
+        return rows
+    seen, out = {}, []
+    for r in rows:
+        k = canon_key(r.get("model", ""))
+        if not k:
+            out.append(r)
+            continue
+        prev = seen.get(k)
+        if prev is None:
+            seen[k] = r
+            out.append(r)
+        else:
+            # 选信息更完整者：非 None 字段数更多者胜出
+            def _info(x):
+                return sum(1 for v in x.values() if v not in (None, "", "—"))
+            if _info(r) > _info(prev):
+                seen[k] = r
+                out[out.index(prev)] = r
+    return out
+
+
+# ---------- L0#2: 时序快照（snapshots/{date}.json）----------
+def _load_snapshots() -> dict:
+    """读取 snapshots/ 下全部 {date}.json，返回 {date: snapshot_dict}（date 升序拼装）。"""
+    out = {}
+    try:
+        if SNAPSHOTS_DIR.exists():
+            for p in sorted(SNAPSHOTS_DIR.glob("*.json")):
+                try:
+                    d = json.loads(p.read_text(encoding="utf-8"))
+                    out[p.stem] = d
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return out
+
+
+def _save_snapshot(date: str, boards: dict):
+    """写入 snapshots/{date}.json（本次完整排行，供后续 WoW / 趋势使用）。"""
+    try:
+        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        SNAPSHOTS_DIR.joinpath(f"{date}.json").write_text(
+            json.dumps(boards, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _seed_bootstrap(cache: dict):
+    """首次引入时序快照时，用现有 leaderboard_cache.json 作为「上一周」基线播种，
+    使 WoW 趋势线 / 跨周 diff 在首跑即有历史可对比（不伪造数据，仅复用既有缓存）。
+    """
+    if SNAPSHOTS_DIR.exists() and any(SNAPSHOTS_DIR.glob("*.json")):
+        return
+    prev = (cache or {}).get("snapshot")
+    if not prev:
+        return
+    try:
+        from datetime import date as _d, timedelta as _td
+        _pd = _parse_snapshot_date(prev) or _d.today()
+        seed_date = (_pd - _td(days=7)).isoformat()
+        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        boards = {k: cache[k] for k in ("lmarena", "aa", "ls", "hf") if k in cache}
+        boards["snapshot"] = prev
+        SNAPSHOTS_DIR.joinpath(f"{seed_date}.json").write_text(
+            json.dumps(boards, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _build_history(snapshots: dict) -> dict:
+    """从时序快照构建每个榜的「归一键 -> 历史名次序列」用于 sparkline。
+
+    返回 {board: {canon: [rank, ...]}}（按日期升序，最近在前由模板控制）。
+    仅取 rank 数值序列；缺失 rank 的快照位置留 None。
+    """
+    hist: dict = {"lmarena": {}, "aa": {}, "ls": {}, "hf": {}}
+    for _date in sorted(snapshots.keys()):
+        snap = snapshots[_date] or {}
+        for board in ("lmarena", "aa", "ls", "hf"):
+            m = snap.get(board, {}) or {}
+            for model, val in m.items():
+                ck = canon_key(model)
+                if not ck:
+                    continue
+                rank = val if isinstance(val, int) else None
+                hist[board].setdefault(ck, [])
+                # 同日期多值（变体）取首个有效 rank
+                if rank is not None and (not hist[board][ck] or hist[board][ck][-1] is None):
+                    hist[board][ck].append(rank)
+                elif rank is not None:
+                    hist[board][ck].append(rank)
+                else:
+                    hist[board][ck].append(None)
+    return hist
 
 
 def _load_cn_snapshot() -> dict:
@@ -69,9 +235,11 @@ def _leaderboard_freshness(leaderboard: dict, report_date) -> dict:
     - per_source: {key: ISO 8601 快照串 or None}（P1#21：语义明确、可对比、可排序）
     - per_source_age: {key: 距报告日天数 or None}（兼容模板渲染，向前端提供现成天数差）
     """
-    # report_date 可能是 str（CLI --date）或 datetime，统一解析为 datetime
+    # report_date 可能是 str（CLI --date）或 datetime 或 None，统一解析为 datetime
     if isinstance(report_date, str):
         report_date = _parse_date_arg(report_date)
+    elif report_date is None:
+        report_date = datetime.now()
     per_source, per_source_age = {}, {}
     worst_key, worst_age = None, -1
     groups = [
@@ -191,23 +359,37 @@ def _save_cache(cache: dict):
 
 
 def _apply_deltas(rows, cache_rows, score_key=None):
-    """rows 含 rank/model；cache_rows 为上期 {model: value}。
-    rank: 数字下降=名次前进（正 delta）；score: 直接差。
-    score_key 为 None 时按行自动判定（优先 score，否则 rank）。"""
+    """rows 含 rank/model；cache_rows 为上期 {model: value}（按展示名）。
+
+    返回每行的 delta 字典（L0#2）：
+      {"wow": +2, "wow_score": -0.5, "new_entry": false}
+    - wow: 名次变化（正数=名次前进，基于 rank）；
+    - wow_score: 分数变化（基于 score）；
+    - new_entry: 上期无该模型记录（跨榜按归一键匹配，兼容变体漂移）。
+    score_key 为 None 时按行自动判定（优先 score，否则 rank）。
+    无上期数据时所有行标记 new_entry=True（首跑基线周，模板据此抑制 🆕 噪声）。
+    """
     if not cache_rows:
         for r in rows:
-            r["delta"] = None
+            r["delta"] = {"wow": None, "wow_score": None, "new_entry": True}
         return rows
     if score_key is None:
         score_key = "score" if any(r.get("score") is not None for r in rows) else "rank"
-    cache_map = {k.lower(): v for k, v in cache_rows.items()}
+    cache_map = {canon_key(k): v for k, v in cache_rows.items()}
     for r in rows:
-        prev = cache_map.get(r["model"].lower())
+        ck = canon_key(r["model"])
+        prev = cache_map.get(ck)
         cur = r.get(score_key)
-        if prev is None or cur is None:
-            r["delta"] = None
+        if prev is None:
+            r["delta"] = {"wow": None, "wow_score": None, "new_entry": True}
             continue
-        r["delta"] = (prev - cur) if score_key == "rank" else round(cur - prev, 1)
+        if cur is None:
+            r["delta"] = {"wow": None, "wow_score": None, "new_entry": False}
+            continue
+        if score_key == "rank":
+            r["delta"] = {"wow": prev - cur, "wow_score": None, "new_entry": False}
+        else:
+            r["delta"] = {"wow": None, "wow_score": round(cur - prev, 1), "new_entry": False}
     return rows
 
 
@@ -315,19 +497,48 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     # 兜底：本地缓存快照（标注 is_cache）
     _fill_from_cache(os_board, cache, snapshot)
 
-    lm = comp["lmarena"].get("rows") or []
-    aa = comp["aa"].get("rows") or []
-    ls = os_board["ls"].get("rows") or []
-    hf = os_board["hf"].get("rows") or []
+    lm = _dedupe_by_alias(comp["lmarena"].get("rows") or [])
+    aa = _dedupe_by_alias(comp["aa"].get("rows") or [])
+    ls = _dedupe_by_alias(os_board["ls"].get("rows") or [])
+    hf = _dedupe_by_alias(os_board["hf"].get("rows") or [])
+    # 写回去重后的行到槽位（否则 data 里仍是原始未合并列表，校验会报重复）
+    comp["lmarena"]["rows"] = lm
+    comp["aa"]["rows"] = aa
+    os_board["ls"]["rows"] = ls
+    os_board["hf"]["rows"] = hf
+
+    # L0#2: 写当前时序快照 + 构建历史序列（供 WoW 徽章 / sparkline）
+    _seed_bootstrap(cache)
+    _cur_snap = {
+        "lmarena": {r["model"]: (r.get("rank") if r.get("rank") is not None else r.get("score"))
+                    for r in lm if r.get("model")},
+        "aa": {r["model"]: (r.get("score") if r.get("score") is not None else r.get("rank"))
+               for r in aa if r.get("model")},
+        "ls": {r["model"]: (r.get("rank") if r.get("rank") is not None else r.get("score"))
+               for r in ls if r.get("model")},
+        "hf": {r["model"]: (r.get("rank") if r.get("rank") is not None else r.get("score"))
+               for r in hf if r.get("model")},
+        "snapshot": snapshot,
+    }
+    _save_snapshot(snapshot, _cur_snap)
+    _snaps = _load_snapshots()
+    _hist = _build_history(_snaps)
+
+    def _attach_delta_and_spark(rows, board, prev_map):
+        _apply_deltas(rows, prev_map or {})
+        for r in rows:
+            ser = (_hist.get(board, {}) or {}).get(canon_key(r["model"]), []) or []
+            r["spark"] = [x for x in ser if x is not None][-4:]
+        return rows
 
     if lm:
-        _apply_deltas(lm, cache.get("lmarena", {}))
+        _attach_delta_and_spark(lm, "lmarena", cache.get("lmarena", {}))
     if aa:
-        _apply_deltas(aa, cache.get("aa", {}))
+        _attach_delta_and_spark(aa, "aa", cache.get("aa", {}))
     if ls:
-        _apply_deltas(ls, cache.get("ls", {}) or cache.get("hf", {}))
+        _attach_delta_and_spark(ls, "ls", cache.get("ls", {}) or cache.get("hf", {}))
     if hf:
-        _apply_deltas(hf, cache.get("hf", {}) or cache.get("ls", {}))
+        _attach_delta_and_spark(hf, "hf", cache.get("hf", {}) or cache.get("ls", {}))
 
     # —— LMArena 智能指数补全 ——
     # LMArena 公开页/API 仅暴露名次，无原始 Elo 分；用同模型在含真实
@@ -342,11 +553,11 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
         _idx_map = {}
         for r in _scored:
             if r.get("score") is not None and r.get("model"):
-                _idx_map[_norm_model(r["model"])] = r["score"]
+                _idx_map[canon_key(r["model"])] = r["score"]
                 _idx_map[r["model"].lower()] = r["score"]
         for r in _unscored:
             if r.get("score") is None and r.get("model"):
-                v = _idx_map.get(_norm_model(r["model"])) or _idx_map.get(r["model"].lower())
+                v = _idx_map.get(canon_key(r["model"])) or _idx_map.get(r["model"].lower())
                 if v is not None:
                     r["score"] = v
 
@@ -378,35 +589,58 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
                 "context": (ctx // 1000) if isinstance(ctx, int) else None,
                 "cn_access": r.get("cn_access"),
             }
-            k = _vnorm(p["label"])
+            # L0#1: 按归一键去重，避免同一模型变体在象限重复堆叠
+            k = canon_key(p["label"]) or _vnorm(p["label"])
             if k not in _seen or (_seen[k]["ability"] or 0) < (p["ability"] or 0):
                 _seen[k] = p
     value_chart = list(_seen.values())
 
+    # L1#10: 跨源差异（同模型在 LMArena 与 AA 的排名差）+ 维度差异上下文锚点
     cross_diff = []
     if lm and aa:
-        aa_map = {r["model"].lower(): r["rank"] for r in aa if r.get("rank")}
+        aa_map = {canon_key(r["model"]): r["rank"] for r in aa if r.get("rank")}
         for r in lm:
-            ar = aa_map.get(r["model"].lower())
+            ar = aa_map.get(canon_key(r["model"]))
             if ar and r.get("rank"):
-                cross_diff.append({"model": r["model"], "lm_rank": r["rank"],
-                                   "aa_rank": ar, "diff": r["rank"] - ar})
+                cross_diff.append({
+                    "model": r["model"], "lm_rank": r["rank"], "aa_rank": ar,
+                    "diff": r["rank"] - ar,
+                    # L1#10: 给差异一个解释锚点——两榜评测维度不同，名次差多源于侧重差异
+                    "explanation": ("LMArena 偏「人类偏好 Elo」（真实使用体感），"
+                                    "AA 偏「多项能力基准综合（智能指数）」——两榜维度不同，"
+                                    "名次差多来自评测侧重差异，而非绝对强弱。"),
+                })
         cross_diff.sort(key=lambda x: abs(x["diff"]), reverse=True)
 
+    # L0#3: selection_note 受众化（开发者 / PM / 自媒体 三段，各 ≤ 1 句）
     top = (aa or lm or [{}])[0] if (aa or lm) else {}
     top_name = top.get("model") if top else None
     cheap = next((r for r in aa if r.get("cn_access")
                   and "国内可直连" in r["cn_access"] and r.get("price_out") is not None
                   and r["price_out"] <= 2), None)
-    if cheap:
-        selection_note = (f"本周综合最强仍是 {top_name or '头部闭源模型'}；"
-                          f"若看重成本与国内合规直连，{cheap['model']}（{cheap['price_out']}$/1M·out）"
-                          f"是更务实的选型。")
-    elif top_name:
+    # 新上榜（new_entry）模型名，供自媒体/PM 视角点题
+    new_entries = [r["model"] for r in (lm + aa) if isinstance(r.get("delta"), dict) and r["delta"].get("new_entry")]
+    # 大幅上升（wow >= 5）模型名
+    risers = [r["model"] for r in (lm + aa)
+              if isinstance(r.get("delta"), dict) and isinstance(r["delta"].get("wow"), int)
+              and r["delta"]["wow"] >= 5]
+    if top_name:
         selection_note = (f"本周综合最强为 {top_name}；开源/自部署可关注 Qwen、Llama、DeepSeek 等家族"
                           f"（详见开源榜）。")
     else:
         selection_note = "本期源数据缺失，排名与结论仅供参考。"
+    selection_notes = {
+        "开发者": (f"选型先看成本与可直连：{cheap['model']}（{cheap['price_out']}$/1M·out，国内可直连）"
+                   f"适合低成本接入；闭源头部 {top_name or '模型'} 能力强但需评估 API 合规与计费。"
+                   if cheap else
+                   f"闭源头部 {top_name or '模型'} 能力强；自部署优先 Qwen / DeepSeek 家族（开源榜可查许可证与单价）。"),
+        "PM": (f"本周综合最强 {top_name or '头部闭源模型'}"
+               f"{('；' + '、'.join(risers) + ' 名次大幅上升') if risers else ''}"
+               f"——产品路线图可据此评估供应商集中度与替换风险。"),
+        "自媒体": (f"本周看点：{top_name or '头部模型'} 居综合榜首"
+                   f"{('；新上榜 ' + '、'.join(new_entries[:3])) if new_entries else ''}"
+                   f"{('；' + '、'.join(risers) + ' 名次跃升') if risers else ''}。"),
+    }
 
     data = {
         "meta": {"region": detected, "proxy": proxy or "",
@@ -421,6 +655,7 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
             "hf": os_board["hf"],
         },
         "selection_note": selection_note,
+        "selection_notes": selection_notes,
         "value_chart": value_chart,
         "cross_diff": cross_diff,
     }
@@ -455,7 +690,11 @@ def _fill_from_cache(board: dict, cache: dict, snapshot: str):
 
 
 def _collect_leaderboard_models(leaderboard_data):
-    """收集排行榜中出现的所有模型名（去重保序）。"""
+    """收集排行榜中出现的所有模型名（去重保序，按归一键去重）。
+
+    L0#1: 用 canon_display 归一展示名，使 "(max)/(pro)" 变体与资料卡 canonical
+    键（小写）稳定命中，避免把同一模型误判为「缺档案新模型」。
+    """
     models = []
     if not leaderboard_data:
         return models
@@ -470,10 +709,15 @@ def _collect_leaderboard_models(leaderboard_data):
             models.append(m)
     seen, uniq = set(), []
     for m in models:
-        if m.lower() not in seen:
-            seen.add(m.lower())
-            uniq.append(m)
+        ck = canon_key(m)
+        if ck and ck not in seen:
+            seen.add(ck)
+            uniq.append(canon_display(m))
     return uniq
+
+
+# L0#4 / L0#5: 排行榜质量 + 榜源 schema 校验（拆到 leaderboard_checks.py，避免本文件膨胀）
+from aiweekly.leaderboard_checks import validate_leaderboard_data, LB_ROW_FIELDS  # noqa: E402
 
 
 def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
