@@ -11,6 +11,21 @@ import re
 
 from aiweekly.leaderboard import _collect_leaderboard_models
 
+
+def _js_json(obj) -> str:
+    """序列化 JSON 供 <script> 上下文内联（图表 labels/data 来自 CLI 用户可控字符串）。
+
+    转义 < > & 为 \\u003c / \\u003e / \\u0026，阻止 </script> 突破脚本块（防 XSS，对应审查 L4）。
+    ensure_ascii=False 保留中文可读性；数值/布尔/None 序列化不受影响。
+    """
+    return (json.dumps(obj, ensure_ascii=False)
+            .replace("<", "\\u003c")
+            .replace(">", "\\u003e")
+            .replace("&", "\\u0026"))
+
+
+
+
 __all__ = [
     "DEFAULT_MARKET_LABELS", "DEFAULT_MARKET_DATA", "DEFAULT_FUNDING_LABELS", "DEFAULT_FUNDING_DATA",
     "DEFAULT_CN_MARKET_LABELS", "DEFAULT_CN_MARKET_DATA", "DEFAULT_CN_FUNDING_LABELS", "DEFAULT_CN_FUNDING_DATA",
@@ -81,16 +96,16 @@ def build_charts(market_data=None, market_labels=None,
 // Market size chart（M3 #11：实测 vs CAGR 外推 诚实区分）
 const marketCtx = document.getElementById('marketSizeChart').getContext('2d');
 // 标签以 F 结尾视为「预测/外推」（如 2027F/2028F），浅色虚线感；其余为实测/机构估算，实色
-const marketIsForecast = {json.dumps([(l.strip().endswith('F')) for l in m_labels])};
+const marketIsForecast = {_js_json([(l.strip().endswith('F')) for l in m_labels])};
 const marketBarColors = marketIsForecast.map(f => f ? 'rgba(37,99,235,0.32)' : 'rgba(37,99,235,0.7)');
 const marketBarBorders = marketIsForecast.map(f => f ? 'rgba(37,99,235,0.6)' : 'rgba(37,99,235,1)');
 marketChart = new Chart(marketCtx, {{
   type: 'bar',
   data: {{
-    labels: {json.dumps(m_labels)},
+    labels: {_js_json(m_labels)},
     datasets: [{{
       label: '市场规模（$B，约 ¥7.2/$）',
-      data: {json.dumps(m_data)},
+      data: {_js_json(m_data)},
       backgroundColor: marketBarColors,
       borderColor: marketBarBorders,
       borderWidth: 1, borderRadius: 6,
@@ -115,10 +130,10 @@ const fundCtx = document.getElementById('fundingChart').getContext('2d');
 fundingChart = new Chart(fundCtx, {{
   type: 'line',
   data: {{
-    labels: {json.dumps(f_labels)},
+    labels: {_js_json(f_labels)},
     datasets: [{{
       label: '融资额（$B，约 ¥7.2/$）',
-      data: {json.dumps(f_data)},
+      data: {_js_json(f_data)},
       borderColor: 'rgba(124,58,237,1)',
       backgroundColor: 'rgba(124,58,237,0.1)',
       fill: true, tension: 0.3,
@@ -138,15 +153,15 @@ fundingChart = new Chart(fundCtx, {{
 // --- 中国 AI 核心产业规模（亿元，RMB）--- M3 #10：叠加 YoY% 折线
 const cnMarketCtx = document.getElementById('cnMarketChart').getContext('2d');
 // 由数据自动算同比：第 i 年 = data[i]/data[i-1]-1（首年无）
-const cnYoY = {json.dumps([None] + [round((cm_data[i]/cm_data[i-1]-1)*100, 1) for i in range(1, len(cm_data))])};
+const cnYoY = {_js_json([None] + [round((cm_data[i]/cm_data[i-1]-1)*100, 1) for i in range(1, len(cm_data))])};
 cnMarketChart = new Chart(cnMarketCtx, {{
   type: 'bar',
   data: {{
-    labels: {json.dumps(cm_labels)},
+    labels: {_js_json(cm_labels)},
     datasets: [
       {{
         label: '核心产业规模（亿元，RMB）',
-        data: {json.dumps(cm_data)},
+        data: {_js_json(cm_data)},
         backgroundColor: 'rgba(220,38,38,0.7)',
         borderColor: 'rgba(220,38,38,1)',
         borderWidth: 1, borderRadius: 6,
@@ -188,10 +203,10 @@ const cnFundCtx = document.getElementById('cnFundingChart').getContext('2d');
 cnFundingChart = new Chart(cnFundCtx, {{
   type: 'line',
   data: {{
-    labels: {json.dumps(cf_labels)},
+    labels: {_js_json(cf_labels)},
     datasets: [{{
       label: '融资额（亿元，RMB）',
-      data: {json.dumps(cf_data)},
+      data: {_js_json(cf_data)},
       borderColor: 'rgba(220,38,38,1)',
       backgroundColor: 'rgba(220,38,38,0.1)',
       fill: true, tension: 0.3,
@@ -213,10 +228,10 @@ const cnStructCtx = document.getElementById('cnStructureChart').getContext('2d')
 cnStructureChart = new Chart(cnStructCtx, {{
   type: 'bar',
   data: {{
-    labels: {json.dumps(cs_labels)},
+    labels: {_js_json(cs_labels)},
     datasets: [{{
       label: '融资额（亿元，RMB）',
-      data: {json.dumps(cs_data)},
+      data: {_js_json(cs_data)},
       backgroundColor: ['rgba(220,38,38,0.78)','rgba(234,88,12,0.78)','rgba(217,119,6,0.78)','rgba(100,116,139,0.78)'],
       borderRadius: 6,
     }}]
@@ -238,10 +253,10 @@ const cnConcCtx = document.getElementById('cnConcentrationChart').getContext('2d
 cnConcentrationChart = new Chart(cnConcCtx, {{
   type: 'bar',
   data: {{
-    labels: {json.dumps(cc_labels)},
+    labels: {_js_json(cc_labels)},
     datasets: [{{
       label: '融资额（亿元，RMB）',
-      data: {json.dumps(cc_data)},
+      data: {_js_json(cc_data)},
       backgroundColor: ['rgba(220,38,38,0.85)','rgba(234,88,12,0.7)','rgba(148,163,184,0.7)'],
       borderRadius: 6,
     }}]

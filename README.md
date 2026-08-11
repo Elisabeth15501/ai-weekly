@@ -65,9 +65,8 @@ ai-weekly/
 ├── scripts/
 │   ├── fetch_ai_news.py          # RSS 抓取 → news.json（14 源 + 时间窗口过滤）
 │   ├── generate_site.py          # 生成单文件 HTML 网站（含排行榜 / 市场 / 看点 / 翻译）
-│   ├── validate_report.py        # 产出校验（结构 / ISO8601 / 体量 / 看点 / 市场 / 合作守护）
+│   ├── validate_report.py        # 产出校验（结构 / ISO8601 / 体量 / 看点 / 市场 / XSS 守护）
 │   ├── deploy_report.py          # 部署辅助（提取摘要 + 框架无关通知文本）
-│   ├── accumulate_data.py        # 数据累积（可选遗留工具）
 │   └── aiweekly/                 # 内部 Python 包（11 模块）
 │       ├── __init__.py           # 包入口 + 公开 API
 │       ├── news.py               # RSS 抓取 / 解析 / 分类 / 去重
@@ -82,6 +81,9 @@ ai-weekly/
 │       └── types.py              # TypedDict 类型定义
 ├── assets/
 │   └── news_site_template.html   # 单文件 HTML 模板（含内联 Chart.js + safeUrl 守卫）
+├── tools/                        # 独立辅助工具（不进入主生成流程）
+│   ├── accumulate_data.py        # 历史数据累积器（WoW/YoY 环比，可选工具）
+│   └── build_openclaw_bundle.sh   # 把核心引擎同步进 openclaw-edition/，生成独立 ClawHub 包
 ├── references/                   # 数据源与报告结构参考文档
 ├── docs/
 │   └── agent-skill-format-landscape.md  # Agent 技能格式格局调研报告
@@ -121,7 +123,7 @@ ai-weekly/
 - **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行
 - **产物框架无关**：`generate_site.py` 输出**单文件 HTML**（CSS/JS/Chart.js 全部内联），不依赖任何 Agent 运行时，可被任意 Agent 返回给用户或托管到静态站点
 
-> **ClawHub 独立发布提示**：`openclaw-edition/SKILL.md` 通过 `../scripts/...` 引用父目录引擎。若 ClawHub / OpenClaw 仅安装该子目录，发布前请执行 `cp -r scripts openclaw-edition/scripts` 把引擎打进子目录，并将命令中的 `../scripts` 改为 `./scripts`。格式本身合规，此为打包 / 分发缺口。
+> **ClawHub 独立发布提示**：`openclaw-edition/` 即自包含技能包。发布到 ClawHub / OpenClaw 时，先运行仓库根的 `bash tools/build_openclaw_bundle.sh`，它会把核心引擎（`scripts/`）、模板（`assets/`）、依赖清单与数据文件同步进 `openclaw-edition/`，使其无需父目录即可独立安装；SKILL.md 命令默认 `./scripts` 即指向包内引擎副本。同步产物已被 `.gitignore` 排除，不污染主仓库。
 >
 > **OpenAI Agent Plugins 1.0.0**（2026-08-06 发布）：六大客户端 day-1 支持（ChatGPT、Codex CLI、Cursor、GitHub Copilot、VS Code、Kiro/AWS）。`plugin.json` 已于 2026-08-10 补全，`skills/ai-weekly/SKILL.md` 采用 Anthropic AgentSkills 规范标准格式——ai-weekly 现可直接被全部六个客户端识别安装。
 

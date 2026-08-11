@@ -28,3 +28,11 @@ model_profiles.pending.json
 # Python 字节码缓存（构建产物，绝不入库）
 __pycache__/
 *.pyc
+
+# OpenClaw 独立打包产物（由 tools/build_openclaw_bundle.sh 生成，不入库）
+openclaw-edition/scripts/
+openclaw-edition/assets/
+openclaw-edition/requirements.txt
+openclaw-edition/run_report.sh
+openclaw-edition/model_profiles.json
+openclaw-edition/models_cost.json

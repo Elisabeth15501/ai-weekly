@@ -101,45 +101,13 @@ TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 # （json.JSONDecodeError / OSError）。
 
 
-# ── P1#1 Phase 2：榜单 / 市场 / 看点 已抽到 aiweekly 子包 ──
-# 下方 re-export 保证 `from generate_site import X` 的历史调用点零改动。
-from aiweekly.leaderboard import (
-    LM_ARENA_URL, AA_URL, HF_DS_API, HF_LEADERBOARD_URL,
-    DATALARNER_URL, LLMSTATS_URL, CACHE_PATH, COST_PATH,
-    CN_SNAPSHOT_PATH, DEFAULT_PROFILES, PENDING_PROFILES, OC_LLM_URL,
-    SV_GENERAL_URL, MS_MODELS_URL, _load_cost_table, _COST_TABLE,
-    _match_cost, _enrich_cost, _apply_profile_as_truth, ORG_PREFIXES,
-    _clean_model_slug, _SUFFIX_RE, _norm_model, fetch_lmarena_ranking,
-    OPEN_SOURCE_MODEL_KEYWORDS, _is_open_source_model, fetch_aa_ranking, fetch_hf_open_ranking,
-    _parse_table_rows, _parse_ctx, _parse_money, fetch_llmstats_ranking,
-    DL_ORG_SPLIT, _split_dl_org, fetch_datalearner_ranking, _load_cn_snapshot,
-    _leaderboard_freshness, fetch_opencompass_ranking, fetch_superclue_ranking, fetch_modelscope_ranking,
-    LB_CRITERIA, SOURCES, _load_cache, _save_cache,
-    _apply_deltas, fetch_all_leaderboards, _fill_from_cache, _collect_leaderboard_models,
-    sync_model_profiles,
-)
-
-from aiweekly.market import (
-    DEFAULT_MARKET_LABELS, DEFAULT_MARKET_DATA, DEFAULT_FUNDING_LABELS, DEFAULT_FUNDING_DATA,
-    DEFAULT_CN_MARKET_LABELS, DEFAULT_CN_MARKET_DATA, DEFAULT_CN_FUNDING_LABELS, DEFAULT_CN_FUNDING_DATA,
-    DEFAULT_CN_STRUCTURE_LABELS, DEFAULT_CN_STRUCTURE_DATA, DEFAULT_CN_CONCENTRATION_LABELS, DEFAULT_CN_CONCENTRATION_DATA,
-    DEFAULT_MARKET_SOURCE, DEFAULT_FUNDING_SOURCE, DEFAULT_CN_MARKET_SOURCE, DEFAULT_CN_FUNDING_SOURCE,
-    ESTIMATE_NOTE, build_charts, BASE_SOURCES, SIGNAL_WEIGHTS,
-    MODEL_HINTS, CN_HINTS, AMOUNT_RE, _extract_market_signals,
-    _compute_weekly_stats, _lb_name_map, _render_market_signals_html, TREND_INSIGHTS,
-    _match_insight_evidence, _signal_theme, _render_trend_insights_html, _render_market_signals_html_with_theme,
-)
-
-from aiweekly.insights import (
-    _validate_insights, _AUTO_KICKERS, _AUTO_SIGNALS, _DAILY_DIGEST_MARKERS,
-    _is_daily_digest, _find_related, _auto_insights, _EDITORIAL_THEMES,
-    _lead_truncate, _week_tone, _auto_lead, _DEFAULT_AUDIENCE_SUMMARY,
-    _AUTO_TERM_TAGS, _AUTO_KW_NOTE, _infer_tag, _KW_STOP,
-    _tokenize, _auto_keywords, _normalize_keywords, _TAG_COLORS,
-    DEFAULT_ACTIVE_AUDIENCE, DEFAULT_SEARCH_ENGINE, GENERIC_AUDIENCE_LABEL, _pick_preferred_key,
-    _render_audience_chips_html, _kw_tag_html, _kw_tier_html, _kw_note_html,
-    _kw_search_url, _render_keyword_chips_html,
-)
+# ── P1#1 Phase 2/3：榜单 / 市场 / 看点 / 渲染 已抽到 aiweekly 子包 ──
+# L3 重构：移除 60+ 名称的 re-export 脆耦合，改为显式模块别名访问。
+# 历史上为兼容 `from generate_site import X` 的调用点保留 re-export；经全仓检索已无任何
+# 外部调用，故调用点统一带模块前缀（LB./MK./INS.），可读性与可维护性更好。
+import aiweekly.leaderboard as LB
+import aiweekly.market as MK
+import aiweekly.insights as INS
 
 from aiweekly.render import generate  # P1#1 Phase 3：渲染层已抽出
 
@@ -367,7 +335,7 @@ def main():
                 # P0 拆分后：_PROXY_OVERRIDE 在 aiweekly.utils 模块；直接对其赋值
                 _au._PROXY_OVERRIDE = args.proxy
                 _configure_proxy()
-            leaderboard_data = fetch_all_leaderboards(args.ranking_top, region=args.region)
+            leaderboard_data = LB.fetch_all_leaderboards(args.ranking_top, region=args.region)
             lm = leaderboard_data["comprehensive"]["lmarena"]["rows"]
             aa = leaderboard_data["comprehensive"]["aa"]["rows"]
             hf = leaderboard_data["open_source"]["hf"]["rows"]
@@ -376,7 +344,7 @@ def main():
             print(f"  ⚠️ 排行榜抓取异常：{e}（将显示「暂无实时数据」）")
 
     # 模型档案同步：自动加载 canonical 档案 + 合并传入的新档案 + 检测新上榜模型
-    model_profiles_data = sync_model_profiles(args.profiles_json, leaderboard_data)
+    model_profiles_data = LB.sync_model_profiles(args.profiles_json, leaderboard_data)
 
     # 解析图表数据（CLI 注入；未提供则回退估算并标注）
 
@@ -394,7 +362,7 @@ def main():
             audience_summary_data = data.get("audience_summary")
         else:
             insights = data
-        errs = _validate_insights(data)
+        errs = INS._validate_insights(data)
         if errs:
             print("❌ insights.json 校验失败：")
             for e in errs:
@@ -405,7 +373,7 @@ def main():
               + (f"、受众结论 {len(audience_summary_data or {})} 类" if audience_summary_data else ""))
         # 受众键一致性检查（非致命）：keywords[].note 的受众键须与 audience_summary 一致，
         # 否则切换「给本周的你」受众卡时，关键词 note 取不到值而显示空白。
-        _aud_keys = set((audience_summary_data or _DEFAULT_AUDIENCE_SUMMARY).keys())
+        _aud_keys = set((audience_summary_data or INS._DEFAULT_AUDIENCE_SUMMARY).keys())
         _note_keys = set()
         for kw in (keywords or []):
             if isinstance(kw, dict) and isinstance(kw.get("note"), dict):
@@ -489,7 +457,7 @@ def main():
 
 
 __all__ = [
-    "main", "generate", "fetch_all_leaderboards",
+    "main", "generate",
 ]
 
 

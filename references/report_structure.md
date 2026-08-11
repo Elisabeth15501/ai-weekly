@@ -40,7 +40,7 @@
 每个 KPI 卡片包含：标签、数值、同比/环比变化箭头、**周环比（WoW）对比**。
 
 **周环比对比**：
-- 数据来源：`scripts/accumulate_data.py` 维护的 `data/history.csv`
+- 数据来源：`tools/accumulate_data.py` 维护的 `data/history.csv`
 - 展示格式：`.kpi-wow` 区域显示 "vs 上周 +X.X%" 或 "持平"
 - 颜色：`.wow-up`（绿色）、`.wow-down`（红色）、`.wow-flat`（灰色）
 - Agent 在生成报告时应先读取 `data/history.csv` 的上一周数据，计算差值后填入

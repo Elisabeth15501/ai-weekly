@@ -7,18 +7,18 @@ accumulate_data.py
 
 用法：
   # 追加本周数据
-  python scripts/accumulate_data.py --week 2026-W27 \
+  python tools/accumulate_data.py --week 2026-W27 \
     --market-size 514.5 --funding-total 83.2 --chatgpt-share 46.4 \
     --enterprise-adoption 94 --top-model "GPT-5.6" --top-model-score 91.9
 
   # 查看历史数据
-  python scripts/accumulate_data.py --show
+  python tools/accumulate_data.py --show
 
   # 计算与上周的环比
-  python scripts/accumulate_data.py --wow 2026-W27
+  python tools/accumulate_data.py --wow 2026-W27
 
   # 导出为 JSON
-  python scripts/accumulate_data.py --export history.json
+  python tools/accumulate_data.py --export history.json
 """
 
 import argparse

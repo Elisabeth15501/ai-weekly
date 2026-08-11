@@ -836,6 +836,45 @@ def check_weekly_dashboard(html_content: str) -> dict:
             "msg": f"数字看板完整：{total} 条 / 必读 Top{len(must)} / 资本&发布事件 {s['fund_events']} 起 / 在榜 {s['lb_models']} 个"}
 
 
+# 嵌入 HTML 的 JSON 变量（经 _json_script_safe 序列化，应已转义 < > & 为 \u003c/\u003e/\u0026）
+_XSS_JSON_VARS = [
+    "NEWS_DATA", "LEADERBOARD_DATA", "INSIGHTS_DATA",
+    "INSIGHTS_KEYWORDS", "WEEKLY_STATS", "AUDIENCE_SUMMARY",
+]
+
+
+def check_xss_safe(html_content: str) -> dict:
+    """P2-XSS 守护（H1/H2 防回归）：确保生成 HTML 不含存储型 XSS 突破。
+
+    1) 嵌入的 JSON 变量（NEWS_DATA 等）**原始文本**不得含裸 `</script`（脚本块突破）；
+       安全序列化产物为 ``\\u003c/script\\u003e``，raw 切片中不会出现裸 `<`，故不会误报。
+    2) 全文不得含危险协议链接 `href="javascript:` / `href='data:`（H2 向量）。
+       （`safeUrl()` 已将其转 `#`，若回归移除则此处捕获。）
+    """
+    import re
+    # 1) JSON 变量裸 </script 突破（仅查 raw 文本，避免 json.loads 把 \u003c 解码回 < 误判）
+    raw_breakout = []
+    for name in _XSS_JSON_VARS:
+        raw = _extract_js_var(name, html_content)
+        if raw and re.search(r'</script', raw, re.IGNORECASE):
+            raw_breakout.append(name)
+
+    # 2) 危险协议 href（大小写不敏感）
+    danger_href = re.findall(r'href\s*=\s*["\']\s*(?:javascript:|data:)',
+                              html_content, re.IGNORECASE)
+
+    ok = (not raw_breakout) and (not danger_href)
+    bits = []
+    if raw_breakout:
+        bits.append(f"JSON 变量含裸</script突破：{', '.join(raw_breakout)}")
+    if danger_href:
+        bits.append(f"危险协议 href：{sorted(set(h.lower() for h in danger_href))}")
+    msg = ("XSS 守护通过（无脚本突破 / 无危险协议 href）✅"
+           if ok else "；".join(bits))
+    return {"ok": ok, "warn": False,
+            "raw_breakout": raw_breakout, "danger_href": danger_href, "msg": msg}
+
+
 def _iter_source_files(source_dir: str):
     """收集待扫描的 Python 源文件（含 aiweekly 子包）。"""
     d = Path(source_dir)
@@ -941,9 +980,11 @@ def check_module_size(source_dir: str, main_max: int = 500, mod_max: int = 800) 
 
     作用域：仅约束「生成引擎」——`generate_site.py` 主入口 + `aiweekly/` 子包。
     顶层 dev/QA 脚本（validate_report.py / fetch_ai_news.py / deploy_report.py /
-    accumulate_data.py）是独立工具，仅记录行数、不参与 ≤800 上限判定。
+    tools/accumulate_data.py）是独立工具，仅记录行数、不参与 ≤800 上限判定。
     """
     # 顶层 dev/QA 脚本豁免（仅记录，不判定上限）
+    # accumulate_data.py 已于 P2-L5 迁移至 tools/（独立辅助工具，不进入主生成流程），
+    # 不再位于 scripts/ 下，故不会被本守护扫描；保留于 EXEMPT 仅作历史记录。
     _EXEMPT = {"validate_report.py", "fetch_ai_news.py", "deploy_report.py", "accumulate_data.py"}
     sizes, problems = {}, []
     for f in _iter_source_files(source_dir):
@@ -1055,6 +1096,9 @@ def validate(html_path: Path, opts: dict = None) -> dict:
             "sources": sources_check,
         }
 
+    # P2-XSS：HTML 内容级 XSS 守护（H1/H2 防回归），独立于源码静态扫描
+    results["xss_safe"] = check_xss_safe(content)
+
     # P0#19 源码静态守护结果并入（已在函数开头计算，独立于 HTML）
     results.update(src_res)
 
@@ -1100,6 +1144,7 @@ def print_report(results: dict) -> None:
             ("关键词可筛选(C2)", results.get("keyword_filter", {})),
             ("关键词自动聚类(C2#7)", results.get("keyword_clustering", {})),
             ("本周数字看板(C2#8)", results.get("weekly_dashboard", {})),
+            ("XSS 安全守护(P2)", results.get("xss_safe", {})),
             ("无裸except(P0#19)", results.get("source_no_bare_except", {})),
             ("ISO8601日期(P0#19)", results.get("source_iso8601", {})),
             ("模块体量(P0#4)", results.get("source_module_size", {})),

@@ -397,7 +397,7 @@ bash run_report.sh scripts/generate_site.py --api-json news.json --dry-run
 | `assets/sample_chart_data.json` | Chart.js 示例数据 |
 | `scripts/generate_site.py` | **v3.0** 一键从 API 生成新闻站 |
 | `scripts/validate_report.py` | v3.0 质量检查（自动识别 v2/v3 格式） |
-| `scripts/accumulate_data.py` | 历史数据累积 |
+| `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
 | `scripts/deploy_report.py` | 部署摘要提取 |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
 | `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，联网核实的机构/许可证/成本等），每次生成自动加载、新模型研究后合并写回 |
