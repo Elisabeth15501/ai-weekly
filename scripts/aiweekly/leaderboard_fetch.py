@@ -1,0 +1,163 @@
+"""排行榜抓取与榜源健康监控（L2#14/#15，拆分自 leaderboard.py）。
+
+本模块只负责「怎么抓取、怎么记录健康」，不含编排逻辑：
+- ``SOURCES`` / ``LB_CRITERIA``：多源池定义（每源带 region 标签，供 region 优先级排序）；
+- ``_collect_source_results``：并行抓取全部榜源（ThreadPoolExecutor, max_workers=4）；
+- ``_record_health``：把本次各榜源健康快照 append 到 leaderboard_health.jsonl。
+
+区域优先级 / 快照兜底 / 周变化 / 选型结论等编排逻辑仍在 leaderboard.py。
+
+依赖（均为叶子模块，无循环依赖）：aiweekly.utils（重试/代理）、aiweekly.leaderboard_sources（各源解析器）。
+"""
+import json
+import logging
+import time
+import concurrent.futures
+from datetime import datetime
+from pathlib import Path
+
+from aiweekly.utils import _retry_fetch
+from aiweekly.leaderboard_sources import (
+    LM_ARENA_URL, AA_URL, HF_LEADERBOARD_URL, DATALARNER_URL,
+    LLMSTATS_URL, OC_LLM_URL, SV_GENERAL_URL, MS_MODELS_URL,
+    fetch_lmarena_ranking, fetch_aa_ranking, fetch_hf_open_ranking,
+    fetch_llmstats_ranking, fetch_datalearner_ranking,
+    fetch_opencompass_ranking, fetch_superclue_ranking, fetch_modelscope_ranking,
+)
+
+logger = logging.getLogger(__name__)
+
+SKILL_DIR = Path(__file__).resolve().parents[2]
+# 榜源健康监控（L2#15）：每次生成 append 一行 {ts,source,status,latency_ms,rows_count}
+HEALTH_PATH = SKILL_DIR / "leaderboard_health.jsonl"
+
+# 三榜各自的评分标准说明（渲染到页面「评分标准」行，数据驱动）；定义在多源池之前，
+# 供 SOURCES 引用（模块级求值顺序要求）。
+LB_CRITERIA = {
+    "lmarena": ("评分标准：人类偏好 Elo（LMArena）。由真实用户对模型回答做匿名两两盲测、"
+                "按「哪个回答更好」投票得出——衡量的是真实使用中的人类好感度（使用体感），"
+                "并非某项知识 / 能力基准。分数越高代表越受人类偏好。"),
+    "aa": ("评分标准：智能指数 Intelligence Index（Artificial Analysis）。综合多项权威能力基准"
+           "归一化后的综合分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、"
+           "GPQA（研究生级科学问答）、Humanity's Last Exam / HLE（人类终极考试·极难跨学科学术题，逼近专家上限）。"),
+    "ls": ("评分标准：LLM-Stats 综合分（LLM Stats Score）。基于多项公开基准归一化后的开源模型"
+           "综合得分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、GPQA（研究生级科学问答）、"
+           "HumanEval（代码生成）、MATH（数学竞赛解题）、SWE-bench（软件工程实战·修复真实 GitHub issue）、"
+           "HLE（人类终极考试）；同时标注许可证、上下文窗口与输入输出单价，便于自部署 / 商用评估。"),
+    "hf": ("评分标准：Hugging Face Open LLM Leaderboard 平均分（Average ⬆️）。在多项权威基准上的"
+           "加权平均分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、MATH（数学竞赛解题）、"
+           "HumanEval（代码生成）、GPQA（研究生级科学问答）、MuSR（多步逻辑推理·长篇谜题 / 谋杀推理等需多步推演）、"
+           "IFEval（指令遵循·严格按格式与约束执行）。仅收录可复现的开源权重模型，强调可复现性与社区验证。"),
+}
+
+# ---------- 多源池（每个榜源带 region 标签，供 region 优先级排序）----------
+SOURCES = {
+    "aa": {"region": "global", "board": "comprehensive", "key": "aa",
+           "fn": lambda n: fetch_aa_ranking(n),
+           "label": "Artificial Analysis · 智能指数", "url": AA_URL,
+           "criteria": LB_CRITERIA["aa"]},
+    "lm": {"region": "global", "board": "comprehensive", "key": "lm",
+           "fn": lambda n: fetch_lmarena_ranking(n),
+           "label": "LMArena · 人类偏好 Elo", "url": LM_ARENA_URL,
+           "criteria": LB_CRITERIA["lmarena"]},
+    "oc": {"region": "cn", "board": "comprehensive",
+           "fn": lambda n: fetch_opencompass_ranking(n),
+           "label": "OpenCompass 司南 · LLM 综合榜", "url": OC_LLM_URL,
+           "criteria": ("评分标准：OpenCompass 司南 LLM 综合榜。在知识/推理/数学/代码/智能体等多维度"
+                        "权威基准上的加权平均均分（满分 100，越高越强）。")},
+    "sv": {"region": "cn", "board": "comprehensive",
+           "fn": lambda n: fetch_superclue_ranking(n),
+           "label": "SuperCLUE · 中文通用智能指数", "url": SV_GENERAL_URL,
+           "criteria": ("评分标准：SuperCLUE 中文通用能力总排行榜。聚焦中文场景的综合能力复合分"
+                        "（满分 100，越高越强）。")},
+    "ls": {"region": "global", "board": "open_source",
+           "fn": lambda n: fetch_llmstats_ranking(n),
+           "label": "LLM-Stats · 开源模型榜", "url": LLMSTATS_URL,
+           "criteria": LB_CRITERIA["ls"]},
+    "dl": {"region": "global", "board": "open_source",
+           "fn": lambda n: fetch_datalearner_ranking(n),
+           "label": "DataLearner · 开源模型榜", "url": DATALARNER_URL,
+           "criteria": LB_CRITERIA["ls"]},
+    "hf": {"region": "global", "board": "open_source",
+           "fn": lambda n: fetch_hf_open_ranking(n * 2),
+           "label": "Hugging Face · Open LLM Leaderboard", "url": HF_LEADERBOARD_URL,
+           "criteria": LB_CRITERIA["hf"]},
+    "ms": {"region": "cn", "board": "open_source",
+           "fn": lambda n: fetch_modelscope_ranking(n),
+           "label": "ModelScope 魔搭 · 开源模型热度", "url": MS_MODELS_URL,
+           "criteria": ("评分标准：ModelScope 魔搭社区开源模型热度（按页面热度排序）。"
+                        "反映国内开源生态活跃度，非能力基准。")},
+}
+
+
+def _collect_source_results(top_n: int, detected: str, proxy: str):
+    """L2#14：并行抓取所有榜源（ThreadPoolExecutor, max_workers=4），
+    返回 {source_key: {"rows":[...], "latency_ms":int, "status":str}}。
+
+    单源失败不阻断其他源；并行执行器异常时整体回退顺序抓取，保证鲁棒性。
+    `_retry_fetch` 已在每个源内部提供重试退避（P0#10）。
+    """
+    keys = list(SOURCES.keys())
+
+    def _one(key):
+        spec = SOURCES[key]
+        t0 = time.monotonic()
+        try:
+            rows = _retry_fetch(lambda: spec["fn"](top_n))
+            lat = int((time.monotonic() - t0) * 1000)
+            return key, (rows or []), lat, ("ok" if rows else "empty")
+        except Exception as e:  # noqa: BLE001  best-effort 单源容错
+            lat = int((time.monotonic() - t0) * 1000)
+            logger.warning("榜源抓取失败 [%s]: %s", spec["label"], e)
+            return key, [], lat, f"error:{type(e).__name__}"
+
+    results = {}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            futs = {ex.submit(_one, k): k for k in keys}
+            for fut in concurrent.futures.as_completed(futs):
+                k, rows, lat, st = fut.result()
+                results[k] = {"rows": rows, "latency_ms": lat, "status": st}
+        logger.info("并行抓取完成：%d 源，命中 %d",
+                    len(results), sum(1 for v in results.values() if v["rows"]))
+    except Exception as e:  # noqa: BLE001  并行异常回退顺序
+        logger.warning("并行抓取异常，回退顺序抓取: %s", e)
+        results = {}
+        for k in keys:
+            k2, rows, lat, st = _one(k)
+            results[k2] = {"rows": rows, "latency_ms": lat, "status": st}
+    return results
+
+
+def _record_health(results: dict, detected: str):
+    """L2#15：把本次各榜源健康快照 append 到 leaderboard_health.jsonl。
+    每行 {ts,source,source_key,board,region,status,latency_ms,rows_count}。
+    写入失败不阻断主流程（best-effort）。
+    """
+    try:
+        ts = datetime.now().astimezone().isoformat(timespec="seconds")
+        lines = []
+        for key, spec in SOURCES.items():
+            out = results.get(key, {}) or {}
+            lines.append(json.dumps({
+                "ts": ts,
+                "source": spec["label"],
+                "source_key": key,
+                "board": spec["board"],
+                "region": spec["region"],
+                "net_region": detected,
+                "status": out.get("status", "unknown"),
+                "latency_ms": out.get("latency_ms", -1),
+                "rows_count": len(out.get("rows") or []),
+            }, ensure_ascii=False))
+        with HEALTH_PATH.open("a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        logger.info("健康记录已写入 %s（%d 条）", HEALTH_PATH.name, len(lines))
+    except Exception as e:  # noqa: BLE001  健康记录失败不阻断
+        logger.warning("健康记录写入失败: %s", e)
+
+
+__all__ = [
+    "HEALTH_PATH", "LB_CRITERIA", "SOURCES",
+    "_collect_source_results", "_record_health",
+]

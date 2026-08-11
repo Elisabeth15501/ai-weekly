@@ -84,10 +84,25 @@ def _apply_profile_as_truth(leaderboard: dict, profiles: dict):
     这是用户确立的硬性规则：排行榜上展示的模型「资料」必须与资料卡一致，
     资料卡是唯一权威源；成本表(models_cost.json)仅作无卡片时的兜底。
     """
+    # 归一键匹配：profile 键（如 "DeepSeek-V4-Pro"）与排行榜模型名（如 "deepseek v4 pro"）
+    # 格式不一，必须归一（去大小写/空白/符号）才能匹配上，否则行内描述字段无法回填 → 资料缺失
+    import re
+    def _canon(name):
+        return re.sub(r'[^a-z0-9]', '', (name or '').strip().lower())
+    try:
+        from aiweekly.leaderboard import canon_key as _ck
+    except Exception:
+        _ck = None
     _MAP = [("cost_in", "price_in"), ("cost_out", "price_out"),
             ("context", "context"), ("license", "license"),
             ("commercial", "commercial"), ("multimodal", "multimodal"),
             ("currency", "currency")]
+    # 双索引：轻量 canon（最宽容，去所有非字母数字）+ 可选别名 canon_key，提高命中率
+    profiles_canon = {}
+    for k, v in (profiles or {}).items():
+        profiles_canon[_canon(k)] = v
+        if _ck:
+            profiles_canon.setdefault(_ck(k), v)
     boards = []
     for b in (list((leaderboard.get("comprehensive") or {}).values())
               + list((leaderboard.get("open_source") or {}).values())):
@@ -95,7 +110,8 @@ def _apply_profile_as_truth(leaderboard: dict, profiles: dict):
             boards.append(b)
     for b in boards:
         for r in b.get("rows", []):
-            p = profiles.get((r.get("model") or "").lower())
+            model = r.get("model") or ""
+            p = profiles_canon.get(_canon(model)) or (_ck and profiles_canon.get(_ck(model)))
             if not p:
                 continue
             for cf, rf in _MAP:

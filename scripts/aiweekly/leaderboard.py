@@ -10,8 +10,13 @@
 ④ 排行榜描述字段以 model_profiles.json（资料卡）为唯一权威源。
 """
 import json
+import logging
+import time
+import concurrent.futures
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from aiweekly.utils import (
     _http_get, _probe, _detect_region, _retry_fetch, _resolved_proxy,
@@ -23,14 +28,10 @@ from aiweekly.model_meta import (
     _load_cost_table, _COST_TABLE, _match_cost, _enrich_cost, _apply_profile_as_truth,
 )
 from aiweekly.leaderboard_sources import (
-    LM_ARENA_URL, AA_URL, HF_DS_API, HF_LEADERBOARD_URL, DATALARNER_URL,
-    LLMSTATS_URL, OC_LLM_URL, SV_GENERAL_URL, MS_MODELS_URL,
-    ORG_PREFIXES, OPEN_SOURCE_MODEL_KEYWORDS, DL_ORG_SPLIT, _SUFFIX_RE,
-    _clean_model_slug, _norm_model, _is_open_source_model, _split_dl_org,
-    _parse_table_rows, _parse_ctx, _parse_money,
-    fetch_lmarena_ranking, fetch_aa_ranking, fetch_hf_open_ranking,
-    fetch_llmstats_ranking, fetch_datalearner_ranking,
-    fetch_opencompass_ranking, fetch_superclue_ranking, fetch_modelscope_ranking,
+    _norm_model,
+)
+from aiweekly.leaderboard_fetch import (
+    LB_CRITERIA, SOURCES, _collect_source_results, _record_health,
 )
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
@@ -282,64 +283,10 @@ def _leaderboard_freshness(leaderboard: dict, report_date) -> dict:
 
 
 
-# 三榜各自的评分标准说明（渲染到页面「评分标准」行，数据驱动）；定义在多源池之前，
-# 供 SOURCES 引用（模块级求值顺序要求）。
-LB_CRITERIA = {
-    "lmarena": ("评分标准：人类偏好 Elo（LMArena）。由真实用户对模型回答做匿名两两盲测、"
-                "按「哪个回答更好」投票得出——衡量的是真实使用中的人类好感度（使用体感），"
-                "并非某项知识 / 能力基准。分数越高代表越受人类偏好。"),
-    "aa": ("评分标准：智能指数 Intelligence Index（Artificial Analysis）。综合多项权威能力基准"
-           "归一化后的综合分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、"
-           "GPQA（研究生级科学问答）、Humanity's Last Exam / HLE（人类终极考试·极难跨学科学术题，逼近专家上限）。"),
-    "ls": ("评分标准：LLM-Stats 综合分（LLM Stats Score）。基于多项公开基准归一化后的开源模型"
-           "综合得分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、GPQA（研究生级科学问答）、"
-           "HumanEval（代码生成）、MATH（数学竞赛解题）、SWE-bench（软件工程实战·修复真实 GitHub issue）、"
-           "HLE（人类终极考试）；同时标注许可证、上下文窗口与输入输出单价，便于自部署 / 商用评估。"),
-    "hf": ("评分标准：Hugging Face Open LLM Leaderboard 平均分（Average ⬆️）。在多项权威基准上的"
-           "加权平均分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、MATH（数学竞赛解题）、"
-           "HumanEval（代码生成）、GPQA（研究生级科学问答）、MuSR（多步逻辑推理·长篇谜题 / 谋杀推理等需多步推演）、"
-           "IFEval（指令遵循·严格按格式与约束执行）。仅收录可复现的开源权重模型，强调可复现性与社区验证。"),
-}
 
 
-# ---------- 多源池（每个榜源带 region 标签，供 region 优先级排序）----------
-SOURCES = {
-    "aa": {"region": "global", "board": "comprehensive", "key": "aa",
-           "fn": lambda n: fetch_aa_ranking(n),
-           "label": "Artificial Analysis · 智能指数", "url": AA_URL,
-           "criteria": LB_CRITERIA["aa"]},
-    "lm": {"region": "global", "board": "comprehensive", "key": "lm",
-           "fn": lambda n: fetch_lmarena_ranking(n),
-           "label": "LMArena · 人类偏好 Elo", "url": LM_ARENA_URL,
-           "criteria": LB_CRITERIA["lmarena"]},
-    "oc": {"region": "cn", "board": "comprehensive",
-           "fn": lambda n: fetch_opencompass_ranking(n),
-           "label": "OpenCompass 司南 · LLM 综合榜", "url": OC_LLM_URL,
-           "criteria": ("评分标准：OpenCompass 司南 LLM 综合榜。在知识/推理/数学/代码/智能体等多维度"
-                        "权威基准上的加权平均均分（满分 100，越高越强）。")},
-    "sv": {"region": "cn", "board": "comprehensive",
-           "fn": lambda n: fetch_superclue_ranking(n),
-           "label": "SuperCLUE · 中文通用智能指数", "url": SV_GENERAL_URL,
-           "criteria": ("评分标准：SuperCLUE 中文通用能力总排行榜。聚焦中文场景的综合能力复合分"
-                        "（满分 100，越高越强）。")},
-    "ls": {"region": "global", "board": "open_source",
-           "fn": lambda n: fetch_llmstats_ranking(n),
-           "label": "LLM-Stats · 开源模型榜", "url": LLMSTATS_URL,
-           "criteria": LB_CRITERIA["ls"]},
-    "dl": {"region": "global", "board": "open_source",
-           "fn": lambda n: fetch_datalearner_ranking(n),
-           "label": "DataLearner · 开源模型榜", "url": DATALARNER_URL,
-           "criteria": LB_CRITERIA["ls"]},
-    "hf": {"region": "global", "board": "open_source",
-           "fn": lambda n: fetch_hf_open_ranking(n * 2),
-           "label": "Hugging Face · Open LLM Leaderboard", "url": HF_LEADERBOARD_URL,
-           "criteria": LB_CRITERIA["hf"]},
-    "ms": {"region": "cn", "board": "open_source",
-           "fn": lambda n: fetch_modelscope_ranking(n),
-           "label": "ModelScope 魔搭 · 开源模型热度", "url": MS_MODELS_URL,
-           "criteria": ("评分标准：ModelScope 魔搭社区开源模型热度（按页面热度排序）。"
-                        "反映国内开源生态活跃度，非能力基准。")},
-}
+# LB_CRITERIA / SOURCES 已迁移到 aiweekly.leaderboard_fetch（L2 模块拆分，见该文件）。
+# 本文件仅保留编排逻辑：区域优先级 / 快照兜底 / 周变化 / 选型结论。
 
 
 def _load_cache() -> dict:
@@ -393,7 +340,36 @@ def _apply_deltas(rows, cache_rows, score_key=None):
     return rows
 
 
-# _retry_fetch 已迁移到 aiweekly.utils（顶部已 re-export）。
+# L2#14 / L2#15（_collect_source_results / _record_health）已迁移到 aiweekly.leaderboard_fetch。
+# 本文件经顶部 `from aiweekly.leaderboard_fetch import ...` 复用，不再本地定义。
+
+
+def _build_selection_notes(top_name, cheap, new_entries, risers):
+    """L0#3 / L2#13：根据综合榜首、低成本可直连模型、新上榜、跃升模型，
+    生成「总览一句 + 三受众（开发者/PM/自媒体）选型结论」。纯函数，便于单测。
+
+    cheap: 低成本可直连模型行(dict，含 model/price_out) 或 None
+    new_entries / risers: 模型名列表（可为空）
+    """
+    if top_name:
+        selection_note = (f"本周综合最强为 {top_name}；开源/自部署可关注 Qwen、Llama、DeepSeek 等家族"
+                          f"（详见开源榜）。")
+    else:
+        selection_note = "本期源数据缺失，排名与结论仅供参考。"
+    selection_notes = {
+        "开发者": (f"选型先看成本与可直连：{cheap['model']}（{cheap['price_out']}$/1M·out，国内可直连）"
+                   f"适合低成本接入；闭源头部 {top_name or '模型'} 能力强但需评估 API 合规与计费。"
+                   if cheap else
+                   f"闭源头部 {top_name or '模型'} 能力强；自部署优先 Qwen / DeepSeek 家族（开源榜可查许可证与单价）。"),
+        "PM": (f"本周综合最强 {top_name or '头部闭源模型'}"
+               f"{('；' + '、'.join(risers) + ' 名次大幅上升') if risers else ''}"
+               f"——产品路线图可据此评估供应商集中度与替换风险。"),
+        "自媒体": (f"本周看点：{top_name or '头部模型'} 居综合榜首"
+                   f"{('；新上榜 ' + '、'.join(new_entries[:3])) if new_entries else ''}"
+                   f"{('；' + '、'.join(risers) + ' 名次跃升') if risers else ''}。"),
+    }
+    return selection_note, selection_notes
+
 
 def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     """抓取双排行榜，返回结构化数据；网络环境自适应。
@@ -411,21 +387,26 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     else:
         detected = "global"
     proxy = _resolved_proxy()
-    print(f"  🌐 网络环境判定：{detected}" + (f"（代理：{proxy}）" if proxy else ""))
+    logger.info("网络环境判定: %s%s", detected, f"（代理：{proxy}）" if proxy else "")
 
     snapshot = datetime.now().astimezone().strftime("%Y-%m-%d")
     cache = _load_cache()
     cn_snap = _load_cn_snapshot()
 
+    # L2#14：并行预抓取全部榜源（含健康元数据），后续按 region 优先级从结果挑选
+    results = _collect_source_results(top_n, detected, proxy)
+    # L2#15：追加健康监控记录
+    _record_health(results, detected)
+
     def try_board(board: str, need: int):
-        """按 region 优先级尝试该 board 的源池，返回 [(source_spec, rows), ...]。"""
+        """按 region 优先级从已抓取结果中挑选该 board 的源池，返回 [(source_spec, rows), ...]。"""
         pool = [s for s in SOURCES.values() if s["board"] == board]
         pool.sort(key=lambda s: 0 if s["region"] == detected else 1)
         hit = []
         for s in pool:
-            rows = _retry_fetch(lambda: s["fn"](top_n))
-            if rows:
-                hit.append((s, rows))
+            outcome = results.get(s["key"], {})
+            if outcome.get("rows"):
+                hit.append((s, outcome["rows"]))
                 if len(hit) >= need:
                     break
         return hit
@@ -477,9 +458,9 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
 
     # —— 开源榜（双列：LLM-Stats + Hugging Face）——
     os_board = {"ls": {"rows": []}, "hf": {"rows": []}}
-    # LLM-Stats（llm-stats 主源，datalearner 兜底）
-    ls_rows = _retry_fetch(lambda: fetch_llmstats_ranking(top_n)) or \
-              _retry_fetch(lambda: fetch_datalearner_ranking(top_n))
+    # LLM-Stats（llm-stats 主源，datalearner 兜底）—— 均从并行结果读取
+    ls_rows = (results.get("ls", {}).get("rows")
+               or results.get("dl", {}).get("rows"))
     if ls_rows:
         os_board["ls"] = live_slot(SOURCES["ls"], ls_rows)
     elif detected == "cn" and cn_snap.get("open_source"):
@@ -487,7 +468,7 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
             os_board["ls"] = snap_slot(cn_snap["open_source"][key], cn_snap.get("snapshot_date", ""))
             break
     # Hugging Face（独立源，与 LLM-Stats 并排展示）
-    hf_rows = _retry_fetch(lambda: fetch_hf_open_ranking(top_n * 2))
+    hf_rows = results.get("hf", {}).get("rows")
     if hf_rows:
         os_board["hf"] = live_slot(SOURCES["hf"], hf_rows)
     elif detected == "cn" and cn_snap.get("open_source"):
@@ -624,23 +605,7 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     risers = [r["model"] for r in (lm + aa)
               if isinstance(r.get("delta"), dict) and isinstance(r["delta"].get("wow"), int)
               and r["delta"]["wow"] >= 5]
-    if top_name:
-        selection_note = (f"本周综合最强为 {top_name}；开源/自部署可关注 Qwen、Llama、DeepSeek 等家族"
-                          f"（详见开源榜）。")
-    else:
-        selection_note = "本期源数据缺失，排名与结论仅供参考。"
-    selection_notes = {
-        "开发者": (f"选型先看成本与可直连：{cheap['model']}（{cheap['price_out']}$/1M·out，国内可直连）"
-                   f"适合低成本接入；闭源头部 {top_name or '模型'} 能力强但需评估 API 合规与计费。"
-                   if cheap else
-                   f"闭源头部 {top_name or '模型'} 能力强；自部署优先 Qwen / DeepSeek 家族（开源榜可查许可证与单价）。"),
-        "PM": (f"本周综合最强 {top_name or '头部闭源模型'}"
-               f"{('；' + '、'.join(risers) + ' 名次大幅上升') if risers else ''}"
-               f"——产品路线图可据此评估供应商集中度与替换风险。"),
-        "自媒体": (f"本周看点：{top_name or '头部模型'} 居综合榜首"
-                   f"{('；新上榜 ' + '、'.join(new_entries[:3])) if new_entries else ''}"
-                   f"{('；' + '、'.join(risers) + ' 名次跃升') if risers else ''}。"),
-    }
+    selection_note, selection_notes = _build_selection_notes(top_name, cheap, new_entries, risers)
 
     data = {
         "meta": {"region": detected, "proxy": proxy or "",
@@ -733,7 +698,7 @@ def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
         try:
             base = json.loads(DEFAULT_PROFILES.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"  ⚠️ 读取 canonical 模型档案失败：{e}")
+            logger.warning("读取 canonical 模型档案失败: %s", e)
 
     # 合并本次传入的新档案并写回 canonical（实时更新）
     if extra_profiles_path:
@@ -743,9 +708,10 @@ def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
                 base.update(extra)
                 DEFAULT_PROFILES.write_text(
                     json.dumps(base, ensure_ascii=False, indent=2), encoding="utf-8")
-                print(f"📇 已合并 {len(extra)} 条新模型档案 -> {DEFAULT_PROFILES.name}（canonical 已更新）")
+                logger.info("已合并 %d 条新模型档案 -> %s（canonical 已更新）",
+                            len(extra), DEFAULT_PROFILES.name)
         except Exception as e:
-            print(f"  ⚠️ 读取/合并 --profiles-json 失败：{e}")
+            logger.warning("读取/合并 --profiles-json 失败: %s", e)
 
     # 检测新上榜却缺档案的模型
     if leaderboard_data:
@@ -755,14 +721,14 @@ def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):
         if missing:
             PENDING_PROFILES.write_text(
                 json.dumps(missing, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"  ⚠️ 发现 {len(missing)} 个新模型未建档，已写入 {PENDING_PROFILES.name}：{missing}")
-            print(f"     → 请联网核实后通过 --profiles-json 合并，或更新 canonical 档案。")
+            logger.warning("发现 %d 个新模型未建档，已写入 %s: %s",
+                           len(missing), PENDING_PROFILES.name, missing)
         else:
             if PENDING_PROFILES.exists():
                 PENDING_PROFILES.unlink()
-            print(f"📇 模型档案齐全：{len(base)} 条覆盖全部 {len(models)} 个上榜模型")
+            logger.info("模型档案齐全：%d 条覆盖全部 %d 个上榜模型", len(base), len(models))
     else:
-        print("  ℹ️ 未提供排行榜数据，跳过新模型建档检测")
+        logger.info("未提供排行榜数据，跳过新模型建档检测")
 
     return base
 

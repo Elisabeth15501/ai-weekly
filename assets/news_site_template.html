@@ -489,6 +489,32 @@ a:hover { text-decoration: underline; }
   padding: 8px 10px; background: var(--card-bg); border: 1px dashed var(--border); border-radius: 8px; }
 .lb-cross b { color: var(--primary); }
 .lb-cross .up { color: #16a34a; } .lb-cross .down { color: #dc2626; }
+/* L2#17 评测说明卡 */
+.lb-explain, .lb-weights { margin: 0 0 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card-bg); padding: 0; overflow: hidden; }
+.lb-explain > summary, .lb-weights > summary { cursor: pointer; padding: 10px 14px; font-size: 13px;
+  font-weight: 600; color: var(--text); list-style: none; user-select: none; }
+.lb-explain > summary::-webkit-details-marker, .lb-weights > summary::-webkit-details-marker { display: none; }
+.lb-explain > summary::before, .lb-weights > summary::before { content: "▸ "; color: var(--primary); }
+.lb-explain[open] > summary::before, .lb-weights[open] > summary::before { content: "▾ "; }
+.lb-explain-list { margin: 0; padding: 0 18px 12px 30px; font-size: 12.5px; line-height: 1.7; color: var(--text-secondary); }
+.lb-explain-list li { margin: 2px 0; }
+.lb-explain-note { color: var(--text-tertiary); font-style: italic; }
+.lb-weights-body { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center;
+  padding: 10px 14px 14px; font-size: 13px; color: var(--text); }
+.lb-weights-body label { display: inline-flex; align-items: center; gap: 6px; }
+.lb-weights-body input[type=range] { width: 110px; accent-color: var(--primary); }
+.lb-weights-body button { border: 1px solid var(--primary); background: var(--primary); color: #fff;
+  border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; }
+.lb-weights-body button#lbWeightsReset, .lb-weights-body button#lbFilterReset { background: transparent; color: var(--text); }
+/* L3#19 同家族跳转 */
+.lb-rel { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.lb-rel-title { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+.lb-rel-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.lb-rel-g { font-size: 11.5px; color: var(--text-tertiary); margin-right: 4px; min-width: 78px; }
+.lb-rel-chip { border: 1px solid var(--border); background: var(--primary-light); color: var(--primary);
+  border-radius: 999px; padding: 3px 10px; font-size: 11.5px; cursor: pointer; }
+.lb-rel-chip:hover { background: var(--primary); color: #fff; }
 /* P1: 性价比象限 */
 .lb-value { margin-top: 8px; }
 .lb-chart-wrap { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; height: 400px; }
@@ -872,6 +898,31 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
       <button type="button" data-a="自媒体">自媒体</button>
     </span>
   </p>
+
+  <!-- L2#17：榜单评测说明卡（这些榜分别测什么） -->
+  <details class="lb-explain" id="lbExplain">
+    <summary>📖 这些榜分别测什么？（点开看懂排名口径）</summary>
+    <ul class="lb-explain-list">
+      <li><b>LMArena</b>：人类偏好 Elo——真实用户盲测投票「哪个回答更好」，最贴近使用体感。</li>
+      <li><b>Artificial Analysis（AA）</b>：多基准综合「智能指数」——代码/推理/知识等多项能力加权，偏客观能力。</li>
+      <li><b>LLM-Stats</b>：开源模型综合榜——聚合多公开基准，衡量开源模型整体实力。</li>
+      <li><b>Hugging Face Open LLM</b>：开源社区榜——社区共建、侧重可复现的开源评测。</li>
+      <li class="lb-explain-note">同一模型在不同榜名次差，多源于评测侧重不同（偏好 vs 能力），并非绝对强弱；综合榜左列=Arena 名次、右列=AA 智能指数。</li>
+    </ul>
+  </details>
+
+  <!-- L3#18：用户自定义权重排序 -->
+  <details class="lb-weights" id="lbWeights">
+    <summary>⚙️ 自定义权重排序（按你的偏好给模型打分再排）</summary>
+    <div class="lb-weights-body">
+      <label>能力 <input type="range" min="0" max="100" value="40" id="wAbility" oninput="document.getElementById('wAbilityV').textContent=this.value"><span id="wAbilityV">40</span></label>
+      <label>成本 <input type="range" min="0" max="100" value="30" id="wCost" oninput="document.getElementById('wCostV').textContent=this.value"><span id="wCostV">30</span></label>
+      <label>上下文 <input type="range" min="0" max="100" value="20" id="wCtx" oninput="document.getElementById('wCtxV').textContent=this.value"><span id="wCtxV">20</span></label>
+      <label>开源许可 <input type="range" min="0" max="100" value="10" id="wLicense" oninput="document.getElementById('wLicenseV').textContent=this.value"><span id="wLicenseV">10</span></label>
+      <button type="button" id="wApply" onclick="applyWeights()">按加权排序</button>
+      <button type="button" id="wReset" onclick="resetWeights()">恢复榜单原序</button>
+    </div>
+  </details>
 
   <!-- 综合榜：LMArena + AA 双列 -->
   <div class="lb-block">
@@ -1496,24 +1547,29 @@ function orgOf(r){
 function renderLbBoards(){
   if(!_lbData) return;
   const {lm, aa, hf, ls} = _lbData;
+  // L3#18：自定义权重排序——启用时对各榜行按加权总分重排（不影响原始数据）
+  const lmRows = _weightSort ? _sortByWeight(lm.rows) : lm.rows;
+  const aaRows = _weightSort ? _sortByWeight(aa.rows) : aa.rows;
+  const lsRows = _weightSort ? _sortByWeight(ls.rows) : ls.rows;
+  const hfRows = _weightSort ? _sortByWeight(hf.rows) : hf.rows;
   // L1#8: 国内可直连行内标签
   function cnBadge(r){
     if(r && r.cn_access && /国内可直连/.test(r.cn_access))
       return '<span class="cn-badge" title="'+escapeHtml(r.cn_access)+'">🇨🇳</span>';
     return '';
   }
-  renderRows('lmBody', applyLbFilter(lm.rows), (r)=>`
+  renderRows('lmBody', applyLbFilter(lmRows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
+    <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     ${costCell(r)}
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${deltaCell(r.delta, r.spark)}`);
 
-  renderRows('aaBody', applyLbFilter(aa.rows), (r)=>`
+  renderRows('aaBody', applyLbFilter(aaRows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
+    <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     <td>${fmtScore(r.score)}</td>
@@ -1522,9 +1578,9 @@ function renderLbBoards(){
     ${deltaCell(r.delta, r.spark)}`);
 
   // 开源榜：LLM-Stats（左）
-  renderRows('lsBody', (ls&&ls.rows)||[], (r)=>`
+  renderRows('lsBody', applyLbFilter(lsRows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
+    <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(orgOf(r)||'—')}</td>
     <td>${fmtScore(r.score)}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
@@ -1534,9 +1590,9 @@ function renderLbBoards(){
     ${deltaCell(r.delta, r.spark)}`);
 
   // 开源榜：Hugging Face（右）
-  renderRows('hfBody', (hf&&hf.rows)||[], (r)=>`
+  renderRows('hfBody', applyLbFilter(hfRows), (r)=>`
     <td><span class="rank-badge">${r.rank}</span></td>
-    <td class="model-name">${escapeHtml(r.model)}${cnBadge(r)}</td>
+    <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(r.org||'—')}</td>
     <td>${fmtScore(r.score)}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
@@ -1545,6 +1601,38 @@ function renderLbBoards(){
     ${commCell(r)}
     ${deltaCell(r.delta, r.spark)}`);
 }
+
+// ===== L3#18 自定义权重排序 =====
+let _weightSort = false;
+const _W = { ability: 40, cost: 30, ctx: 20, license: 10 };
+function _normCap(v, cap){ return Math.max(0, Math.min(1, (v==null?0:v)/cap)); }
+function _licenseScore(lic){
+  if(!lic) return 50;
+  const s = String(lic).toLowerCase();
+  if(/apache|mit|bsd|modified mit|open ?source|open weight/.test(s)) return 100;
+  if(/专有|proprietary|closed/.test(s)) return 30;
+  return 55;
+}
+function _weightedScore(r){
+  const ability = (r.score!=null) ? Math.max(0, Math.min(100, r.score))
+                : (r.rank!=null ? Math.max(0, 100-(r.rank-1)*1.2) : 0);
+  const cost = 100 * (1 - _normCap(r.price_out, 30));
+  const ctx  = 100 * _normCap(r.context, 2000000);
+  const lic  = _licenseScore(r.license);
+  const W=_W, tot=(W.ability+W.cost+W.ctx+W.license)||1;
+  return (W.ability*ability + W.cost*cost + W.ctx*ctx + W.license*lic)/tot;
+}
+function _sortByWeight(rows){
+  return (rows||[]).map(r=>({r, s:_weightedScore(r)})).sort((a,b)=>b.s-a.s).map(x=>x.r);
+}
+function applyWeights(){
+  _W.ability=+document.getElementById('wAbility').value;
+  _W.cost=+document.getElementById('wCost').value;
+  _W.ctx=+document.getElementById('wCtx').value;
+  _W.license=+document.getElementById('wLicense').value;
+  _weightSort=true; renderLbBoards();
+}
+function resetWeights(){ _weightSort=false; renderLbBoards(); }
 function renderRanking() {
   const LB = LEADERBOARD_DATA;
   const section = document.getElementById('rankingSection');
@@ -1587,6 +1675,9 @@ function renderRanking() {
 
   _lbData = { lm, aa, hf, ls };
   _lbProfiles = LB.model_profiles || {};
+  // 构建归一键索引（与 Python model_meta._canon 等价）：profile 键（如 "DeepSeek-V4-Pro"）
+  // 经 _canon 后映射到原 profile 对象，使榜单名 "deepseek v4 pro" 也能命中资料卡
+  _lbProfilesCanon = buildCanonIndex(_lbProfiles);
   renderLbBoards();
 
   // P0/P1: 选型结论 + 跨源差异 + 性价比象限
@@ -1611,8 +1702,10 @@ function renderRanking() {
       tb.dataset.bound='1';
       tb.addEventListener('click', e=>{
         const tr=e.target.closest('tr');
-        const name=tr && tr.querySelector('.model-name');
-        if(name) openLbModal(name.textContent.trim());
+        const nameTd=tr && tr.querySelector('.model-name');
+        // 取纯模型名（data-model 不含 🇨🇳 等 badge，避免 emoji 干扰 _lbMap 查找）
+        const name=nameTd && (nameTd.dataset.model || nameTd.textContent.trim());
+        if(name) openLbModal(name);
       });
     }
   });
@@ -1657,6 +1750,33 @@ function renderRanking() {
 // ===== 选型卡 / 跨源差异 / 性价比象限（P1）=====
 let _lbMap = {};
 let _lbProfiles = {};   // 模型资料卡 profile（机构/许可证/成本等），由 LEADERBOARD_DATA.model_profiles 注入
+let _lbProfilesCanon = {};   // 归一键索引：去大小写/空白/符号，使 "DeepSeek-V4-Pro" 等键能被榜单名 "deepseek v4 pro" 匹配到
+
+// ===== 资料卡归一键匹配（与 Python model_meta._canon / canon_key 等价）=====
+// 归一化：去大小写 + 去一切非字母数字（含空格/连字符/点/括号），
+// 使 "DeepSeek-V4-Pro" / "deepseek v4 pro" / "DeepSeek V4 Pro (max)" 等都能稳定匹配。
+function _canon(name){
+  return (name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+// 宽松归一：先剥离括号限定词（(max)/(high)/(pro)/(xhigh)/(with fallback) 等变体后缀），
+// 等价于 Python canon_key 经别名表把变体双胞胎归并的行为，使 "Kimi K3" 也能命中 "Kimi K3 (max)"。
+function _looseCanon(name){
+  return _canon((name||'').replace(/\([^)]*\)/g,''));
+}
+// 构建 profile 归一键索引：同时以严格 _canon 与宽松 _looseCanon 为键，
+// 值 = 原 profile 对象，覆盖「榜单名 vs 档案键」的格式差异与变体后缀差异。
+function buildCanonIndex(profiles){
+  const idx = {};
+  if (profiles && typeof profiles === 'object') {
+    for (const k in profiles) {
+      if (Object.prototype.hasOwnProperty.call(profiles, k)) {
+        idx[_canon(k)] = profiles[k];
+        idx[_looseCanon(k)] = profiles[k];
+      }
+    }
+  }
+  return idx;
+}
 
 // L0#3: 受众化选型结论（复用 LEADERBOARD_DATA.selection_notes 三段）
 let _lbSelectionAudience = '开发者';
@@ -1727,15 +1847,72 @@ function renderValueChart(points){
   });
 }
 
+// ===== L3#19 模型知识图谱：从档案反查同机构 / 同许可证 / 同上下文量级 =====
+function _ctxTier(ctx){
+  const c = (ctx==null) ? 0 : ctx;
+  if(c >= 1000000) return '超大(≥1M)';
+  if(c >= 128000) return '大(≥128K)';
+  return '标准(<128K)';
+}
+function _relChips(p){
+  if(!p || !_lbProfiles) return '';
+  const groups = { '同机构': [], '同许可证': [], '同上下文量级': [] };
+  for(const k in _lbProfiles){
+    if(!Object.prototype.hasOwnProperty.call(_lbProfiles, k)) continue;
+    if(k === p.name) continue;
+    const o = _lbProfiles[k];
+    if(p.org && o.org && o.org === p.org) groups['同机构'].push(k);
+    if(p.license && o.license && o.license === p.license) groups['同许可证'].push(k);
+    if(_ctxTier(p.context) === _ctxTier(o.context)) groups['同上下文量级'].push(k);
+  }
+  let html = '';
+  for(const g in groups){
+    const arr = groups[g].slice(0, 6);
+    if(!arr.length) continue;
+    html += '<div class="lb-rel-group"><span class="lb-rel-g">' + g + '</span>' +
+            arr.map(k => '<button type="button" class="lb-rel-chip" data-rel="' +
+                        escapeHtml(k) + '">' + escapeHtml(_lbProfiles[k].name || k) +
+                        '</button>').join('') + '</div>';
+  }
+  return html ? '<div class="lb-rel"><div class="lb-rel-title">🔗 同家族跳转</div>' + html + '</div>' : '';
+}
+
+// 同家族跳转：事件委托（模态内容每次 innerHTML 重建，委托到 mask 一次即可）
+(function _bindRelNav(){
+  const mask = document.getElementById('lbModalMask');
+  if(mask && !mask.dataset.relBound){
+    mask.dataset.relBound = '1';
+    mask.addEventListener('click', function(e){
+      const el = e.target.closest('[data-rel]');
+      if(el){ e.stopPropagation(); openLbModal(el.dataset.rel); }
+    });
+  }
+})();
+
 // 选型卡 modal（资料卡）：合并排行榜行 + 模型资料卡 profile（web 来源）
 function openLbModal(name){
-  const r = _lbMap[(name||'').toLowerCase()];
+  let r = _lbMap[(name||'').toLowerCase()];
   const body = document.getElementById('lbModalBody');
   const mask = document.getElementById('lbModalMask');
-  if(!r || !body || !mask) return;
-  const key = (name||'').toLowerCase();
-  const p = _lbProfiles[key] || _lbProfiles[name] || null;
-
+  if(!body || !mask) return;
+  // Profile 匹配：以归一键索引为主查找（榜单名→profile 键格式不一），回退原名，
+  // 避免 "DeepSeek-V4-Pro" / "Kimi K3"(vs"Kimi K3 (max)") 这类大小写/符号/变体键匹配不到 → 资料缺失
+  const _pkey = _canon(name);
+  const _pkeyLoose = _looseCanon(name);
+  const p = (_lbProfilesCanon && (_lbProfilesCanon[_pkey] || _lbProfilesCanon[_pkeyLoose]))
+          || _lbProfiles[_pkey]
+          || _lbProfiles[(name||'').toLowerCase()]
+          || _lbProfiles[name]
+          || null;
+  // L3#19：若榜单无此行但有档案（如从「同家族跳转」点进的档案模型），用档案合成行，仍可开卡
+  if(!r && p){
+    r = { model: p.name||name, rank: '—', score: (p.intel_index!=null?p.intel_index:null),
+          org: p.org, license: p.license, commercial: p.commercial,
+          price_out: p.cost_out, price_in: p.cost_in, context: p.context,
+          multimodal: p.multimodal, cn_access: p.cn_access||'', best_for: p.use_case,
+          delta: null, spark: [] };
+  }
+  if(!r) return;
   const org  = (p&&p.org) || r.org || '—';
   const lic  = (p&&p.license) || r.license || '—';
   const comm = (p&&p.commercial) || r.commercial || '—';
@@ -1790,6 +1967,7 @@ function openLbModal(name){
       ${row('适用场景', uc)}
       <tr><td>信息源</td><td>${src}</td></tr>
     </table>
+    ${_relChips(p)}
     <p class="lb-modal-hint">⌨️ ← / → 切换上一个 / 下一个模型 · ESC 关闭</p>`;
   mask.style.display = 'flex';
   // L1#11: 键盘导航（←/→ 切换上/下个模型，ESC 关闭）

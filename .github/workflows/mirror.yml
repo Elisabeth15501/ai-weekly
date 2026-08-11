@@ -1,0 +1,44 @@
+name: Mirror Leaderboard
+
+# L3#20：每天抓取一次国际榜源，构建静态镜像并发布到 GitHub Pages。
+# 国内用户改用 Pages 地址拉取，免去代理。
+on:
+  schedule:
+    - cron: '17 18 * * *'      # 每天 UTC 18:17 ≈ 北京 02:17
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mirror-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Build mirror JSON
+        run: python scripts/mirror_build.py --out mirror/leaderboard.json
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'mirror'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
