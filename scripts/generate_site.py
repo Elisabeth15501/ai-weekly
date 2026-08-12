@@ -240,6 +240,14 @@ def main():
                         help="单条翻译超时秒数（默认 45；CPU 本地推理较慢，过短会大量超时丢条）")
     parser.add_argument("--translate-retries", type=int, default=2,
                         help="单条翻译失败后的重试次数（默认 2，总尝试 = retries+1）")
+    parser.add_argument("--translate-num-predict", type=int, default=600,
+                        help="译文 token 上限（默认 600，摘要偏长避免截断）")
+    parser.add_argument("--no-translate-title", dest="translate_title",
+                        action="store_false", default=True,
+                        help="关闭中文标题翻译（默认开启：卡片标题显示中文+原文小字）")
+    parser.add_argument("--translate-cache", default=None,
+                        help="译文缓存文件路径（默认：与 --api-json 同目录的 .translate_cache.json；"
+                             "命中即复用、带原文哈希防脏，避免每周重译）")
     # 本周看点（编辑洞察 + 关键词）：由 Agent 基于本周新闻撰写
     parser.add_argument("--insights-json", help="本周看点 JSON 文件（{keywords:[{term,note}], insights:[{kicker,title,analysis,insight,related:[{title,url}]}]}）")
     parser.add_argument("--lead", help="本周看点顶部导语一句话（电梯演讲，可选）")
@@ -435,6 +443,11 @@ def main():
         translate_workers=args.translate_workers,
         translate_timeout=args.translate_timeout,
         translate_retries=args.translate_retries,
+        translate_num_predict=args.translate_num_predict,
+        translate_title=args.translate_title,
+        translate_cache=args.translate_cache or (
+            os.path.join(os.path.dirname(os.path.abspath(args.api_json)), ".translate_cache.json")
+            if (args.translate_en and args.api_json) else None),
     )
     _lb_ok = bool(leaderboard_data and (
         leaderboard_data.get("comprehensive", {}).get("lmarena", {}).get("rows") or

@@ -420,6 +420,17 @@ def main():
     p.add_argument("--news-api", action="store_true", help="启用 News API 增强")
     p.add_argument("--no-hf", action="store_true", help="跳过 Hugging Face 排行榜")
     p.add_argument("--check-feeds", action="store_true", help="仅检查 RSS 源健康状态")
+    # 可选：抓取阶段即用本地 Ollama 预译英文报道（写回 news.json，generate 阶段零推理）
+    p.add_argument("--translate-en", action="store_true",
+                   help="抓取阶段即用本地 Ollama 为英文报道生成中文总结（需本机运行 Ollama）")
+    p.add_argument("--translate-model", default="qwen2.5:7b",
+                   help="翻译所用本地 Ollama 模型（默认 qwen2.5:7b）")
+    p.add_argument("--translate-workers", type=int, default=3,
+                   help="翻译并发线程数（默认 3；CPU 本地推理下过高会互相抢资源导致超时丢条）")
+    p.add_argument("--translate-timeout", type=int, default=45,
+                   help="单条翻译超时秒数（默认 45；CPU 本地推理较慢，过短会大量超时丢条）")
+    p.add_argument("--translate-retries", type=int, default=2,
+                   help="单条翻译失败后的重试次数（默认 2，总尝试 = retries+1）")
     args = p.parse_args()
 
     if args.check_feeds:
@@ -432,6 +443,25 @@ def main():
         return
 
     data = fetch_all(week_str=args.week, use_news_api=args.news_api, use_hf=not args.no_hf)
+
+    # 可选：抓取阶段预译英文报道（结果写回 news.json），generate 阶段直接命中缓存、零推理。
+    # 用 try/except 包裹：翻译异常（Ollama 未运行/import 失败）绝不影响抓取主体，
+    # generate 阶段会再次尝试（或静默保留英文原文）。
+    if args.translate_en:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from aiweekly.translate import Translator
+            cache_path = os.path.join(
+                os.path.dirname(os.path.abspath(args.output)), ".translate_cache.json")
+            tr = Translator(enabled=True, model=args.translate_model,
+                            timeout=args.translate_timeout, max_workers=args.translate_workers,
+                            retries=args.translate_retries, translate_title=True,
+                            cache_path=cache_path)
+            n = tr.translate_items(data["items"])
+            print(f"🌐 抓取阶段预译：本地 Ollama 翻译 {n} 条英文报道")
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ 抓取阶段预译跳过（{type(e).__name__}: {e}）；generate 阶段将重试")
+
     save_json(data, args.output)
 
     # 退出码分级：0=全成功 / 2=部分降级(源偏少或新闻偏少) / 1=全失败

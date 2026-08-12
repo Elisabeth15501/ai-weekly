@@ -97,7 +97,10 @@ def generate(api_data: dict, output_path: str = None,
              translate_model: str = "qwen2.5:7b",
              translate_workers: int = 3,
              translate_timeout: int = 45,
-             translate_retries: int = 2) -> str:
+             translate_retries: int = 2,
+             translate_num_predict: int = 600,
+             translate_title: bool = True,
+             translate_cache: str = None) -> str:
     """生成完整的新闻网站 HTML。
 
     Args:
@@ -137,7 +140,8 @@ def generate(api_data: dict, output_path: str = None,
         _tr = Translator(
             enabled=True, model=translate_model,
             timeout=translate_timeout, max_workers=translate_workers,
-            retries=translate_retries)
+            retries=translate_retries, num_predict=translate_num_predict,
+            translate_title=translate_title, cache_path=translate_cache)
         try:
             n_tr = _tr.translate_items(api_data.get("items", []))
             if n_tr:

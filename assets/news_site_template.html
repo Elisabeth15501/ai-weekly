@@ -1287,6 +1287,11 @@ function renderCards(items) {
   grid.innerHTML = items.map(n => {
     const timeAgo = formatTimeAgo(n.publishedAt);
     const isEnCn = (n.lang === 'en' && n.cn_summary);
+    const isEnTitle = (n.lang === 'en' && n.cn_title);
+    const titleHtml = isEnTitle
+      ? `<span class="cn-title">${escapeHtml(n.cn_title)}</span>`
+        + `<span class="en-title-sub" style="display:block;font-size:11px;color:#94a3b8;margin-top:3px;font-weight:400;">${escapeHtml(n.title)}</span>`
+      : escapeHtml(n.title);
     const summaryHtml = isEnCn
       ? `<span class="cn-badge">中文</span> ${escapeHtml(n.cn_summary)}`
       : escapeHtml(n.summary);
@@ -1301,7 +1306,7 @@ function renderCards(items) {
         ${n.mustRead ? '<span class="mustread-badge">🔥必读</span>' : ''}
       </div>
       <div class="card-body">
-        <div class="card-title" title="${escapeHtml(n.title)}">${escapeHtml(n.title)}</div>
+        <div class="card-title" title="${escapeHtml(n.title)}">${titleHtml}</div>
         <div class="card-summary${isEnCn ? ' no-clamp' : ''}">${summaryHtml}</div>
         ${enOrigHtml}
         <div class="card-meta">

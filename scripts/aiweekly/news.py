@@ -66,6 +66,8 @@ OPEN_SOURCE_PROVIDERS = {
 
 # CJK 字符范围，用于判定报道语言（含中文→zh，否则→en）
 _CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf]")
+# 连续英文单词（≥2 字母），用于语言判定时区分「英文为主的中英混排」
+_LATIN_RE = re.compile(r"[A-Za-z]{2,}")
 
 
 def merge_external_news(base_items: list, external_items: list) -> list:
@@ -107,6 +109,7 @@ def format_news_items(api_data: dict) -> list:
             "lang": _detect_lang(item.get("title", ""), item.get("summary", "")),
             "score": item.get("score", 0),
             "cn_summary": item.get("cn_summary", "") or "",
+            "cn_title": item.get("cn_title", "") or "",
         })
     return items
 
@@ -120,13 +123,24 @@ def _normalize_source(raw: str) -> str:
 
 
 def _detect_lang(title: str, summary: str) -> str:
-    """基于标题+摘要是否含中文字符判定报道语言：zh / en。
+    """基于标题+摘要判定报道语言：zh / en。
 
-    中文源（量子位/36氪/TechCrunch 中文转载等）与英文源据此自然分流，
-    供页面「语言」筛选使用；不依赖 RSS 源名映射，鲁棒。
+    默认：含中文字符即判中文，对纯中文/中文源（量子位、36氪、TechCrunch 中文转载等）
+    与纯英文源自然分流，供页面「语言」筛选；不依赖 RSS 源名映射，鲁棒。
+
+    增强（P1#5）：纠正「英文为主的中英混排」误判——如 "OpenAI 发布 GPT-5"，
+    旧逻辑因含个别汉字直接判中文、导致这类英文报道既不进「语言=英文」筛选、
+    也不触发中文总结。现改为：汉字极少（<8）且含 ≥2 个英文词时判英文。
+    正常中文报道摘要汉字数远大于 8，不会误伤。
     """
     text = f"{title or ''} {summary or ''}"
-    return "zh" if _CJK_RE.search(text) else "en"
+    if not _CJK_RE.search(text):
+        return "en"
+    han = len(_CJK_RE.findall(text))
+    latin = len(_LATIN_RE.findall(text))
+    if han < 8 and latin >= 2:
+        return "en"
+    return "zh"
 
 
 def _normalize_summary(raw: str, max_len: int = SUMMARY_MAX,
