@@ -79,13 +79,25 @@ ai-weekly/
 │   └── accumulate_data.py        # 历史数据累积器（WoY/YoY 环比，可选工具）
 ├── references/                   # 数据源与报告结构参考文档
 ├── docs/
-│   └── agent-skill-format-landscape.md  # Agent 技能格式格局调研报告
-├── data/                         # 运行时小数据（feed 健康状态、历史缓存）
+│   └── agent-skill-format-landscape.md  # （本地开发参考，已 gitignore，不随仓库发布）
+├── data/                         # 本地运行时数据（feed 健康/历史缓存）；gitignore，不入库
 ├── model_profiles.json           # 模型档案（排行榜描述字段唯一权威源）
 └── models_cost.json              # 模型成本兜底数据
 ```
 
 > 运行时产物（`news.json` / `insights.json` / `leaderboard_cache.json` / `AI_News_*.html` 等）已被 `.gitignore` 排除，不会入库；仓库只保留可复现的源码与参考配置。
+
+---
+
+## 本地数据与首次使用说明
+
+ai-weekly 的**排行榜、市场分析**等展示「实时数据 / 趋势」的模块，依赖**本地累积的历史快照**（如 `snapshots/` 下的周度榜单快照、`data/` 下的趋势累积数据）。
+
+这些历史数据**只在你运行生成时于本地产生**，且只能捕捉**最近**的数据窗口——它们**不会、也不应**随仓库分发（本就属于个人运行产物，已加入 `.gitignore`）。
+
+**⚠️ 首次安装请注意**：头几周生成的报告里，上述模块的「趋势线 / 环比（WoW）变化」会显示为**空白**，这是正常现象、**并非 Bug**。随着你每周持续运行（本地累积 2 周以上快照后），趋势线会自动填充。
+
+> 若希望首次即可看到历史趋势，可手动放入近期快照文件，或先连续运行几周累积本地数据。
 
 ---
 
@@ -168,7 +180,6 @@ ai-weekly/
 
 ## 相关文档
 
-- [Agent 技能格式格局调研报告](./docs/agent-skill-format-landscape.md) — SKILL.md 如何成为 Agent 技能事实标准
 - [对抗式代码审查报告](./AI_Weekly_Adversarial_Review.md) — 安全缺陷修复详情与 payload 验证
 - [优化方案文档](./AI_Weekly_Optimization_Plan.md)（如有）— 工程债清单与北极星规划
 
