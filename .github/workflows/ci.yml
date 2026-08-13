@@ -1,0 +1,27 @@
+name: CI
+
+# 把仓库已有质量门禁（13 个纯函数单测 + 全仓语法编译）接进自动化：
+# 每次 push / PR 都跑，避免坏提交直接进入公开仓库或 SkillHub 发行。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Syntax gate (py_compile all scripts)
+        run: python -m compileall -q scripts
+      - name: Unit tests (pure, offline)
+        working-directory: scripts
+        run: python -m pytest aiweekly/tests/ -q

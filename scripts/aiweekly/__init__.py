@@ -1,13 +1,14 @@
 """aiweekly · AI 周报生成器内部包。
 
 设计原则：
-- 按职责垂直切分（P1#1 已全部落地，10 模块）：
+- 按职责垂直切分（P1#1 已全部落地，11 模块）：
     types              — TypedDict 数据契约（NewsItem / LeaderboardRow / LeaderboardSlot）
-    utils              — 日期解析 / 网络 IO / 代理 / 区域探测 / 重试退避
+    utils              — 日期解析 / 网络 IO / 代理 / 区域探测 / 重试退避 / JSON 读写
     translate          — 本地 Ollama 英文中译 + 健康探测
     news               — 外部合并 / 信源归一 / 摘要压缩 / 语言判定 / 重要度评分
     leaderboard_sources — 多源池抓取（LMArena / HF / OpenCompass / SuperCLUE / ModelScope）
     leaderboard        — 多源榜合并 / 快照兜底 / 成本与档案富化 / 选型结论
+    leaderboard_fetch  — 单源抓取执行 / 健康记录（SOURCES / LB_CRITERIA / _collect_source_results / _record_health / HEALTH_PATH；P0#4 硬守护拆出，避免 leaderboard.py 越 800 行）
     market             — 市场规模与融资数据 / Chart.js 构建 / 本周信号 × 趋势洞察桥接
     insights           — 看点卡 / 导语 / 关键词彩标 / 受众 chips（全部服务端预渲染）
     model_meta         — 模型元数据查找（成本 / 上下文 / 许可证 / 币种）

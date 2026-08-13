@@ -45,7 +45,7 @@ metadata:
 - **高可信度**：每条新闻必须附带原始报道 URL
 - **零脑补**：市场/融资图表数据必须由 Agent 从 WebSearch 获取真实值后注入；未提供时明确标注「示例/估算数据」，绝不编造模型榜单
 - **零运维**：生成后直接可用的静态 HTML
-- **跨平台单源**：本 `SKILL.md` 同时服务 Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy；引擎接口另见 `manifest.json`（LangGraph / Dify / Coze 等框架的最小接口描述）
+- **跨平台单源**：本 `SKILL.md` 同时服务 Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy；引擎接口另见 `manifest.json`（LangGraph / Dify / Coze 等框架的最小接口描述）。兼容性按 AgentSkills 规范声明；**已实测 WorkBuddy，其余平台尚未逐一回归**，如遇加载问题请反馈。
 
 ## 三、不要做（硬规则）
 

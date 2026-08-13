@@ -3,6 +3,7 @@
 所有函数无业务依赖，供其它子模块引用。
 外部使用仍可通过 `from generate_site import _http_get`（兼容垫层）。
 """
+import json
 import os
 import random
 import ssl
@@ -10,6 +11,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 
 # Chrome UA：绕过部分站点的反爬默认 UA 限制
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -222,9 +224,37 @@ def _parse_snapshot_date(snap: str):
         return None
 
 
+def load_json(path, default=None):
+    """读取 JSON 文件（best-effort，不抛）。
+
+    文件不存在 / 解析失败均返回 `default`，由调用方决定回退策略。
+    集中消除各模块手写 `Path.read_text` + `json.loads` 的重复样板。
+    """
+    p = Path(path)
+    if not p.exists():
+        return default
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
+
+
+def save_json(path, obj, indent: int = 2) -> None:
+    """原子化写入 JSON 文件（先写 .tmp 再 rename，避免半截文件被下游读到）。
+
+    `ensure_ascii=False` 保留中文可读；`indent=2` 与历史产物格式一致。
+    """
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=indent), encoding="utf-8")
+    tmp.replace(p)
+
+
 __all__ = [
     "_UA", "_PROXY_OVERRIDE", "_SOCKS_ACTIVE",
     "_resolved_proxy", "_configure_proxy", "_build_opener",
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_iso_datetime", "_parse_date_arg", "_parse_snapshot_date",
+    "load_json", "save_json",
 ]

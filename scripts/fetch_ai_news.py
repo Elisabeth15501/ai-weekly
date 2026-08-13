@@ -52,6 +52,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
+from aiweekly.utils import save_json as _save_json
+
 try:
     import feedparser
     import requests
@@ -405,7 +407,7 @@ def fetch_all(week_str: str | None = None, use_news_api: bool = False,
 
 
 def save_json(data: dict, output_path: str) -> None:
-    Path(output_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_json(output_path, data)  # 委托到 aiweekly.utils.save_json（原子写 + 共享助手）
     print(f"\n✅ 已保存 {output_path}（{data['count']} 条新闻）")
     cats = {}
     for it in data["items"]:
