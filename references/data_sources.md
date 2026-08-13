@@ -139,7 +139,7 @@ NEWSAPI_KEY=
 # Crunchbase API（可选）
 CRUNCHBASE_KEY=
 
-# 代理配置（如需翻墙访问英文 RSS 源）
+# 代理配置（受限网络下可选，用于提升海外源可达性）
 HTTP_PROXY=
 HTTPS_PROXY=
 ```

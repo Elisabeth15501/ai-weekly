@@ -295,7 +295,7 @@ bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open
 
 - **源池与 region 标签**：综合榜源池 `[Artificial Analysis(国外), LMArena(国外), OpenCompass 司南(国内), SuperCLUE(国内)]`；开源榜源池 `[Hugging Face(国外), ModelScope 魔搭(国内)]`。每个源带 `region` 标签。
 - **自动探测**：`--region auto` 同时探测一个国内哨兵与一个国外哨兵，判定 `cn` / `global` / `unknown`，并据此排序源优先级（国内环境优先国内源，反之亦然）。也可显式 `--region cn` / `--region global`。
-- **代理支持**：国外源在受限网络（如国内无代理）下常超时；可通过 `HTTPS_PROXY` 环境变量或 `--proxy` 参数指定出站代理，让 LMArena/AA/HF 重新可达。
+- **代理支持**：部分海外源在受限网络（如企业内网）下可能超时；可通过 `HTTPS_PROXY` 环境变量或 `--proxy` 参数指定出站代理以提升可达性。
 - **国内可直连榜的局限（重要）**：OpenCompass 司南、SuperCLUE、ModelScope 官网均为 **JS 渲染 SPA**，其数据 API 无法用简单 HTTP 稳定抓取（返回 SPA 兜底页 / 需鉴权）。因此这些"live"解析器按**尽力而为**实现——连不上或解析不到结构化数据就返回 None，由多源池优雅降级。
 - **兜底不空白**：国内环境且实时源全失败 → 自动回退到随技能附带的 `cn_leaderboard_snapshot.json`（OpenCompass 司南 LLM 综合榜 + 开源榜快照，标注数据截止日，徽章显示「缓存快照」）；国外/未知环境且实时源失败 → 回退本地 `leaderboard_cache.json`。
 - **来源透明**：排行榜每个子榜头部用徽章标注「实时·国内源 / 实时·国外源 / 缓存快照」，页脚注明探测到的网络环境与选用策略，用户始终知道数据从哪来。
@@ -303,23 +303,19 @@ bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open
 排行榜来源优先级：`--ranking-json` > 多源池实时（按 region 排序）> 国内快照 / 本地缓存 > 显示「暂无实时数据」。
 图表数据未注入时，图表注释自动标注「示例/估算数据」，不伪装为实时。
 
-### 配置代理（让 LMArena / Hugging Face 实时抓取）
+### 配置代理（可选，提升受限网络下海外源可达性）
 
-实测：**Artificial Analysis 在国内网络通常可直连（HTTP 200）**，但 **LMArena、Hugging Face 直连不通（网络不可达）**，需走代理。技能已内置代理支持（`_http_get` / `_probe` 经 `ProxyHandler` 或 SOCKS 全局生效），只需提供一个可达的代理端点：
+部分海外源在受限网络（如企业内网、无外网出口的环境）下可能超时。技能内置代理支持（`_http_get` / `_probe` 经 `ProxyHandler` 或 SOCKS 全局生效），可通过标准 HTTP 代理端点提升可达性：
 
-- **HTTP 代理（推荐，如 Clash / Clash Verge 默认混合端口 7890）**
-  1. 启动代理客户端，确认监听 `127.0.0.1:7890`（HTTP 类型，非 SOCKS）。
-  2. 二选一运行：
-     ```bash
-     HTTPS_PROXY=http://127.0.0.1:7890 bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
-     # 或
-     bash run_report.sh scripts/generate_site.py --api-json news.json --proxy http://127.0.0.1:7890 -o AI_News.html
-     ```
-- **SOCKS 代理（如 v2rayN 默认 1080，需 PySocks）**
-  1. 先装依赖：`$HOME/.workbuddy/binaries/python/envs/aiweekly/Scripts/python.exe -m pip install PySocks`
-  2. 运行：`--proxy socks5://127.0.0.1:1080`（或 `HTTPS_PROXY=socks5://127.0.0.1:1080`）。
-- **验证**：日志出现 `🌐 网络环境判定：…（代理：http://…）`，且综合榜左列(LMArena)/开源榜(HF) 头部徽章为「实时·国外源」即成功；若仍回退「缓存快照」说明代理未生效或不可达。
-- **降级行为**：代理不可达时，国外源优雅降级到国内快照 / 本地缓存，不会崩溃；代理也通国内源时，OpenCompass 等仍按国内优先级优先。
+- **通过环境变量**
+  ```bash
+  HTTPS_PROXY=http://<proxy-host>:<port> bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
+  ```
+- **通过参数**
+  ```bash
+  bash run_report.sh scripts/generate_site.py --api-json news.json --proxy http://<proxy-host>:<port> -o AI_News.html
+  ```
+- **降级行为**：代理不可达时，海外源优雅降级到国内快照 / 本地缓存，不会崩溃。
 
 ### 模型资料卡档案同步（real-time archive update）
 

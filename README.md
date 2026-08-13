@@ -110,18 +110,18 @@ ai-weekly 的**排行榜、市场分析**等展示「实时数据 / 趋势」的
 ### 1. 在线 demo（HTML）
 - `https://<owner>.github.io/<repo>/` → 最新一期 AI 周报（根路径直达）
 - `https://<owner>.github.io/<repo>/reports/<ISO周>/index.html` → 任意历史周次（如 `reports/2026-W33/index.html`）
-- 单文件 HTML、Chart.js 已内联，**国内免代理、可离线打开**（与本地生成物一致）
+- 单文件 HTML、Chart.js 已内联，**无外部依赖、可直接离线打开**（与本地生成物一致）
 
 ### 2. 往周数据源（结构化 JSON）
 - `https://<owner>.github.io/<repo>/reports/index.json` → 所有已发布周次的清单（索引）
 - `https://<owner>.github.io/<repo>/reports/<ISO周>/news.json` → 该周结构化新闻（字段与 `news.json` 一致，机器可读）
-- `https://<owner>.github.io/<repo>/leaderboard.json` · `model_profiles.json` → 排行榜镜像（供国内前端免代理拉取）
+- `https://<owner>.github.io/<repo>/leaderboard.json` · `model_profiles.json` → 排行榜镜像（网络受限环境下可直接拉取，免去自行抓取海外源）
 
 > **为什么能当数据源？** RSS 仅保留约 1 周，无法回抓旧闻；但本工作流**每次运行都会把当周已生成的结构化报告发布到 Pages 并累加入 `reports/index.json`**。未来的周报增强（跨周趋势、WoW 环比对比）即可直接 `fetch` Pages 上的历史 `news.json`，无需重新抓取原始 RSS。注意：它保存的是「已生成的周报快照」，不是原始 RSS 流——要扩充历史，需在该周仍处 RSS 保留期内至少运行一次（每日定时已保证这点）。
 
 ### 已知限制
 - **中文翻译**：CI 环境无本地 Ollama，故不在工作流中传 `--translate-en`，英文报道以**原文**呈现。若需公开站点也带中文总结，请在**本地**生成（带 `--translate-en`）后另行推送到 Pages 源，或把带译文的 `news.json` 注入工作流。
-- **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」；排行榜镜像每日刷新（CI 在境外直连 LMArena/HF 等国际源，比本地 `cn` 环境更全）。
+- **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」；排行榜镜像每日刷新（CI 在境外环境抓取 LMArena/HF 等国际源，比本地 `cn` 环境更全）。
 
 如需手动触发或回填某周：`Actions → Mirror Leaderboard & Weekly Report → Run workflow`，可填 `week=2026-W33`（注意 RSS 保留期限制）。
 

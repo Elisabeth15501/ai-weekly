@@ -5,7 +5,7 @@
 全部落在一个目录（默认 public/）下，由 mirror.yml 作为 Pages artifact 上传部署。
 
 部署后站点结构（假设仓库 elisabeth15501/ai-weekly）：
-  /leaderboard.json              排行榜镜像（供国内前端免代理拉取）
+  /leaderboard.json              排行榜镜像（网络受限环境下可直接拉取）
   /model_profiles.json           模型档案镜像
   /index.html                    最新一期周报（根路径直达，在线 demo）
   /reports/index.json            所有已发布周次的清单（往周数据源索引）
@@ -124,7 +124,7 @@ def main() -> int:
     if rc == 1 or not has_items:
         raise RuntimeError(f"新闻抓取失败（exit={rc}，有数据={has_items}），无可用数据，终止构建")
 
-    # 3) 生成 HTML（用镜像排行榜，避免 CI 直连 GFW 源；无 insights 时相关板块留空）
+    # 3) 生成 HTML（用镜像排行榜，避免 CI 直接抓取海外源；无 insights 时相关板块留空）
     print("🖥️ 生成周报 HTML…", flush=True)
     html = week_dir / "index.html"
     gen_cmd = [py, "scripts/generate_site.py",

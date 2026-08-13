@@ -18,7 +18,7 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 # 代理：允许通过 HTTPS_PROXY / HTTP_PROXY 环境变量或 --proxy 参数显式指定，
-# 让「国外源」在受限网络（如国内需走代理）下也能抓取。
+# 让「国外源」在受限网络（如企业内网）下也能抓取。
 _PROXY_OVERRIDE = None  # 由 CLI 通过 --proxy 设置
 
 _SOCKS_ACTIVE = False  # 由 _configure_proxy() 在启用 SOCKS 时置位
@@ -61,7 +61,7 @@ def _configure_proxy():
             print(f"  🔌 已启用 SOCKS 代理：{host}:{port}（PySocks）")
         except ImportError:
             print("  ⚠️ 检测到 SOCKS 代理但未安装 PySocks，无法使用。"
-                  " 请运行：pip install PySocks（在 aiweekly venv 中），或改用 HTTP 代理（如 Clash 7890）。")
+                  " 请运行：pip install PySocks（在 aiweekly venv 中），或改用 HTTP 代理。")
         except Exception as e:
             print(f"  ⚠️ SOCKS 代理配置失败：{e}")
 

@@ -1737,7 +1737,7 @@ function renderRanking() {
     if (banner) {
       banner.style.display = 'block';
       banner.innerHTML = '⚠️ <b>榜单时效提示</b>：本期限部分排行榜为缓存快照（' + staleTxt +
-        '），非本周实时抓取，仅供参考。建议在生成时刷新 <code>cn_leaderboard_snapshot.json</code> 或加 <code>--proxy</code> 直连刷新。';
+        '），非本周实时抓取，仅供参考。建议在生成时刷新 <code>cn_leaderboard_snapshot.json</code> 或加 <code>--proxy</code> 实时刷新。';
     }
   } else {
     const banner = document.getElementById('lbStaleWarn');

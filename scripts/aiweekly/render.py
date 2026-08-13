@@ -180,7 +180,7 @@ def generate(api_data: dict, output_path: str = None,
     if _lb_fresh["stale"]:
         print(f"  ⚠️ 排行榜快照时效告警：最新快照距本期 {_lb_fresh['worst_age']} 天"
               f"（阈值 {LEADERBOARD_STALE_DAYS} 天），部分榜单为「非本周抓取」——"
-              f"建议刷新 cn_leaderboard_snapshot.json 或加 --proxy 直连刷新。")
+              f"建议刷新 cn_leaderboard_snapshot.json 或加 --proxy 实时刷新。")
     else:
         print(f"  ✅ 排行榜快照时效 OK（最大龄 {_lb_fresh['max_age']} 天）。")
 
