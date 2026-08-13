@@ -25,6 +25,7 @@ keyword_search_sources.json
 model_profiles.pending.json
 leaderboard_health.jsonl
 mirror/
+public/
 snapshots/
 *.run.log
 

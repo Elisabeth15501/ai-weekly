@@ -1,11 +1,17 @@
-name: Mirror Leaderboard
+name: Mirror Leaderboard & Weekly Report
 
-# L3#20：每天抓取一次国际榜源，构建静态镜像并发布到 GitHub Pages。
+# L3#20 + L3#21：每天抓取国际榜源构建排行榜镜像，并生成 AI 周报站，
+# 一并发布到 GitHub Pages：既作为在线 demo，也作为「往周数据源」（结构化 JSON）。
 # 国内用户改用 Pages 地址拉取，免去代理。
 on:
   schedule:
     - cron: '17 18 * * *'      # 每天 UTC 18:17 ≈ 北京 02:17
   workflow_dispatch:
+    inputs:
+      week:
+        description: '指定 ISO 周（如 2026-W33）覆盖本周；留空=本周。注意 RSS 仅保留约 1 周'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -26,12 +32,17 @@ jobs:
           python-version: '3.12'
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Build mirror JSON
-        run: python scripts/mirror_build.py --out mirror/leaderboard.json
+      - name: Build Pages site (leaderboard mirror + weekly report + data source)
+        run: |
+          ARGS=(--out-dir public)
+          if [ -n "${{ github.event.inputs.week }}" ]; then
+            ARGS+=(--week "${{ github.event.inputs.week }}")
+          fi
+          python scripts/build_pages_site.py "${ARGS[@]}"
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'mirror'
+          path: 'public'
 
   deploy:
     needs: build
