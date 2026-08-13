@@ -1,0 +1,235 @@
+{
+  "count": 25,
+  "items": [
+    {
+      "title": "一家新能源大厂，如何撑起全球最大AI算力超级单体？",
+      "summary": "算力竞赛的天平，正在向电力倾斜",
+      "url": "https://www.qbitai.com/2026/08/470621.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T11:36:42",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "谷歌创始人布林紧急接管Gemini团队，但“3.5 Pro已被取消”",
+      "summary": "谷歌算力分配内耗严重",
+      "url": "https://www.qbitai.com/2026/08/470576.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T09:24:44",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "百年黎曼猜想被Claude破了新纪录！是个未公开新模型",
+      "summary": "把下界推高了一大截",
+      "url": "https://www.qbitai.com/2026/08/470485.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T05:12:20",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "GPU开始金融化！黄仁勋拉上华尔街搞5000亿美元融资",
+      "summary": "真就把GPU当理财产品了～",
+      "url": "https://www.qbitai.com/2026/08/470254.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T04:31:39",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "Claude骂声中启动「隐形水印」：新模型全量嵌入，标记所有文字",
+      "summary": "大水印时代来了",
+      "url": "https://www.qbitai.com/2026/08/470228.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T03:51:24",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "当AI开始“自作主张”，谁来为智能体戴上“项圈”？全球AI安全实战化大考，中国方案打入前三",
+      "summary": "全球AI安全实战化测评，中国方案DoGNAVY位列前三",
+      "url": "https://www.qbitai.com/2026/08/469869.html",
+      "source": "量子位",
+      "publishedAt": "2026-08-11T03:11:12",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "扒完微信16个AI入口，我们发现“小微”无处不在",
+      "summary": "AI应用风向标（公众号：ZhidxcomAI）\n 作者｜江宇\n 编辑｜漠影\n智东西8月11日报道，继此前灰度测试原生AI助手“小微”后，微信近期又在多个高频功能中加入AI入口，包括公众号消息总结、朋友圈文案生成、扫一扫“拍照给AI”，以及聊天输入框里的“指令”。\n今年6月，我们曾高强度体验小微，并在微信里找到了12个入口：聊天记录、群聊、公众号文章、视频号、图片、PDF、Office文档等内容，都可以直接“问小微”。\n这次，我们又顺着微信各个角落扒了一遍，发现小微还在继续往外“长”。\n相比此前以“问内容”为主，这批新入口离微信日常操作更近了：刷公众号、发朋友圈、扫一扫，甚至给朋友发一句话，都能",
+      "url": "https://zhidx.com/p/583944.html",
+      "source": "智东西",
+      "publishedAt": "2026-08-11T21:50:30",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "刚刚，蚂蚁站在Kimi肩膀上开源了一款新模型",
+      "summary": "智东西\n作者 | 李水青\n编辑 | 心缘\n智东西8月11日报道，今日，蚂蚁百灵大模型开源了一款轻量级混合推理MoE模型——Ling-3.0-tiny。\n该模型总参数量为7.9B，推理时激活参数量为1.3B，主要面向高效本地部署而设计。其同步提供BF16、FP8和INT4三个版本，已在DGX Spark、MacBook、Mac mini等设备上完成验证，兼顾性能、效率与可部署性。\n\n在Artificial Analysis Intelligence Index评价体系中，Ling-3.0-tiny获得25分，仅比Gemma-4-26B-A4B低1分，同时高于gpt-oss-120B（high）、",
+      "url": "https://zhidx.com/p/583981.html",
+      "source": "智东西",
+      "publishedAt": "2026-08-11T20:11:50",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "小扎高调开战闭源AI！推30B智能体模型，消费级显卡就能跑，杨立昆点赞",
+      "summary": "智东西\n 编译 | 茄子\n 编辑 | 程茜\n智东西8月11日消息，昨晚，Meta推出300亿参数本地Agent模型Muse Glimmer，并宣布开放权重，这也是Meta成立超级智能实验室后首次开放模型权重。\n随后，Meta创始人兼CEO马克·扎克伯格（Mark Zuckerberg）发长文阐述Meta的超级智能路线，并呼吁减少美国对开源AI模型的限制，批评部分AI厂商通过封闭模型控制技术和用户，同时支持继续实施芯片出口管制。\n他还预告Meta即将开放最新旗舰模型Muse Spark 1.2的权重。\n\n▲扎克伯格官宣开放Muse Glimmer权重并发长文（图源：X）\n据技术博客称，Muse",
+      "url": "https://zhidx.com/p/583803.html",
+      "source": "智东西",
+      "publishedAt": "2026-08-11T18:08:33",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "深圳创企做触觉，融了数千万，前纽交所公司高管创办",
+      "summary": "机器人前瞻（公众号：robot_pro）\n作者 | 周加琦\n编辑 | 漠影\n机器人前瞻8月11日报道，近日，深圳触觉传感厂商模量科技完成数千万Pre-A轮融资，由猎鹰投资、益华资本投资，点石资本担任财务顾问。\n据悉，模量科技本轮融资资金将用于研发团队和产线扩建、全球业务拓展。\n2025年6月，该公司获得了德宁资本约千万元的天使轮融资；同年9月，模量科技再次获得青橙资本的千万级Pre-A轮加注。\n模量科技成立于2024年，专注于构建触觉基础设施，研发触觉感知模组、触觉数据采集、触觉模型。\n该公司的核心产品包括MoFi触觉模组、MoVi视触觉六维力、MoGlo数采手套、MoTe压力分布测试系统、F",
+      "url": "https://zhidx.com/p/583814.html",
+      "source": "智东西",
+      "publishedAt": "2026-08-11T12:55:17",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "AI 硬件都在做加法，阅星曈靠一块「减法屏」拿下近 5000 万融资",
+      "summary": "头图来源：阅星曈\n \n极客公园获悉，超便携电子纸品牌阅星曈近期完成一笔接近 5000 万元的 A 轮追加融资，由顺为资本、经纬创投、博裕创投和小红书四家老股东继续投资。\n此前在今年 4 月，阅星曈曾对外披露，自天使轮至 A 轮累计完成五轮、总额超过亿元的融资。公司方面称，此次近 5000 万元是滚动融资中近期完成的一笔 A 轮交割。资金将主要用于提前锁定电子纸屏幕和产能、研发新硬件、改善软件交互、探索 AI 能力，以及拓展内容版权和海外市场。\n过去两年，AI 硬件普遍在做加法：加入麦克风、摄像头、更多传感器和更大的模型，希望设备能够听见、看见并主动理解用户。\n阅星曈目前获得市场反馈的产品，",
+      "url": "http://www.geekpark.net/news/368690",
+      "source": "极客公园",
+      "publishedAt": "2026-08-11T21:00:26",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "对话格式塔彭雷：AI 的下一站，是解读人的大脑",
+      "summary": "过去半年，脑机接口行业同时踩下了几脚油门。\n2026 年 1 月，Neuralink 宣布全球临床试验参与者增至 21 人。从 2024 年完成首例人体植入，到将试验扩展至多个国家，侵入式脑机接口正在越过单个患者的演示阶段。\n同一个月，OpenAI 成为 Merge Labs 约 2.5 亿美元种子轮融资中的最大出资方。这家由 Sam Altman 联合创办的公司没有继续沿用电极，转而把筹码押在超声上，希望在不开颅的情况下读取和调控大脑。\n另一条经血管植入路线上的 Synchron，也完成了 2 亿美元 D 轮融资，资金将用于关键性试验和商业化准备。\n国内市场也迅速升温。公开统计显示，20",
+      "url": "http://www.geekpark.net/news/368694",
+      "source": "极客公园",
+      "publishedAt": "2026-08-11T21:00:08",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "对话影溯章国锋：互联网数据才是空间智能最需要的「太阳能」",
+      "summary": "作者｜张鹏 \n整理｜ 徐珊\n \n世界模型的牌桌上，坐着的已经全是重量级玩家。Yann LeCun 离开 Meta 亲自下场，李飞飞的 World Labs 发布 Marble，NVIDIA 用 Cosmos 拉起联盟，国内的大厂与创业公司也在密集进场。让 AI 理解物理世界，已经是今年的主流方向。\n但模型智能的上限，最终取决于喂给它的数据。 语言模型和视频模型的成长，都建立在互联网三十年的积累上；而这一次，世界模型的牌桌上，没有任何一家的数据够得到训练基础模型所需的量级。\n行业不是没有努力。从遥操到第一视角采集，具身公司都在重金投入数据。但在影溯科技创始人兼董事长、浙江大学求是特聘教授 章国锋",
+      "url": "http://www.geekpark.net/news/368667",
+      "source": "极客公园",
+      "publishedAt": "2026-08-11T15:30:55",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "Seedance 2.5 上线后，LibTV 先帮创作者「学会」了新模型",
+      "summary": "作者｜甘德 \n编辑｜ 郑玄\n \nSeedance 2.5 发布的时候，身边几乎所有 AI 视频或者 AI 影视相关的朋友都很兴奋。\n「模型能力已经溢出了」。\n一位在做 AI 短剧导演的朋友这样评价。他的体验是，现在有一个好故事，有专业的电影制作经验，或者一支足够专业的抽卡师团队，以及比较充足的资金，Seedance 2.5 已经能够稳定制作出业界工业水准之上的视频内容了。\n但这样专业而无后顾之忧的创作者仍然是少数。\n过去一年，视频模型的生成能力大幅提升。但这些变化还没有能够完全兑现到视频整体质量的提升上。\n答案或许在那位 AI 短剧导演的后半句里。Seedance 2.5 是一块金子，但对于大",
+      "url": "http://www.geekpark.net/news/368665",
+      "source": "极客公园",
+      "publishedAt": "2026-08-11T15:21:37",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "把 AI 视频的钱花在刀刃上，不是每一刀上",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/pqWqcoySQ5HdKz96vSo3?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T19:11:29",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "代理技能 Ponytail 在贡献者提出质疑后修正了自身的基准测试结果",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/uHECxUzeafk9Nbzpxi25?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T17:48:00",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "让 Agent 读懂业务世界：Snowflake Cortex Agents 的本体驱动推理实践",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/2NsA9FT1uhjmdRrwzOo3?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T17:19:44",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "为 Agentic Enterprise 实现 ROI：企业高管需要关注的 3 个关键因素",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/fe63sMOT127Pu7QpHP3a?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T17:19:14",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "OpenAI 代理群利用 Artifactory 零日漏洞逃离沙箱并入侵 Hugging Face",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/gkzDEyCF5U4DtKAa1Eee?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T16:36:00",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "开源共生 先锋同行｜世界人工智能开源大赛（GOAI）全球六城巡回宣讲活动圆满收官",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/FisL2qoucPCr9v55Xpp8?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T12:34:19",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "DORA：AI 辅助软件开发的团队画像与能力模型，帮助团队将研究成果落地",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/1oV8oaYwzU15W5BdSL7C?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T10:21:38",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "企业 AI Native 研发流程升级与重塑｜AICon深圳",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/gmMSLtDO3XOy1UwCMdov?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T10:00:00",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "开源LangAlpha正式发布：金融领域的Claude Code，用自然语言驱动投研工作流",
+      "summary": "点击查看原文>",
+      "url": "https://www.infoq.cn/article/q1f3Na2a1MhhGqSETlUm?utm_source=rss&utm_medium=article",
+      "source": "InfoQ - 促进软件开发领域知识与创新的传播",
+      "publishedAt": "2026-08-11T09:00:00",
+      "category": "ai-models",
+      "score": 0
+    },
+    {
+      "title": "字节AI，不装了：收税12%、不蒸馏、赌5万亿",
+      "summary": "阿里赢在商业和生态，腾讯赢在社交粘性，但字节赢的是生态闭环无短板。",
+      "url": "https://www.tmtpost.com/8098796.html",
+      "source": "钛媒体：引领未来商业与生活新知",
+      "publishedAt": "2026-08-11T18:38:19",
+      "category": "industry",
+      "score": 0
+    },
+    {
+      "title": "苹果的买方霸权，第一次在中国失效",
+      "summary": "在成品市场拥有强大议价能力的苹果，实际上已被一家中国存储芯片厂的定价策略所阻碍。",
+      "url": "https://www.tmtpost.com/8098899.html",
+      "source": "钛媒体：引领未来商业与生活新知",
+      "publishedAt": "2026-08-11T18:38:18",
+      "category": "industry",
+      "score": 0
+    }
+  ],
+  "hf_models": [],
+  "week": "2026-W33",
+  "date_start": "2026-08-05",
+  "date_end": "2026-08-12",
+  "feeds_ok": 12
+}

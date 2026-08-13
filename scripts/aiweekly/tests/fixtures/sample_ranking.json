@@ -1,0 +1,467 @@
+{
+  "comprehensive": {
+    "lmarena": {
+      "source": "LMArena",
+      "url": "https://lmarena.ai",
+      "snapshot": "2026-08-13",
+      "criteria": "综合评分",
+      "source_region": "global",
+      "is_cache": false,
+      "rows": [
+        {
+          "model": "Claude Opus 5 (max)",
+          "rank": 1,
+          "score": 1300,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Fable 5 (with fallback)",
+          "rank": 2,
+          "score": 1295,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.6 Sol (max)",
+          "rank": 3,
+          "score": 1290,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.4 (high)",
+          "rank": 4,
+          "score": 1285,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Opus 4.7 (high)",
+          "rank": 5,
+          "score": 1280,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Grok 4.5 (high)",
+          "rank": 6,
+          "score": 1275,
+          "org": "xAI",
+          "license": "专有闭源",
+          "context": 500000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Gemini 3.6 Flash",
+          "rank": 7,
+          "score": 1270,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        },
+        {
+          "model": "Gemini-3.1-Pro",
+          "rank": 8,
+          "score": 1265,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        }
+      ]
+    },
+    "aa": {
+      "source": "Artificial Analysis",
+      "url": "https://artificialanalysis.ai",
+      "snapshot": "2026-08-13",
+      "criteria": "综合评分",
+      "source_region": "global",
+      "is_cache": false,
+      "rows": [
+        {
+          "model": "Claude Opus 5 (max)",
+          "rank": 1,
+          "score": 1300,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Fable 5 (with fallback)",
+          "rank": 2,
+          "score": 1295,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.6 Sol (max)",
+          "rank": 3,
+          "score": 1290,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.4 (high)",
+          "rank": 4,
+          "score": 1285,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Opus 4.7 (high)",
+          "rank": 5,
+          "score": 1280,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Grok 4.5 (high)",
+          "rank": 6,
+          "score": 1275,
+          "org": "xAI",
+          "license": "专有闭源",
+          "context": 500000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Gemini 3.6 Flash",
+          "rank": 7,
+          "score": 1270,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        },
+        {
+          "model": "Gemini-3.1-Pro",
+          "rank": 8,
+          "score": 1265,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        }
+      ]
+    }
+  },
+  "open_source": {
+    "ls": {
+      "source": "LLM-Stats",
+      "url": "https://llm-stats.com",
+      "snapshot": "2026-08-13",
+      "criteria": "综合评分",
+      "source_region": "global",
+      "is_cache": false,
+      "rows": [
+        {
+          "model": "Claude Opus 5 (max)",
+          "rank": 1,
+          "score": 1300,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Fable 5 (with fallback)",
+          "rank": 2,
+          "score": 1295,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.6 Sol (max)",
+          "rank": 3,
+          "score": 1290,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.4 (high)",
+          "rank": 4,
+          "score": 1285,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Opus 4.7 (high)",
+          "rank": 5,
+          "score": 1280,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Grok 4.5 (high)",
+          "rank": 6,
+          "score": 1275,
+          "org": "xAI",
+          "license": "专有闭源",
+          "context": 500000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Gemini 3.6 Flash",
+          "rank": 7,
+          "score": 1270,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        },
+        {
+          "model": "Gemini-3.1-Pro",
+          "rank": 8,
+          "score": 1265,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        }
+      ]
+    },
+    "hf": {
+      "source": "Hugging Face",
+      "url": "https://huggingface.co",
+      "snapshot": "2026-08-13",
+      "criteria": "综合评分",
+      "source_region": "global",
+      "is_cache": false,
+      "rows": [
+        {
+          "model": "Claude Opus 5 (max)",
+          "rank": 1,
+          "score": 1300,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Fable 5 (with fallback)",
+          "rank": 2,
+          "score": 1295,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.6 Sol (max)",
+          "rank": 3,
+          "score": 1290,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "GPT-5.4 (high)",
+          "rank": 4,
+          "score": 1285,
+          "org": "OpenAI",
+          "license": "专有闭源",
+          "context": 1050000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Claude Opus 4.7 (high)",
+          "rank": 5,
+          "score": 1280,
+          "org": "Anthropic",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Grok 4.5 (high)",
+          "rank": 6,
+          "score": 1275,
+          "org": "xAI",
+          "license": "专有闭源",
+          "context": 500000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": false
+          }
+        },
+        {
+          "model": "Gemini 3.6 Flash",
+          "rank": 7,
+          "score": 1270,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        },
+        {
+          "model": "Gemini-3.1-Pro",
+          "rank": 8,
+          "score": 1265,
+          "org": "Google",
+          "license": "专有闭源",
+          "context": 1000000,
+          "delta": {
+            "wow": 1,
+            "wow_score": null,
+            "new_entry": true
+          }
+        }
+      ]
+    }
+  },
+  "selection_notes": {
+    "开发者": "本周头部模型格局稳定，开发者可关注开源榜新晋。",
+    "PM": "综合榜与开源榜分化，PM 需权衡闭源能力 vs 开源可控。",
+    "自媒体": "「国产大模型集体上新」仍是本周流量主线。"
+  }
+}
