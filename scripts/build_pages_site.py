@@ -111,7 +111,18 @@ def main() -> int:
     fetch_cmd = [py, "scripts/fetch_ai_news.py", "--output", str(news_json)]
     if args.week:
         fetch_cmd += ["--week", args.week]
-    run(fetch_cmd)  # 新闻抓取失败则整段失败（周报无数据可渲染）
+    # 退出码语义：0=全成功 / 2=降级(部分源不可达或新闻偏少，但已产出可用数据) / 1=全失败。
+    # 降级(2)在 CI 上很常见（GitHub 美国 runner 拉不到部分国内源），只要 news.json 非空即可继续渲染；
+    # 仅当 news.json 真正为空（exit=1）时才判失败，避免无谓中断整段构建。
+    rc = run(fetch_cmd, fatal=False)
+    has_items = False
+    if news_json.exists():
+        try:
+            has_items = bool(json.loads(news_json.read_text(encoding="utf-8")).get("items"))
+        except Exception:  # noqa: BLE001
+            has_items = False
+    if rc == 1 or not has_items:
+        raise RuntimeError(f"新闻抓取失败（exit={rc}，有数据={has_items}），无可用数据，终止构建")
 
     # 3) 生成 HTML（用镜像排行榜，避免 CI 直连 GFW 源；无 insights 时相关板块留空）
     print("🖥️ 生成周报 HTML…", flush=True)
