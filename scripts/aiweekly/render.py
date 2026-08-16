@@ -15,7 +15,7 @@ from pathlib import Path
 
 from aiweekly.utils import _parse_date_arg, _parse_snapshot_date
 from aiweekly.news import (
-    MUSTREAD_TOP_N, format_news_items, _score_news,
+    MUSTREAD_TOP_N, format_news_items, _score_news, LEADERBOARD_STALE_DAYS,
 )
 from aiweekly.translate import Translator
 from aiweekly.leaderboard import (
