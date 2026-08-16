@@ -93,6 +93,7 @@ def generate(api_data: dict, output_path: str = None,
              model_profiles: dict = None,
              report_date: str = None,
              data_snapshot: str = None,
+             pin_terms: list = None,
              translate_en: bool = False,
              translate_model: str = "qwen2.5:7b",
              translate_workers: int = 3,
@@ -152,7 +153,7 @@ def generate(api_data: dict, output_path: str = None,
     # 格式化新闻数据（含信源/摘要归一化 + cn_summary 透传）
     news_items = format_news_items(api_data)
     # C0：重要度评分 + 🔥必读标记（仅排序/标记，不篡改事实字段）
-    _score_news(news_items, report_date=report_date, top_n=MUSTREAD_TOP_N)
+    _score_news(news_items, report_date=report_date, top_n=MUSTREAD_TOP_N, pin_terms=pin_terms)
     # M1：从本周新闻抽取「资本/模型发布」信号，做成新闻↔宏观图桥接卡（服务端预渲染）
     market_signals = _extract_market_signals(news_items, top_n=5)
     # C2#8：聚合「本周数字看板」指标（总量/国内外比/模型发布/融资事件/在榜模型数/必读Top3）

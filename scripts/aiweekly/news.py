@@ -191,11 +191,15 @@ def _is_open_source(provider: str) -> bool:
     return any(p.lower() in provider.lower() for p in OPEN_SOURCE_PROVIDERS)
 
 
-def _score_news(items: list, report_date: str = None, top_n: int = MUSTREAD_TOP_N) -> list:
+def _score_news(items: list, report_date: str = None, top_n: int = MUSTREAD_TOP_N,
+                pin_terms: list = None) -> list:
     """基于「来源权威度 × 时效 × 类别权重」计算重要度评分，并标记 Top-N 为必读。
 
     评分仅用于排序与🔥必读标记，绝不篡改标题/链接/时间等事实字段。
     返回原列表（就地写入 score / mustRead）。
+
+    pin_terms: 编辑钉选词列表（子串匹配标题）。命中的条目强制必读（mustRead=True、
+    pinned=True），避免重大事件被拆成多条、各自分数稀释而漏出 Top-N。
     """
     if not items:
         return items
@@ -226,6 +230,14 @@ def _score_news(items: list, report_date: str = None, top_n: int = MUSTREAD_TOP_
     order = sorted(range(len(items)), key=lambda i: scores[i], reverse=True)
     for rank, idx in enumerate(order):
         items[idx]["mustRead"] = (rank < top_n)
+    # 编辑钉选：命中 pin_terms 的条目强制必读，重大事件不被算法稀释漏出 Top-N
+    pts = [t.strip() for t in (pin_terms or []) if t and t.strip()]
+    if pts:
+        for it in items:
+            t = (it.get("title", "") or "")
+            if any(p.lower() in t.lower() for p in pts):
+                it["mustRead"] = True
+                it["pinned"] = True
     return items
 
 

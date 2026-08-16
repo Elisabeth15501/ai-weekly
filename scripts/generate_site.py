@@ -229,9 +229,15 @@ def main():
     parser.add_argument("--cn-market-source", help="中国市场规模来源说明（如 中国信通院/中商产业研究院）")
     parser.add_argument("--cn-funding-source", help="中国融资额来源说明（如 新浪创投Plus 2025）")
     parser.add_argument("--ranking-criteria", help="排行榜排名标准说明（覆盖默认 LMMarketCap 综合评分说明）")
-    # 英文报道中文总结（本地 Ollama 翻译，可选；零 API 成本、国内友好；best-effort 不阻断）
-    parser.add_argument("--translate-en", action="store_true",
-                        help="为英文报道生成中文总结（调用本地 Ollama，需本机运行 Ollama；失败/超时保留英文原文）")
+    # 编辑钉选：把命中关键词的报道强制钉进「必读」（重大事件不被算法稀释）
+    parser.add_argument("--pin-terms", default=None,
+                        help="逗号分隔的钉选词（子串匹配标题）；命中条目强制必读。例：--pin-terms \"DeepSeek Harness,GLM-5.3\"")
+    # 英文报道中文总结（本地 Ollama 翻译；默认开启，best-effort 不阻断；无本地模型时自动跳过）
+    parser.add_argument("--translate-en", action="store_true", default=True,
+                        help="为英文报道生成中文总结（调用本地 Ollama；默认开启。需本机运行 Ollama，"
+                             "失败/超时保留英文原文，不影响生成）")
+    parser.add_argument("--no-translate-en", dest="translate_en", action="store_false",
+                        help="关闭英文报道中文总结（如无本地 Ollama 或想加速）")
     parser.add_argument("--translate-model", default="qwen2.5:7b",
                         help="翻译所用本地 Ollama 模型（默认 qwen2.5:7b，非推理模型更快）")
     parser.add_argument("--translate-workers", type=int, default=3,
@@ -438,6 +444,7 @@ def main():
         keyword_search_sources=search_sources_data,
         report_date=args.date,
         data_snapshot=args.data_snapshot,
+        pin_terms=[t.strip() for t in (args.pin_terms or "").split(",") if t.strip()],
         translate_en=args.translate_en,
         translate_model=args.translate_model,
         translate_workers=args.translate_workers,

@@ -35,5 +35,5 @@ jobs:
             --api-json aiweekly/tests/fixtures/sample_news.json \
             --insights-json aiweekly/tests/fixtures/sample_insights.json \
             --ranking-json aiweekly/tests/fixtures/sample_ranking.json \
-            --no-live-ranking --output report_ci.html
+            --no-live-ranking --no-translate-en --output report_ci.html
           python validate_report.py --html report_ci.html
