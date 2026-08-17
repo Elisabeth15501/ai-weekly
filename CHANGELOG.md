@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.1.1 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.2.0 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -8,6 +8,27 @@
 > 所有早期版本的功能均已在 `3.1.1` 中可用。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [3.2.0] — 2026-08-17
+
+文档与发布层面的对齐版本：正式把**飞书双推送路径**（Webhook + 连接器）写进技能文档，并把版本号对齐到 3.2.0。
+
+> **核实说明（重要）**：飞书连接器代码 `delivery/feishu_connector.py` 其实已于 **v3.1.1**（commit `b636960`）随 GA 一并入库；本版本（3.2.0）的增量是**文档补全**——把此前"代码存在但无说明"的连接器路径正式记录为可选推送方式，而非新增代码功能。另外，`publish.py` 自动管线当前**仅**走 Webhook 路径；连接器为独立 CLI，尚未接入自动编排（见下方 Notes）。
+
+### Added
+- 无新增代码（`feishu_connector.py` 已在 3.1.1 提供）。
+
+### Changed
+- **SKILL.md §6.1 重写**：从"仅 Webhook 一种"扩展为**双路径对比**——路径 A（Webhook：`scripts/publish.py` + `delivery/feishu_bot.py`）与路径 B（连接器：`delivery/feishu_connector.py`，经 WorkBuddy 飞书连接器 `lark-cli` 发送，密钥由连接器托管、不落配置文件）。附文件职责说明与两种模式的命令、回退 / 目标解析 / 身份。
+- **README.md 新增整节「飞书头条卡片推送（可选）」**：含架构树补 `delivery/`、能力分级表补飞书推送行。
+- **SKILL.md「文件清单」表**补 `publish.py` / `feishu_bot.py` / `feishu_connector.py` 三行。
+- 版本号 `3.1.1 → 3.2.0` 对齐（SKILL.md 双行）。
+
+### Notes / 后续
+- 两条路径共用同一张卡片 schema（`feishu_bot.build_headline_card`），产出卡片内容完全一致。
+- 若希望自动化周报也能走连接器路径，需在 `publish.py` 增加 `--delivery connector` 开关并复用 `feishu_connector.send_card`——可作为后续小版本（如 3.2.1 / 3.3.0）的增强项。
 
 ---
 
