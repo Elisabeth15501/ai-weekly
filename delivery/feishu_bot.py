@@ -17,8 +17,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import requests
-
 logger = logging.getLogger("aiweekly.delivery.feishu")
 
 # 角色 icon 映射（audience_summary 中文键）
@@ -163,6 +161,8 @@ def push(webhook: str, card: dict[str, Any], timeout: int = 10) -> dict[str, Any
     仅在传输层失败时抛 requests.RequestException（由调用方决定重试）；
     业务错误（code != 0）不抛异常，由调用方读取返回值判断。
     """
+    import requests  # 惰性导入：仅 webhook 推送路径需要，卡片构建无需此依赖
+
     resp = requests.post(webhook, json=card, timeout=timeout)
     resp.raise_for_status()
     try:
