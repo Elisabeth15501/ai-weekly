@@ -171,10 +171,19 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 
 ### 6.1 分发：飞书头条卡片推送（P0，可选但推荐）
 
-生成报告后，可把**本周头条速览**推到飞书群机器人（incoming webhook 消息卡片），让情报在"工作者已在用的地方"被消费。仅用 `requests` 调飞书官方 webhook，**不引入任何第三方商业 SDK**。
+生成报告后，可把**本周头条速览**推到飞书（群机器人 / 连接器），让情报在"工作者已在用的地方"被消费。两种推送路径**共用同一张卡片 schema**（由 `delivery/feishu_bot.build_headline_card` 构造），区别只在"怎么发出去"：
+
+| 路径 | 发送方式 | 凭据 | 依赖 | 适合 |
+|------|---------|------|------|------|
+| **A. Webhook 自定义机器人** | `feishu_bot.push()` POST 到飞书 incoming webhook | webhook URL（token 内嵌在 URL） | `requests` | 任意环境，已建好自定义机器人 |
+| **B. 飞书连接器直推（推荐）** | `delivery/feishu_connector.py` 经 `lark-cli im +messages-send` 发送 | 连接器托管，**绝不落配置文件** | 标准库 + 已连接的飞书连接器（lark-cli + node） | WorkBuddy 用户，密钥不想写进仓库 |
+
+> **文件职责**：`delivery/feishu_bot.py` 是共用的卡片构造库（`build_headline_card` + webhook 发送的 `push`）；`delivery/feishu_connector.py` 是独立 CLI，import 前者的卡片构造、改用 lark-cli 发送。两者产出的卡片内容完全一致。
+
+**模式 A — Webhook（由 `publish.py` 一步完成）**
 
 ```bash
-# 组装 report.json 头条载荷 + 推送飞书卡片（webhook 三级回退：--webhook > $FEISHU_WEBHOOK > delivery/feishu_config.json）
+# 组装 report.json 并直接推送到 webhook（三级回退：--webhook > $FEISHU_WEBHOOK > delivery/feishu_config.json）
 bash run_report.sh scripts/publish.py \
   --news-json news.json \
   --insights-json insights.json \
@@ -188,9 +197,33 @@ bash run_report.sh scripts/publish.py --news-json news.json --insights-json insi
 # 直接指定 webhook（也可写入 delivery/feishu_config.json，已被 .gitignore 忽略）：
 bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open-apis/bot/v2/hook/XXXX"
 ```
+webhook 三级皆空 → 自动跳过推送（exit 0，不阻断报告生成）；推送返回业务错误时 exit 1。
 
-卡片内容：本周主线 + 🔥本周重点（按 score 取 Top5，带链接/来源）+ 💡本周看点（Top3）+ 👥分角色摘要（开发者/PM/自媒体）+ 🔖关键词 + 「查看完整周报」按钮（链接自动追加 `?src=feishu&uid=<uid>` 度量参数）。
-未配置 webhook 时自动跳过推送（exit 0，不阻断报告生成）；推送返回业务错误（非 0）时 exit 1。
+**模式 B — 飞书连接器直推（密钥不落盘，推荐）**
+
+先让 `publish.py` 产出 `report.json`（可加 `--dry-run` 只组装不推），再用连接器 CLI 发送：
+
+```bash
+# 1) 组装 report.json（此步不推送）
+bash run_report.sh scripts/publish.py \
+  --news-json news.json --insights-json insights.json \
+  --audience-json audience_summary.json --output report.json
+
+# 2) 经飞书连接器推送到群（bot 身份，需先把「WorkBuddy-Feishu CLI」机器人加进群）
+python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx
+
+# 推给自己（user 身份 → 私聊，首次冒烟测试最省事，无需加机器人）
+python delivery/feishu_connector.py --report report.json --user-id ou_xxxx --as user
+
+# 预览（不实际发送）
+python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry-run
+```
+
+- **目标解析优先级**：`--chat-id/--user-id` > 环境变量 `FEISHU_CHAT_ID/FEISHU_USER_ID` > `delivery/feishu_target.json`（`{"chat_id":"oc_xxx"}` 或 `{"user_id":"ou_xxx"}`）。
+- **发送身份**：`--as bot`（默认，应用机器人，需机器人已入群）/ `--as user`（以你本人身份，需你对该会话有发消息权限）。
+- 依赖：仅标准库 + 已连接的飞书连接器；**无需 `requests`**，卡片构建路径不会因缺 `requests` 而失败。
+
+**卡片内容（两种模式一致）**：本周主线 + 🔥本周重点（按 score 取 Top5，带链接/来源）+ 💡本周看点（Top3）+ 👥分角色摘要（开发者/PM/自媒体）+ 🔖关键词 + 「查看完整周报」按钮（链接自动追加 `?src=feishu&uid=<uid>` 度量参数）。
 
 ### 7. 自动化设置
 
@@ -352,6 +385,9 @@ bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open
 | `scripts/validate_report.py` | v3.0 质量检查（含 XSS 守护，自动识别 v2/v3 格式） |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
 | `scripts/deploy_report.py` | 部署摘要提取（框架无关通知文本） |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径） |
+| `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
+| `delivery/feishu_connector.py` | 飞书连接器直推 CLI（lark-cli，密钥不落盘），复用前者的卡片构造 |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
 | `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，联网核实的机构/许可证/成本等），每次生成自动加载、新模型研究后合并写回 |
 | `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（检测为空自动删除；运行方据此联网补档） |
