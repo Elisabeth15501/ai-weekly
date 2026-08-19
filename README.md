@@ -37,7 +37,15 @@ bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
 
 # 4. 校验产出
 bash run_report.sh scripts/validate_report.py --html AI_News.html
+
+# 5. 部署到 GitHub Pages（gh-pages 分支；飞书/钉钉卡片的 view_url 即此地址）
+bash run_report.sh deploy --html AI_News.html
+#   离线仅本地提交：加 --no-push
+#   部署后顺手把 Pages 源切到 gh-pages：加 --switch-pages（需 GITHUB_TOKEN）
 ```
+
+> **完整分发一步到位**：`publish.py` 在推送飞书卡片的同时可顺带部署周报——
+> `bash run_report.sh scripts/publish.py --news-json news.json --insights-json insights.json --html AI_News.html --deploy`。
 
 > **统一启动器 `run_report.sh`**：自动探测已安装依赖的 Python（优先复用 `aiweekly` 受管 venv，回退 `python3`/`python`），无需手动激活环境。支持 `--proxy` 代理、`--region` 区域探测、`--translate-en` 本地翻译、`--health-check` 健康检查等全部 CLI 参数透传。
 
@@ -108,27 +116,36 @@ ai-weekly 的**排行榜、市场分析**等展示「实时数据 / 趋势」的
 
 ---
 
-## GitHub Pages 公开站点（在线 demo + 往周数据源）
+## GitHub Pages 公开站点（在线 demo）
 
-仓库启用 GitHub Pages 后，`.github/workflows/mirror.yml` 每天（UTC 18:17 ≈ 北京 02:17）自动运行，把生成的站点发布到 `https://<owner>.github.io/<repo>/`。它同时承担两个角色：
+周报通过 `scripts/deploy_ghpages.py` 部署到 **`gh-pages` 分支根目录**，飞书/钉钉卡片里的 `view_url`（`https://<owner>.github.io/<repo>/AI_News_<date>.html`）即指向这里。部署是**本地流水线的一步**（不是 CI），结构如下：
 
-### 1. 在线 demo（HTML）
-- `https://<owner>.github.io/<repo>/` → 最新一期 AI 周报（根路径直达）
-- `https://<owner>.github.io/<repo>/reports/<ISO周>/index.html` → 任意历史周次（如 `reports/2026-W33/index.html`）
-- 单文件 HTML、Chart.js 已内联，**无外部依赖、可直接离线打开**（与本地生成物一致）
+```
+gh-pages 分支（Pages 源 = Deploy from a branch: gh-pages / /root）
+├── AI_News_2026-08-17.html   # 当期周报（根路径直达）
+├── AI_News_<更早日期>.html   # 历史周报（累加保留）
+└── index.html                # 自动生成的存档页（列出所有期，最新高亮）
+```
 
-### 2. 往周数据源（结构化 JSON）
-- `https://<owner>.github.io/<repo>/reports/index.json` → 所有已发布周次的清单（索引）
-- `https://<owner>.github.io/<repo>/reports/<ISO周>/news.json` → 该周结构化新闻（字段与 `news.json` 一致，机器可读）
-- `https://<owner>.github.io/<repo>/leaderboard.json` · `model_profiles.json` → 排行榜镜像（网络受限环境下可直接拉取，免去自行抓取海外源）
+发布方式（`run_report.sh deploy` 即封装此脚本）：
+```bash
+bash run_report.sh deploy --html AI_News.html
+#   --no-push        仅本地提交，不推送（离线可跑，待网络恢复后 git push origin gh-pages）
+#   --switch-pages   部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 GITHUB_TOKEN）
+#   --dry-run        只做 worktree+复制+index 预览，不提交不推送
+```
 
-> **为什么能当数据源？** RSS 仅保留约 1 周，无法回抓旧闻；但本工作流**每次运行都会把当周已生成的结构化报告发布到 Pages 并累加入 `reports/index.json`**。未来的周报增强（跨周趋势、WoW 环比对比）即可直接 `fetch` Pages 上的历史 `news.json`，无需重新抓取原始 RSS。注意：它保存的是「已生成的周报快照」，不是原始 RSS 流——要扩充历史，需在该周仍处 RSS 保留期内至少运行一次（每日定时已保证这点）。
+### 首次启用（一次性）
+1. 把 `gh-pages` 分支推送到远端：`git push origin gh-pages`。
+2. 仓库 **Settings → Pages → Source** 选 **Deploy from a branch → `gh-pages` / `/root`**。
+   或用 `--switch-pages` 自动切换（需要带 `pages:write` 权限的 `GITHUB_TOKEN`）。
+3. 等待约 1 分钟，访问 `https://<owner>.github.io/<repo>/AI_News_<date>.html` 验证不再 404。
+
+> **为什么是 gh-pages 分支而非 CI artifact？** 飞书卡片的 `view_url` 直接指向分支根目录的 `AI_News_*.html`，与「Deploy from a branch」模型天然契合；GitHub Pages 只允许单一来源，故原先的 `.github/workflows/mirror.yml`（Actions artifact 部署）已停用（`if: false`），以免两种来源互斥导致部署失败。
 
 ### 已知限制
-- **中文翻译**：CI 环境无本地 Ollama，故不在工作流中传 `--translate-en`，英文报道以**原文**呈现。若需公开站点也带中文总结，请在**本地**生成（带 `--translate-en`）后另行推送到 Pages 源，或把带译文的 `news.json` 注入工作流。
-- **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」；排行榜镜像每日刷新（CI 在境外环境抓取 LMArena/HF 等国际源，比本地 `cn` 环境更全）。
-
-如需手动触发或回填某周：`Actions → Mirror Leaderboard & Weekly Report → Run workflow`，可填 `week=2026-W33`（注意 RSS 保留期限制）。
+- **中文翻译**：若需公开站点也带中文总结，请在**本地**生成时加 `--translate-en`（依赖本机 Ollama），再 `run_report.sh deploy` 推上去。
+- **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」（RSS 仅保留约 1 周），要保留某周需在该周仍处保留期内至少部署一次。
 
 ---
 

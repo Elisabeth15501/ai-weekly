@@ -11,6 +11,22 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+- **GitHub Pages 部署接入流水线**：新增 `scripts/deploy_ghpages.py`，用 git worktree 把生成的周报 HTML 推到 `gh-pages` 分支根目录（飞书/钉钉卡片 `view_url` 即指向此地址），并自动累加根 `index.html` 存档页（列出各期、最新高亮）。支持 `--no-push`（离线仅本地提交）、`--switch-pages`（GitHub API 一次性切 Pages 源）、`--dry-run`（只预览不提交）。
+- **`run_report.sh deploy` 子命令**：把部署作为流水线一等步骤封装（`bash run_report.sh deploy --html AI_News.html`）。
+- **`publish.py --deploy`**：在推送飞书卡片的同时顺带部署到 gh-pages（需配合 `--html`）；透传 `--no-push` / `--switch-pages`。
+
+### Changed
+- **停用 `.github/workflows/mirror.yml`**（`if: false`）：原先的 Actions artifact Pages 部署与 gh-pages 分支来源互斥，会破坏分支部署；如需恢复 Actions 部署，需先把仓库 Pages 源切回 "GitHub Actions"。
+- README / SKILL.md 的「GitHub Pages」说明改为描述 gh-pages 分支部署模型与首次启用步骤。
+
+### Notes
+- 首次启用需 `git push origin gh-pages`，并在仓库 **Settings → Pages → Source** 设为 `gh-pages / /root`（或 `run_report.sh deploy --switch-pages`，需带 `pages:write` 的 `GITHUB_TOKEN`）。
+
+---
+
 ## [3.2.0] — 2026-08-17
 
 文档与发布层面的对齐版本：正式把**飞书双推送路径**（Webhook + 连接器）写进技能文档，并把版本号对齐到 3.2.0。

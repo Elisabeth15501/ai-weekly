@@ -160,6 +160,10 @@ def main() -> int:
     ap.add_argument("--output", default=None, help="report.json 写出路径（默认 news 同目录/report.json）")
     ap.add_argument("--top-n", type=int, default=5, help="头条条数（默认 5）")
     ap.add_argument("--dry-run", action="store_true", help="仅构造卡片并打印，不推送")
+    ap.add_argument("--html", default=None, help="生成的周报 HTML 路径（配合 --deploy 部署到 gh-pages）")
+    ap.add_argument("--deploy", action="store_true", help="生成 report.json 后顺便部署到 gh-pages（需 --html）")
+    ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（透传给 deploy_ghpages）")
+    ap.add_argument("--switch-pages", action="store_true", help="部署时一并把 Pages 源切到 gh-pages（需 GITHUB_TOKEN）")
     args = ap.parse_args()
 
     uid = args.uid if args.uid != "auto" else uuid.uuid4().hex[:8]
@@ -191,24 +195,46 @@ def main() -> int:
         print(json.dumps(card, ensure_ascii=False, indent=2)[:2400])
         return 0
 
+    rc = 0
     webhook = resolve_webhook(args)
     if not webhook:
         print("⚠️ 未配置飞书 Webhook（--webhook / $FEISHU_WEBHOOK / delivery/feishu_config.json 均空），"
               "跳过推送（报告已生成，不阻断）。")
-        return 0
+    else:
+        try:
+            resp = push(webhook, card)
+            code = resp.get("code")
+            if code in (0, None):
+                print(f"✅ 飞书推送成功：{resp}")
+            else:
+                print(f"❌ 飞书返回业务错误：{resp}")
+                rc = 1
+        except Exception as e:  # noqa: BLE001  传输层错误，best-effort 上报
+            logger.warning("飞书推送传输失败: %s", e)
+            print(f"❌ 飞书推送失败：{e}")
+            rc = 1
 
-    try:
-        resp = push(webhook, card)
-        code = resp.get("code")
-        if code in (0, None):
-            print(f"✅ 飞书推送成功：{resp}")
-            return 0
-        print(f"❌ 飞书返回业务错误：{resp}")
-        return 1
-    except Exception as e:  # noqa: BLE001  传输层错误，best-effort 上报
-        logger.warning("飞书推送传输失败: %s", e)
-        print(f"❌ 飞书推送失败：{e}")
-        return 1
+    # 流水线最终分发步骤：把周报部署到 gh-pages（GitHub Pages）
+    if args.deploy:
+        if not args.html or not Path(args.html).exists():
+            print("⚠️ --deploy 需要有效的 --html 路径，跳过 gh-pages 部署。")
+        else:
+            print("🌐 部署周报到 gh-pages…")
+            try:
+                import subprocess as _sp
+                deploy_cmd = [sys.executable,
+                              str(REPO_ROOT / "scripts" / "deploy_ghpages.py"),
+                              "--html", args.html]
+                if args.no_push:
+                    deploy_cmd.append("--no-push")
+                if args.switch_pages:
+                    deploy_cmd.append("--switch-pages")
+                _sp.run(deploy_cmd, cwd=str(REPO_ROOT), check=False)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("gh-pages 部署异常: %s", exc)
+                print(f"❌ gh-pages 部署异常：{exc}")
+
+    return rc
 
 
 if __name__ == "__main__":

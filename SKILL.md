@@ -169,7 +169,35 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 - 调用 `present_files` 展示
 - 总结核心发现（3-5 条）
 
-### 6.1 分发：飞书头条卡片推送（P0，可选但推荐）
+### 6.1 部署到 GitHub Pages（gh-pages 分支，可选但推荐）
+
+飞书/钉钉卡片里的「查看完整周报」按钮 `view_url` 指向 `https://<owner>.github.io/<repo>/AI_News_<date>.html`——该地址由 **`gh-pages` 分支**提供（仓库 Pages 源 = `Deploy from a branch: gh-pages / /root`）。用 `run_report.sh deploy` 即可把当期周报推到该分支：
+
+```bash
+# 流水线封装：底层调用 scripts/deploy_ghpages.py
+bash run_report.sh deploy --html AI_News_YYYY-MM-DD.html
+#   --no-push       仅本地提交不推送（离线可跑；待网络恢复后 git push origin gh-pages）
+#   --switch-pages  部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 GITHUB_TOKEN）
+#   --dry-run       只做 worktree+复制+index 预览，不提交不推送
+```
+
+`deploy_ghpages.py` 用 **git worktree** 操作 `gh-pages`（不污染 `main`、不进 SkillHub 包），并把所有 `AI_News_*.html` 累加进根目录 `index.html` 存档页（最新高亮）。脚本自动清理 worktree，本地 `gh-pages` 提交始终保留。
+
+**一步到位**：`publish.py` 在推送飞书卡片的同时可顺带部署周报（需传 `--html`）：
+
+```bash
+bash run_report.sh scripts/publish.py \
+  --news-json news.json --insights-json insights.json \
+  --audience-json audience_summary.json \
+  --html AI_News_YYYY-MM-DD.html --deploy
+#   --deploy           生成 report.json 后顺带部署到 gh-pages
+#   --no-push          部署时仅本地提交不推送
+#   --switch-pages     部署时一并把 Pages 源切到 gh-pages
+```
+
+**首次启用（一次性）**：`git push origin gh-pages` → 仓库 Settings → Pages → Source 选 `gh-pages / /root`（或 `run_report.sh deploy --switch-pages`）。注意：GitHub Pages 只允许单一来源，原先的 `.github/workflows/mirror.yml`（Actions artifact 部署）因此已停用（`if: false`），以免两种来源互斥导致部署失败。
+
+### 6.2 分发：飞书头条卡片推送（P0，可选但推荐）
 
 生成报告后，可把**本周头条速览**推到飞书（群机器人 / 连接器），让情报在"工作者已在用的地方"被消费。两种推送路径**共用同一张卡片 schema**（由 `delivery/feishu_bot.build_headline_card` 构造），区别只在"怎么发出去"：
 
@@ -258,6 +286,9 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
      -o AI_News_[日期].html
 6. 运行 validate_report.py 检查质量
 7. 调用 present_files 展示结果
+8. （可选）部署到 GitHub Pages，让飞书卡片的「查看完整周报」可点击访问：
+   bash run_report.sh deploy --html AI_News_[日期].html
+   若沙箱网络/凭据不可用导致推送失败，跳过此步也不影响报告生成（本地 gh-pages 提交已就绪）。
 
 注意：默认流程不含任何外部商业 API。若用户明确要求用 AI HOT 等外部 API 增强可信度，
      请提示用户自行从官方渠道导出 JSON，并以 --external-news-json 注入（含 --external-source-name/url 署名）。
@@ -385,7 +416,8 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 | `scripts/validate_report.py` | v3.0 质量检查（含 XSS 守护，自动识别 v2/v3 格式） |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
 | `scripts/deploy_report.py` | 部署摘要提取（框架无关通知文本） |
-| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径） |
+| `scripts/deploy_ghpages.py` | **部署到 GitHub Pages**：git worktree 操作 `gh-pages` 分支，累加根 `index.html` 存档页并推送 |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy` 顺带部署 gh-pages） |
 | `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
 | `delivery/feishu_connector.py` | 飞书连接器直推 CLI（lark-cli，密钥不落盘），复用前者的卡片构造 |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |

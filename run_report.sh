@@ -52,4 +52,12 @@ if [ -z "$PY" ]; then
 fi
 
 echo "🐍 使用 Python: $PY"
+
+# deploy 子命令：部署周报到 gh-pages（GitHub Pages）—— 流水线最终分发步骤
+if [ "${1:-}" = "deploy" ]; then
+  shift
+  cd "$SCRIPT_DIR" || exit 1
+  exec "$PY" scripts/deploy_ghpages.py "$@"
+fi
+
 exec "$PY" "$@"
