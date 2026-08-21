@@ -8,6 +8,7 @@
 设计要点：
   * 用 git worktree 操作 gh-pages（不污染 main / 不进 SkillHub 包）。
   * 自动累加维护根 index.html（列出所有周报，最新高亮）。
+  * 自动写入 .nojekyll（禁用 Jekyll 并强制 GitHub Pages 重新 build 分支）。
   * 默认推送 origin gh-pages；--no-push 仅本地提交（离线可跑）。
   * --switch-pages 通过 GitHub API 一次性把 Pages 源切到 gh-pages(/root)。
   * MSYS 路径转换坑：所有 git 子进程注入 MSYS_NO_PATHCONV=1，路径用正斜杠。
@@ -265,8 +266,10 @@ def deploy(
         (site_dir / "index.html").write_text(
             build_index_html(reports, latest), encoding="utf-8"
         )
+        # 关键：加 .nojekyll 防止 GitHub Pages 走 Jekyll 处理，并确保重新 build
+        (site_dir / ".nojekyll").write_text("", encoding="utf-8")
         if verbose:
-            print(f"🗂️ 已更新 index.html（共 {len(reports)} 期，最新={latest}）")
+            print(f"🗂️ 已更新 index.html（共 {len(reports)} 期，最新={latest}）+ .nojekyll")
 
         if dry_run:
             if verbose:
