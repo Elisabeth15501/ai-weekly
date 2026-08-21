@@ -136,9 +136,19 @@ bash run_report.sh deploy --html AI_News.html
 ```
 
 ### 首次启用（一次性）
-1. 把 `gh-pages` 分支推送到远端：`git push origin gh-pages`。
-2. 仓库 **Settings → Pages → Source** 选 **Deploy from a branch → `gh-pages` / `/root`**。
-   或用 `--switch-pages` 自动切换（需要带 `pages:write` 权限的 `GITHUB_TOKEN`）。
+1. 把 `gh-pages` 分支推送到远端：`git push origin gh-pages`（已推过可跳过）。
+2. 把 GitHub Pages **源**切到 `gh-pages / /root`（二选一）：
+   - **手动**：仓库 **Settings → Pages → Source** 选 **Deploy from a branch → `gh-pages` / `/root`** → Save。
+   - **自动（方案 B，推荐）**：建一个 **Fine-grained PAT**，再跑脚本：
+     1. GitHub → 头像 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**。
+     2. Repository access 选 **Only select repositories → `ai-weekly`**；Permissions → **Pages → Read and write**。
+     3. 生成后复制 token（只显示一次），在本机设环境变量并跑：
+        ```bash
+        export GITHUB_TOKEN=github_pat_xxx   # 不落盘，仅当前 shell 会话有效
+        bash scripts/setup_pages_source.sh
+        ```
+        脚本只读环境变量、不回显、不写文件，切源成功后链接约 1 分钟生效。
+     > 之后每周自动化带这个 token 跑 `run_report.sh deploy --switch-pages` 即全自动（首次切源后该步骤幂等，可重复跑不影响）。
 3. 等待约 1 分钟，访问 `https://<owner>.github.io/<repo>/AI_News_<date>.html` 验证不再 404。
 
 > **为什么是 gh-pages 分支而非 CI artifact？** 飞书卡片的 `view_url` 直接指向分支根目录的 `AI_News_*.html`，与「Deploy from a branch」模型天然契合；GitHub Pages 只允许单一来源，故原先的 `.github/workflows/mirror.yml`（Actions artifact 部署）已停用（`if: false`），以免两种来源互斥导致部署失败。
