@@ -16,16 +16,21 @@ cd "$REPO_DIR"
 
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 if [ -z "$TOKEN" ]; then
-  echo "❌ 未设置 GITHUB_TOKEN（或 GH_TOKEN）。请先 export 一个带 ai-weekly 仓库 Pages:write 的 Fine-grained PAT。" >&2
+  echo "❌ 未设置 GITHUB_TOKEN（或 GH_TOKEN）。" >&2
+  echo "   PowerShell 请先：\$env:GITHUB_TOKEN=\"github_pat_xxx\"" >&2
+  echo "   Git Bash 请先：export GITHUB_TOKEN=github_pat_xxx" >&2
+  echo "   需为 ai-weekly 仓库的 Fine-grained PAT（Pages: write）。" >&2
   exit 1
 fi
 
-# 解析 owner/repo
+# 解析 owner/repo（兼容 Git bash 的老版 ERE：不用非贪婪/?、不用\. 转义）
 REMOTE="$(git remote get-url origin)"
-if [[ "$REMOTE" =~ github\.com[:/]([^/]+)/(.+?)(\.git)?$ ]]; then
-  OWNER="${BASH_REMATCH[1]}"
-  NAME="${BASH_REMATCH[2]}"
-else
+# 先去掉可能的 .git 后缀与协议前缀，再按 / 切分
+CLEAN="${REMOTE%.git}"
+CLEAN="${CLEAN##*github.com[/:]}"
+OWNER="${CLEAN%%/*}"
+NAME="${CLEAN##*/}"
+if [ -z "$OWNER" ] || [ -z "$NAME" ]; then
   echo "❌ 无法从 remote 解析 owner/repo：$REMOTE" >&2
   exit 1
 fi
