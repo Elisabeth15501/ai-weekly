@@ -64,5 +64,18 @@ if [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || [ "$HTTP" = "204" ]; then
 else
   echo "❌ 切源失败（HTTP $HTTP）：" >&2
   cat /tmp/_pages_resp.json >&2
+  echo "" >&2
+  # 常见原因：Fine-grained PAT 调 Pages 更新端点常被拒（403 Resource not accessible）
+  if [ "$HTTP" = "403" ]; then
+    echo "💡 若报错含 'Resource not accessible by personal access token'（403）：" >&2
+    echo "   GitHub 的 Pages 更新 API 对 Fine-grained PAT 经常不支持，即使已勾 Pages: Read and write。" >&2
+    echo "   解法：改用 Classic PAT ——" >&2
+    echo "     GitHub → Settings → Developer settings → PAT → Tokens (classic) → Generate new token (classic)" >&2
+    echo "     勾选范围：repo（全选）+ pages:write，生成后重新：$env:GITHUB_TOKEN=\"新token\" 重跑本脚本。" >&2
+  fi
+  if [ "$HTTP" = "404" ]; then
+    echo "💡 若报错含 'Not Found'（404）：仓库尚未启用 GitHub Pages。" >&2
+    echo "   请先到仓库 Settings → Pages 手动启用一次（选任意分支均可），再重跑本脚本切到 gh-pages。" >&2
+  fi
   exit 1
 fi
