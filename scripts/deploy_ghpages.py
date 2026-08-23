@@ -138,21 +138,28 @@ def _unique_worktree_dir() -> Path:
 
 
 def _prune_existing_worktree(repo: Path, branch: str) -> None:
-    """若 gh-pages 已被其它 worktree 占用，先强制移除那个 worktree。"""
-    res = _git(["worktree", "list", "--porcelain"], cwd=repo, check=False)
+    """若 gh-pages 已被其它（通常是上次异常残留的）worktree 占用，先强制移除。
+
+    稳健做法：直接解析 `git worktree list` 文本输出，找出所有指向本仓库
+    aiw-ghp-* 临时目录的工作树，强制移除 + prune。避免 --porcelain
+    在 Windows 下按块分割解析失败导致残留越积越多、下次 deploy 直接报
+    "already used by worktree" 而静默失败。
+    """
+    res = _git(["worktree", "list"], cwd=repo, check=False)
     if res.returncode != 0:
         return
-    blocks = res.stdout.split("\n\n")
-    for blk in blocks:
-        lines = blk.strip().splitlines()
-        wt = None
-        br = None
-        for ln in lines:
-            if ln.startswith("worktree "):
-                wt = ln[len("worktree "):].strip()
-            elif ln.startswith("branch "):
-                br = ln[len("branch "):].strip()
-        if br == f"refs/heads/{branch}" and wt:
+    import tempfile
+    tmp_root = Path(tempfile.gettempdir())
+    seen: set[str] = set()
+    for line in res.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        wt = parts[0]
+        if "aiw-ghp-" in wt and wt.startswith(str(tmp_root)):
+            if wt in seen:
+                continue
+            seen.add(wt)
             try:
                 _git(["worktree", "remove", "--force", wt], cwd=repo, check=False)
             except Exception:  # noqa: BLE001
