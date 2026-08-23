@@ -100,7 +100,7 @@ def build_index_html(reports: list[str], latest: str | None) -> str:
         body = "\n".join(items)
     else:
         body = '  <li><span class="date">暂无周报</span></li>'
-    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
+    generated = datetime.now().replace(microsecond=0).isoformat()
     return """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
