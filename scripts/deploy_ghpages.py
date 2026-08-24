@@ -52,9 +52,16 @@ def _git(args, cwd=None, check=True):
         if _tok_file.is_file():
             token = _tok_file.read_text(encoding="utf-8").strip()
     if token and args and args[0] == "push":
+        # 免交互推送：git smart HTTP 端点只认 Basic 认证（Bearer 仅适用于 GitHub
+        # REST API，见 switch_pages_source 的 urllib 调用）。本机 git 环境下
+        # http.extraheader 会被 credential 流程覆盖/忽略而失效，故改用
+        # url.insteadOf 把 token 直接嵌入远端 URL，git 自动走 Basic 认证。
+        # 同时清空 credential.helper，避免 wincred 等助手干扰。
         cmd = [
             "git", "-c",
-            f"http.extraheader=AUTHORIZATION: Bearer {token}",
+            f"url.https://x-access-token:{token}@github.com/"
+            ".insteadOf=https://github.com/",
+            "-c", "credential.helper=",
         ] + list(args)
     res = subprocess.run(
         cmd,
