@@ -19,12 +19,17 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Diagnostic (env sanity)
+        run: |
+          python --version
+          python -m pytest --version
+          pip list | grep -iE "pytest|beautifulsoup4|feedparser|requests" || true
       - name: Syntax gate (py_compile all scripts)
         run: python -m compileall -q scripts
       - name: Unit tests (pure, offline)
         working-directory: scripts
-        run: python -m pytest aiweekly/tests/ -q
+        run: python -m pytest aiweekly/tests/ -q --tb=short
 
       # 端到端质量门禁：用确定性 fixture（离线）生成报告，再跑 24/24 校验。
       # 任何生成/校验回归都会让 CI 变红——这是把"手动看周报挑刺"自动化。
