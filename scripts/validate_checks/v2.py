@@ -16,8 +16,8 @@ TEMPLATE_CHART_DATA = [
 
 
 def _extract_body_html(html_content: str) -> str:
-    cleaned = re.sub(r"<style[^>]*>.*?</style>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = re.sub(r"<script[^>]*>.*?</script>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<style\b[^>]*>.*?</style\b[^>]*>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<script\b[^>]*>.*?</script\b[^>]*>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
     m = re.search(r"<body[^>]*>(.*?)</body>", cleaned, flags=re.DOTALL | re.IGNORECASE)
     return m.group(1) if m else cleaned
 
