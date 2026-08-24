@@ -41,6 +41,9 @@ __pycache__/
 delivery/feishu_config.json
 delivery/dingtalk_config.json
 
+# GitHub PAT（本地免交互 push 用，绝不入库）
+.github_token
+
 # OpenClaw 独立打包产物（由 tools/build_openclaw_bundle.sh 生成，不入库）
 openclaw-edition/scripts/
 openclaw-edition/assets/

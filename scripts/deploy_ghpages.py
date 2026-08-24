@@ -42,6 +42,20 @@ def _git(args, cwd=None, check=True):
     env = dict(os.environ)
     env["MSYS_NO_PATHCONV"] = "1"
     cmd = ["git"] + list(args)
+    # 免交互推送：当存在 GITHUB_TOKEN/GH_TOKEN 时，对 push 命令注入
+    # Authorization header（仅内存，不写进 remote URL、不落盘）。
+    # 解决沙箱/无 wincred 凭据环境下 `git push` 卡在交互提示导致超时的问题。
+    token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN")
+    if not token:
+        # 兜底：从本地未跟踪文件读取（不入库、不写在 automation 明文里）
+        _tok_file = REPO_ROOT / ".github_token"
+        if _tok_file.is_file():
+            token = _tok_file.read_text(encoding="utf-8").strip()
+    if token and args and args[0] == "push":
+        cmd = [
+            "git", "-c",
+            f"http.extraheader=AUTHORIZATION: Bearer {token}",
+        ] + list(args)
     res = subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
