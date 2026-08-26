@@ -139,16 +139,17 @@ bash run_report.sh deploy --html AI_News.html
 1. 把 `gh-pages` 分支推送到远端：`git push origin gh-pages`（已推过可跳过）。
 2. 把 GitHub Pages **源**切到 `gh-pages / /root`（二选一）：
    - **手动**：仓库 **Settings → Pages → Source** 选 **Deploy from a branch → `gh-pages` / `/root`** → Save。
-   - **自动（方案 B，推荐）**：建一个 **Fine-grained PAT**，再跑脚本：
-     1. GitHub → 头像 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**。
-     2. Repository access 选 **Only select repositories → `ai-weekly`**；Permissions → **Pages → Read and write**。
+   - **自动（方案 B，推荐）**：建一个 **Classic PAT**（Fine-grained 不被 Pages API 支持，会 403），再跑脚本：
+     1. GitHub → 头像 → **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token**。
+     2. 勾选 **`repo`**（含 `public_repo`）与 **`pages:write`**；设较长过期（如 1 年）。
      3. 生成后复制 token（只显示一次），在本机设环境变量并跑：
         ```bash
-        export GITHUB_TOKEN=github_pat_xxx   # 不落盘，仅当前 shell 会话有效
+        export GITHUB_TOKEN=ghp_xxx   # Classic PAT，仅当前 shell 会话有效，不落盘
         bash scripts/setup_pages_source.sh
         ```
         脚本只读环境变量、不回显、不写文件，切源成功后链接约 1 分钟生效。
      > 之后每周自动化带这个 token 跑 `run_report.sh deploy --switch-pages` 即全自动（首次切源后该步骤幂等，可重复跑不影响）。
+     > **注意**：`setup_pages_source.sh` 切源走 GitHub REST API，只认 Classic PAT；而 `deploy_ghpages.py` 部署推送走 git smart HTTP，用 `.github_token` 文件（Classic PAT）经 `url.insteadOf` 免交互推送。两处都用 Classic PAT 即可，不要混用 Fine-grained。
 3. 等待约 1 分钟，访问 `https://<owner>.github.io/<repo>/AI_News_<date>.html` 验证不再 404。
 
 > **为什么是 gh-pages 分支而非 CI artifact？** 飞书卡片的 `view_url` 直接指向分支根目录的 `AI_News_*.html`，与「Deploy from a branch」模型天然契合；GitHub Pages 只允许单一来源，故原先的 `.github/workflows/mirror.yml`（Actions artifact 部署）已停用（`if: false`），以免两种来源互斥导致部署失败。
@@ -156,6 +157,15 @@ bash run_report.sh deploy --html AI_News.html
 ### 已知限制
 - **中文翻译**：若需公开站点也带中文总结，请在**本地**生成时加 `--translate-en`（依赖本机 Ollama），再 `run_report.sh deploy` 推上去。
 - **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」（RSS 仅保留约 1 周），要保留某周需在该周仍处保留期内至少部署一次。
+
+### 排错：gh-pages 部署 / 推送常见坑
+
+- **飞书 `view_url` 打开 404**：先确认 Pages **源**已切到 `gh-pages / /root`（Settings → Pages → Source）。若已切源仍 404，多半是 `deploy_ghpages.py` 的 `git push` 没推上云——本地已 commit 但远端还是旧版本。用 `curl -I https://<owner>.github.io/<repo>/AI_News_<date>.html` 验证 HTTP 状态。
+- **`git push` 报 `invalid credentials` / 卡死超时**：这是**认证方式**问题，**不等于 token 无效**（可用 `curl -H "Authorization: Bearer <token>" https://api.github.com/user` 验证 token 本身有效）。
+  - ❌ 不要走 `http.extraheader=AUTHORIZATION: Bearer <token>`：`Bearer` 只对 GitHub **REST API** 有效；git 推送走 **git smart HTTP** 协议，只认 **Basic** 认证，会被拒。
+  - ❌ 不要依赖 Windows `wincred` 凭据助手：无交互 tty 的环境（CI / 沙箱 / 定时自动化）会卡在用户名提示导致超时。
+  - ✅ 正确做法（已内置）：把 **Classic PAT** 写入本地 `ai-weekly/.github_token`（已 gitignore，不入库），`deploy_ghpages.py` 会用 `url.insteadOf` 把 token 嵌进远端 URL + 清空 `credential.helper`，自动走 Basic 认证完成免交互推送。也可通过环境变量 `GITHUB_TOKEN` / `GH_TOKEN` 传入。
+- **`setup_pages_source.sh` 切源报 403 / 404**：Pages 源切换的 GitHub API **不支持 Fine-grained PAT**（常 403）。改用 **Classic PAT**（`repo` + `pages:write`）即可。
 
 ---
 

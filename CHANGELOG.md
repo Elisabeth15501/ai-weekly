@@ -21,6 +21,13 @@
 ### Changed
 - **停用 `.github/workflows/mirror.yml`**（`if: false`）：原先的 Actions artifact Pages 部署与 gh-pages 分支来源互斥，会破坏分支部署；如需恢复 Actions 部署，需先把仓库 Pages 源切回 "GitHub Actions"。
 - README / SKILL.md 的「GitHub Pages」说明改为描述 gh-pages 分支部署模型与首次启用步骤。
+- **首次启用文档修正**：Pages 源切换改用 **Classic PAT**（Fine-grained 不被 Pages API 支持，常 403）。
+
+### Fixed
+- **部署推送认证修正（deploy_ghpages.py）**：原 `http.extraheader=AUTHORIZATION: Bearer <token>` 在 git smart HTTP 上无效（GitHub 报 `invalid credentials`）。改为用 `url.insteadOf` 把 Classic PAT 嵌进远端 URL（Basic 认证），并清空 `credential.helper` 避免 Windows wincred 在无 tty 环境卡死超时。支持从 `.github_token` 文件（gitignore）或环境变量 `GITHUB_TOKEN`/`GH_TOKEN` 读取。
+- **CI 诊断（ci.yml）**：`pip install` 加 `--no-cache-dir`，单测前 `pytest --version` 显式诊断，失败用 `--tb=short` 输出短堆栈。
+- **mirror.yml 合规**：顶层 `if: false` 改为 job 级 `if: false`，修复 GitHub Actions `Invalid workflow file`。
+- **安全加固（validate_checks/v2.py）**：`<style>`/`<script>` 过滤正则增加单词边界 `\b` 与尾部容错 `[^>]*`，防止误删 `<stylesheet>`/`<scriptx>` 且闭合标签带尾字符时漏过滤（CodeQL CWE-20）。
 
 ### Notes
 - 首次启用需 `git push origin gh-pages`，并在仓库 **Settings → Pages → Source** 设为 `gh-pages / /root`（或 `run_report.sh deploy --switch-pages`，需带 `pages:write` 的 `GITHUB_TOKEN`）。
