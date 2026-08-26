@@ -1,6 +1,6 @@
 {
   "name": "ai-weekly",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "displayName": "AI Weekly Report",
   "description": "生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）",
   "entry": "scripts/generate_site.py",

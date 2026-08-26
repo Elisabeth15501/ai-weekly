@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.2.0 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.3.0 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -11,7 +11,9 @@
 
 ---
 
-## [Unreleased]
+## [3.3.0] — 2026-08-27
+
+把「GitHub Pages 自动部署 + 飞书完整周报链接可用」这条核心链路正式封版：新增 gh-pages 部署流水线、修通免交互 PAT 推送认证、加固 CI 与安全正则，并修正文档中与实测不符的描述（Fine-grained→Classic PAT、自动化调度日 周六→周一）。
 
 ### Added
 - **GitHub Pages 部署接入流水线**：新增 `scripts/deploy_ghpages.py`，用 git worktree 把生成的周报 HTML 推到 `gh-pages` 分支根目录（飞书/钉钉卡片 `view_url` 即指向此地址），并自动累加根 `index.html` 存档页（列出各期、最新高亮）。支持 `--no-push`（离线仅本地提交）、`--switch-pages`（GitHub API 一次性切 Pages 源）、`--dry-run`（只预览不提交）。
