@@ -84,7 +84,34 @@ _AUTO_SIGNALS = [
     ("超越", 2), ("首发", 3), ("重磅", 3), ("推出", 2), ("基座", 2), ("模型", 1),
     ("agent", 2), ("智能体", 2), ("端侧", 2), ("具身", 2), ("突破", 3), ("论文", 2),
     ("夺冠", 3), ("刷新", 2), ("SOTA", 3), ("开源版", 3), ("上线", 2), ("封测", 2),
+    # 民间热度/性价比信号（Market Research 2026-08：实测、调用量与价格是开发者
+    # 「用脚投票」的最硬信号——匿名公测揭晓、免费实测、价格屠夫类报道缺位曾致
+    # GLM-5.3-Flash/Ox Alpha 这类民间最高热度话题进不了看点）
+    ("实测", 3), ("上手", 2), ("免费", 3), ("降价", 3), ("性价比", 3), ("价格", 2),
+    ("刷屏", 3), ("爆火", 3), ("揭晓", 3), ("匿名", 3), ("公测", 3), ("下载量", 3),
+    ("调用量", 3), ("token", 2), ("复刻", 2), ("网友", 2), ("横评", 2),
 ]
+
+# 主题实体组（看点多样性去重：同一新闻线的多条报道只占一席，把席位让给不同话题）。
+# 组名 -> 该组实体关键词；标题命中任一实体即归入该组。
+_TOPIC_ENTITY_GROUPS = [
+    ("GLM系", ["GLM", "Ox Alpha", "Ox-Alpha", "牛来", "智谱", "Zhipu"]),
+    ("混元", ["Hy4", "Hy3", "混元", "腾讯"]),
+    ("千问", ["Qwen", "千问", "阿里"]),
+    ("DeepSeek", ["DeepSeek", "深度求索"]),
+    ("豆包", ["豆包", "字节"]),
+    ("MiniMax", ["MiniMax"]),
+    ("Claude", ["Claude", "Anthropic"]),
+    ("GPT/OpenAI", ["GPT", "OpenAI"]),
+    ("Gemini/谷歌", ["Gemini", "谷歌"]),
+    ("Kimi", ["Kimi", "月之暗面"]),
+    ("Llama/Meta", ["Llama", "Meta "]),
+]
+
+
+def _topic_keys(title: str) -> set:
+    """提取标题所属的主题实体组名集合（未命中任何组的条目返回空集，永不冲突）。"""
+    return {name for name, kws in _TOPIC_ENTITY_GROUPS if any(k in title for k in kws)}
 
 
 # 纯日报聚合类信源/标题特征（C1#6：看点去注水，排除这些条目作为「看点」）
@@ -147,26 +174,47 @@ def _auto_insights(api_data: dict, top_n: int = 6) -> list:
 
     scored = []
     for it in items:
-        text = f"{it.get('title', '')} {it.get('summary', '')}".lower()
+        title_l = (it.get("title") or "").lower()
+        text = f"{title_l} {(it.get('summary') or '').lower()}"
         score = float(it.get("score", 0) or 0)
+        title_bonus = 0.0
         for sig, w in _AUTO_SIGNALS:
-            if sig.lower() in text:
-                score += w
-        scored.append((score, it))
+            if sig.lower() in title_l:
+                title_bonus += w
+        bonus = title_bonus + sum(
+            w for sig, w in _AUTO_SIGNALS if sig.lower() in text and sig.lower() not in title_l
+        )
+        score += bonus
+        # 聚合条轻降权：「A；B；C」清单式日报的信号词是塞多条新闻堆出来的，
+        # 价值密度低于单主题深度文。同线竞争时让民间实测/深度文优先占席位。
+        if _is_daily_digest(it):
+            score -= 2.0
+        scored.append((score, title_bonus, it))
     scored.sort(key=lambda x: x[0], reverse=True)
 
     out = []
     seen_titles = set()
-    for score, it in scored:
+    used_topics = set()  # C-多样性：已入选看点占用的主题实体组
+    for score, bonus, it in scored:
         if len(out) >= top_n:
             break
         title = (it.get("title") or "").strip()
         if not title or title in seen_titles:
             continue
-        # C1#6：排除纯日报聚合类作为「看点」（去注水）
-        if _is_daily_digest(it):
+        # C1#6：排除纯日报聚合类作为「看点」（去注水）。
+        # 高分豁免：聚合条里也可能藏着本周头号民间事件（如「匿名模型身份揭晓」）。
+        # 豁免判据用 title_bonus（标题信号词权重）而非全文 bonus——日报聚合的 summary
+        # 会堆砌大量信号词导致全文 bonus 虚高；只有标题本身就带强民间信号
+        # （title_bonus ≥3）且总分达标（score ≥6）的聚合条才值得入场，避免一刀切陪葬。
+        if _is_daily_digest(it) and not (bonus >= 3.0 and score >= 6.0):
+            continue
+        # 主题去重：同一新闻线（共享模型/公司实体组）的多条报道只占一席，
+        # 未命中任何实体组的条目不受影响。
+        tkeys = _topic_keys(title)
+        if tkeys and (tkeys & used_topics):
             continue
         seen_titles.add(title)
+        used_topics |= tkeys
         cat = it.get("category", "industry")
         kicker = _AUTO_KICKERS.get(cat, "行业")
         summary = (it.get("summary") or "").strip()
@@ -595,6 +643,58 @@ def _render_keyword_chips_html(keywords, active=DEFAULT_ACTIVE_AUDIENCE,
             f'{html.escape(term, quote=True)} <span class="kw-go">↗</span></span>\n'
             f"    {_kw_tag_html(k.get('tag'))}\n    {_kw_tier_html(k.get('tier'))}\n  </a>\n"
             f"  {_kw_note_html(k.get('note'), active)}\n</div>"
+        )
+    return "\n".join(parts)
+
+
+def _safe_insight_url(u: str) -> str:
+    """仅放行 http(s)/mailto 协议的 URL，其余回退 '#'（与 render._safe_url 同规则，
+    独立实现避免 render↔insights 循环 import）。"""
+    try:
+        scheme = urllib.parse.urlparse(u or "").scheme.lower()
+    except ValueError:
+        return "#"
+    return u if scheme in ("http", "https", "mailto") else "#"
+
+
+def _render_insight_cards_html(insights) -> str:
+    """把看点列表渲染成静态卡片 HTML，与模板 JS renderInsights 输出结构一致
+    （insight-card / 看点 NN / insight-kicker / insight-title / insight-analysis /
+    insight-editorial / insight-related）。禁 JS 时看点卡依然可见。"""
+    if not insights:
+        return ""
+    parts = []
+    for i, it in enumerate(insights, 1):
+        if not isinstance(it, dict):
+            continue
+        title = (it.get("title") or "").strip()
+        if not title:
+            continue
+        num = f"{i:02d}"
+        kicker = (f'<span class="insight-kicker">{html.escape(it["kicker"])}</span>'
+                  if it.get("kicker") else "")
+        analysis = (f'<p class="insight-analysis">{html.escape(it["analysis"])}</p>'
+                    if it.get("analysis") else "")
+        editorial = (f'<div class="insight-editorial"><b>编辑洞察</b>'
+                     f'{html.escape(it["insight"])}</div>'
+                     if it.get("insight") else "")
+        related_items = []
+        for r in (it.get("related") or []):
+            if not isinstance(r, dict) or not r.get("title"):
+                continue
+            url = _safe_insight_url(r.get("url") or "")
+            related_items.append(
+                f'<a href="{html.escape(url, quote=True)}" target="_blank" '
+                f'rel="noopener">{html.escape(r["title"])} →</a>')
+        related = (f'<div class="insight-related">{"".join(related_items)}</div>'
+                   if related_items else "")
+        parts.append(
+            f'<article class="insight-card">\n'
+            f'      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">\n'
+            f'        <span style="font-size:13px;font-weight:600;color:var(--accent);">看点 {num}</span>\n'
+            f'        {kicker}\n      </div>\n'
+            f'      <h3 class="insight-title">{html.escape(title)}</h3>\n'
+            f'      {analysis}\n      {editorial}\n      {related}\n    </article>'
         )
     return "\n".join(parts)
 

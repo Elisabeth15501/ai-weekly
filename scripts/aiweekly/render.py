@@ -32,6 +32,7 @@ from aiweekly.insights import (
     _DEFAULT_AUDIENCE_SUMMARY, _auto_insights, _auto_lead, _auto_keywords,
     _normalize_keywords, _is_daily_digest,
     _render_audience_chips_html, _render_keyword_chips_html,
+    _render_insight_cards_html,
     DEFAULT_ACTIVE_AUDIENCE, DEFAULT_SEARCH_ENGINE,
 )
 
@@ -321,6 +322,13 @@ def generate(api_data: dict, output_path: str = None,
         '<div class="insights-keywords-chips" id="insightsKeywordsChips"><!-- JS generated --></div>',
         f'<div class="insights-keywords-chips" id="insightsKeywordsChips">{_kw_html}</div>' if _kw_html else
         '<div class="insights-keywords-chips" id="insightsKeywordsChips"></div>')
+    # 看点卡本体也做服务端静态预渲染（与受众/关键词卡同级；此前仅 JSON 注入靠 JS 渲染，
+    # 禁 JS 时「本周看点」只剩导语没有卡）。JS renderInsights 仍会在运行时接管交互。
+    _ic_html = _render_insight_cards_html(_insights)
+    template = template.replace(
+        '<div id="insightsList"><!-- JS generated --></div>',
+        f'<div id="insightsList">{_ic_html}</div>' if _ic_html else
+        '<div id="insightsList"></div>')
     # M1：本周市场信号区块（服务端预渲染，与受众/关键词卡同样不依赖 JS）
     # 新版带「印证趋势」标签，与下方「AI 行业趋势洞察」面板双向桥接
     _ms_html = _render_market_signals_html_with_theme(market_signals, _lb_map)
