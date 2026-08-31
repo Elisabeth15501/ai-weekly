@@ -28,7 +28,7 @@ from aiweekly.model_meta import (
     _load_cost_table, _COST_TABLE, _match_cost, _enrich_cost, _apply_profile_as_truth,
 )
 from aiweekly.leaderboard_sources import (
-    _norm_model,
+    _norm_model, _split_dl_org,
 )
 from aiweekly.leaderboard_fetch import (
     LB_CRITERIA, SOURCES, _collect_source_results, _record_health,
@@ -214,11 +214,30 @@ def _build_history(snapshots: dict) -> dict:
     return hist
 
 
+def _normalize_snapshot_orgs(data: dict):
+    """快照行防御清洗：历史组装数据曾把中文机构名拼进 model 尾部
+    （如「Qwen3.8-Max阿里巴巴」且 org 空），统一按 DL_ORG_SPLIT endswith 拆分。"""
+    for board in ("comprehensive", "open_source"):
+        for slot in (data.get(board) or {}).values():
+            if not isinstance(slot, dict):
+                continue
+            for row in slot.get("rows") or []:
+                if not isinstance(row, dict):
+                    continue
+                model = str(row.get("model") or "")
+                if model and not str(row.get("org") or "").strip():
+                    org, m = _split_dl_org(model)
+                    if org and m:
+                        row["org"], row["model"] = org, m
+
+
 def _load_cn_snapshot() -> dict:
     """读取国内可直连榜快照（OpenCompass 司南，SSR 不可达时的兜底）。"""
     try:
         if CN_SNAPSHOT_PATH.exists():
-            return json.loads(CN_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+            data = json.loads(CN_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+            _normalize_snapshot_orgs(data)
+            return data
     except Exception:
         pass
     return {}

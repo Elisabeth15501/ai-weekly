@@ -376,9 +376,11 @@ def fetch_llmstats_ranking(top_n: int = 30):
 
 # DataLearner 将「模型名 + 机构名」拼接在模型列末尾（如 "Kimi K3Moonshot AI"），
 # 机构总是拼在末尾，故按 endswith 切分，避免误伤模型名中的子串。
+# 长词优先匹配（sorted by len desc），故「阿里巴巴」不会被「阿里」抢先截断留尾巴。
 DL_ORG_SPLIT = [
     "Moonshot AI", "腾讯AI实验室", "智谱AI", "MiniMax", "DeepSeek", "阿里",
-    "百度", "StepFun", "阶跃", "Mistral AI", "Meta", "OpenAI", "Anthropic",
+    "阿里巴巴", "百度", "字节跳动", "月之暗面", "深度求索", "StepFun", "阶跃",
+    "阶跃星辰", "Mistral AI", "Meta", "OpenAI", "Anthropic",
     "Google", "xAI", "NVIDIA", "Microsoft", "Cohere", "01.AI", "Ai2",
     "Databricks", "NousResearch", "Zhipu", "Qwen", "Alibaba", "Tencent",
     "Grok", "Arcee",
