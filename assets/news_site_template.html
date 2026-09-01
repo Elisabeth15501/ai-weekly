@@ -887,7 +887,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
 
 <!-- ========== RANKING ========== -->
 <div class="ranking-section" id="rankingSection">
-  <h2>🏆 大模型排行榜 <span class="ranking-note">综合榜（LMArena 人类偏好 + AA 智能指数）· 开源模型榜（LLM-Stats / Hugging Face）</span></h2>
+  <h2>🏆 大模型排行榜 <span class="ranking-note" id="rankingNote"></span></h2>
   <div class="lb-stale-warn" id="lbStaleWarn" style="display:none;"></div>
   <p class="rate-note" id="rateNote"></p>
   <p class="lb-selection-note">
@@ -907,7 +907,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
       <li><b>Artificial Analysis（AA）</b>：多基准综合「智能指数」——代码/推理/知识等多项能力加权，偏客观能力。</li>
       <li><b>LLM-Stats</b>：开源模型综合榜——聚合多公开基准，衡量开源模型整体实力。</li>
       <li><b>Hugging Face Open LLM</b>：开源社区榜——社区共建、侧重可复现的开源评测。</li>
-      <li class="lb-explain-note">同一模型在不同榜名次差，多源于评测侧重不同（偏好 vs 能力），并非绝对强弱；综合榜左列=Arena 名次、右列=AA 智能指数。</li>
+      <li class="lb-explain-note" id="lbExplainNote"></li>
     </ul>
   </details>
 
@@ -1020,7 +1020,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="lb-chart-wrap">
       <canvas id="valueChart"></canvas>
     </div>
-    <p class="lb-criteria">横轴=输出单价（$/1M tokens），纵轴=能力指数；圆点大小≈上下文窗口。AA 智能指数为真实指标，LMArena 名次经近似归一，仅供横向参考。未匹配成本家族的模型不计入。</p>
+    <p class="lb-criteria" id="valueChartNote"></p>
   </div>
 
   <p class="section-source" id="lbSnapshot"></p>
@@ -1660,18 +1660,23 @@ function renderRanking() {
     if (s.source_region === 'global') return '<span class="lb-src-tag">国外源</span>';
     return '';
   }
-  setText('lmSrc', lm.source || 'LMArena');
+  setText('lmSrc', lm.display_name || lm.source || 'LMArena');
   setHTML('lmTag', regionBadgeHTML(lm));
   setHref('lmLink', lm.url);
-  setText('aaSrc', aa.source || 'Artificial Analysis');
+  setText('aaSrc', aa.display_name || aa.source || 'Artificial Analysis');
   setHTML('aaTag', regionBadgeHTML(aa));
   setHref('aaLink', aa.url);
-  setText('lsSrc', ls.source || 'LLM-Stats Open LLM Leaderboard');
+  setText('lsSrc', ls.display_name || ls.source || 'LLM-Stats Open LLM Leaderboard');
   setHTML('lsTag', regionBadgeHTML(ls));
   setHref('lsLink', ls.url);
-  setText('hfSrc', hf.source || 'Hugging Face Open LLM Leaderboard');
+  setText('hfSrc', hf.display_name || hf.source || 'Hugging Face Open LLM Leaderboard');
   setHTML('hfTag', regionBadgeHTML(hf));
   setHref('hfLink', hf.url);
+  // 方向 B：3 处说明文字按真实数据动态渲染（避免写死 "LMArena" 与数据矛盾）
+  const _meta = LB.meta || {};
+  setText('rankingNote', _meta.ranking_note || '');
+  setText('lbExplainNote', _meta.lb_explain_note || '');
+  setText('valueChartNote', _meta.value_chart_note || '');
   // 评分标准（数据驱动，每个排行榜独立）
   setText('lmCriteria', lm.criteria || '');
   setText('aaCriteria', aa.criteria || '');
@@ -1729,7 +1734,12 @@ function renderRanking() {
   if (staleKeys.length) {
     const staleTxt = staleKeys.map(k => {
       const age = perSrc[k];
-      const label = { 'comprehensive.lmarena':'LMArena', 'comprehensive.aa':'AA', 'open_source.ls':'LLM-Stats', 'open_source.hf':'HF' }[k] || k;
+      const label = ({
+        'comprehensive.lmarena': lm.display_name || lm.source || 'LMArena',
+        'comprehensive.aa': aa.display_name || aa.source || 'AA',
+        'open_source.ls': ls.display_name || ls.source || 'LLM-Stats',
+        'open_source.hf': hf.display_name || hf.source || 'HF',
+      })[k] || k;
       return `${label}（${age}天前）`;
     }).join('、');
     snapTxt += ' ｜ ⚠️ 部分榜单为非本周抓取：' + staleTxt;

@@ -39,6 +39,82 @@ from aiweekly.insights import (
 SKILL_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 
+
+# ---------- 排行榜列头 display_name（方向 B 修复：表头动态显示真实数据源）----------
+def _attach_leaderboard_display_names(lb: dict) -> None:
+    """为每个排行榜槽位计算 display_name，供模板表头动态显示真实数据源（而非写死 "LMArena"）。
+
+    规则：
+    - 取 source 中「（」前的真实榜名作为 base；
+    - is_cache=True 时追加「（历史对照 <snapshot>）」，明确这是旧数据回退、并非该榜实时值；
+    - 否则直接用 base（去掉冗长括号后缀）。
+    """
+    for group in ("comprehensive", "open_source"):
+        for _key, sub in (lb.get(group) or {}).items():
+            if not isinstance(sub, dict):
+                continue
+            src = (sub.get("source") or "").strip()
+            base = src.split("（")[0].strip() if src else (_key or "")
+            if sub.get("is_cache"):
+                snap = (sub.get("snapshot") or "").strip()
+                sub["display_name"] = f"{base}（历史对照 {snap}）" if snap else f"{base}（历史快照）"
+            else:
+                sub["display_name"] = base
+
+
+def _build_leaderboard_notes(lb: dict) -> dict:
+    """生成排行榜区 3 处说明文字（ranking-note / lb-explain 末尾 / 性价比象限），
+    全部基于实际可达槽位动态生成，避免写死「LMArena」与真实数据矛盾的误导。
+
+    返回 dict 直接并入 final_leaderboard["meta"]。
+    """
+    comp = lb.get("comprehensive") or {}
+    os_ = lb.get("open_source") or {}
+    lm = comp.get("lmarena") or {}
+    aa = comp.get("aa") or {}
+    ls = os_.get("ls") or {}
+    hf = os_.get("hf") or {}
+    lab = lambda s: (s.get("display_name") or s.get("source") or "")
+
+    comp_parts = []
+    if aa.get("rows"):
+        comp_parts.append(lab(aa))
+    if lm.get("rows"):
+        suffix = "（非 LMArena 实时，系 AA 历史数据回退）" if lm.get("is_cache") else ""
+        comp_parts.append(lab(lm) + suffix)
+    comp_note = "综合榜：" + " + ".join(comp_parts) if comp_parts else "综合榜：暂无数据"
+
+    os_parts = []
+    if ls.get("rows"):
+        os_parts.append(lab(ls))
+    if hf.get("rows"):
+        os_parts.append(lab(hf))
+    os_note = "开源模型榜：" + " + ".join(os_parts) if os_parts else "开源模型榜：暂无数据"
+
+    ranking_note = comp_note + " ｜ " + os_note
+
+    lb_explain_note = (
+        f"综合榜左列为 {lab(lm) or 'LMArena'}，右列为 {lab(aa) or 'AA 智能指数'}；"
+        f"开源榜左列为 {lab(ls) or 'LLM-Stats'}，右列为 {lab(hf) or 'Hugging Face'}。"
+    )
+
+    if not lm.get("rows") or lm.get("is_cache"):
+        value_chart_note = (
+            "纵轴=AA 智能指数（真实指标）；本期限 LMArena 实时源不可达，未引入近似归一名次，避免误导。"
+            "未匹配成本家族的模型不计入。"
+        )
+    else:
+        value_chart_note = (
+            "横轴=输出单价（$/1M tokens），纵轴=能力指数；圆点大小≈上下文窗口。"
+            "AA 智能指数为真实指标，LMArena 名次经近似归一，仅供横向参考。未匹配成本家族的模型不计入。"
+        )
+
+    return {
+        "ranking_note": ranking_note,
+        "lb_explain_note": lb_explain_note,
+        "value_chart_note": value_chart_note,
+    }
+
 __all__ = ["generate", "TEMPLATE_PATH", "SKILL_DIR"]
 
 
@@ -169,6 +245,8 @@ def generate(api_data: dict, output_path: str = None,
         final_leaderboard["model_profiles"] = model_profiles
         # 以资料卡为准：用卡片权威值覆盖排行榜行的描述性字段（成本/上下文/许可证等）
         _apply_profile_as_truth(final_leaderboard, model_profiles)
+    # 方向 B：为每个槽位计算 display_name（动态表头真实数据源），并生成 3 处动态说明文字
+    _attach_leaderboard_display_names(final_leaderboard)
     # M1：构建 模型名/机构名 -> 名次 映射，供「资本↔能力」联动标注
     _lb_map = _lb_name_map(final_leaderboard)
 
@@ -185,6 +263,8 @@ def generate(api_data: dict, output_path: str = None,
               f"建议刷新 cn_leaderboard_snapshot.json 或加 --proxy 实时刷新。")
     else:
         print(f"  ✅ 排行榜快照时效 OK（最大龄 {_lb_fresh['max_age']} 天）。")
+    # 方向 B：把动态生成的排行榜说明文字并入 meta，供模板表头/注释按真实数据渲染
+    final_leaderboard["meta"].update(_build_leaderboard_notes(final_leaderboard))
 
     # 图表代码
     chart_code = build_charts(market_data, market_labels, funding_data, funding_labels,
