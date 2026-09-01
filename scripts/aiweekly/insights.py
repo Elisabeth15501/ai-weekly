@@ -360,11 +360,15 @@ _DEFAULT_AUDIENCE_SUMMARY = {
 _AUTO_TERM_TAGS = [
     ("DeepSeek", "模型"), ("Qwen", "模型"), ("千问", "模型"), ("Claude", "模型"),
     ("GPT", "模型"), ("Gemini", "模型"), ("开源", "模型"), ("多模态", "模型"),
+    ("牛来", "模型"), ("Ox Alpha", "模型"), ("智谱", "模型"), ("GLM", "模型"),
     ("端侧", "产品"), ("Agent", "产品"), ("智能体", "产品"), ("应用", "产品"),
     ("具身智能", "资本"), ("融资", "资本"), ("估值", "资本"), ("收购", "资本"),
     ("推理成本", "基建"), ("算力", "基建"), ("芯片", "基建"), ("云", "基建"),
     ("监管", "监管"), ("合规", "监管"), ("政策", "监管"), ("安全", "安全"), ("隐私", "安全"),
 ]
+# P2 (2026-09)：民间绰号 / 关键别名保送名单——出现即进关键词聚类（见 _auto_keywords）。
+# 低成本高感知：让「民间怎么叫」直接改变读者对本周议题的感知。
+_PRIORITY_ALIASES = {"牛来"}
 # 关键词的每受众默认提示（note 为 {受众: 文案} 时渲染彩色受众标签）
 _AUTO_KW_NOTE = {
     "开发者": "可作为选型 / 成本 / 落地的跟踪锚点，顺着它做资料搜集。",
@@ -470,6 +474,19 @@ def _auto_keywords(api_data: dict, top_n: int = 8) -> list:
     ranked = sorted(cands.items(),
                     key=lambda x: (x[0].lower() in seed_set, x[1]),
                     reverse=True)[:top_n]
+
+    # P2 (2026-09)：民间绰号 / 关键别名「保送」——即便词频未进 top_n，
+    # 只要本周新闻出现，就强制进入关键词聚类（让「民间怎么叫」影响感知）。
+    # 用末位替换保底，不额外撑大版面。
+    present = {t.lower() for t, _ in ranked}
+    for pa in _PRIORITY_ALIASES:
+        if pa.lower() in {c.lower() for c in cands} and pa.lower() not in present:
+            if len(ranked) < top_n:
+                ranked.append((pa, cands.get(pa, 1)))
+            else:
+                ranked[-1] = (pa, cands.get(pa, 1))
+            present.add(pa.lower())
+    ranked = ranked[:top_n]
 
     def _tag_for(term):
         tl = term.lower()

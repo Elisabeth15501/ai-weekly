@@ -16,6 +16,8 @@
   "qwen3.6-max": ["Qwen3.6-Max", "qwen3.6-max", "Qwen 3.6 Max", "qwen3.6 max"],
   "glm-5.1": ["GLM-5.1", "GLM 5.1", "glm-5.1", "GLM-5.1"],
   "glm-5.2": ["GLM-5.2", "GLM 5.2", "GLM-5.2 (max)", "glm-5.2 (max)"],
+  "glm-5.3": ["GLM-5.3", "GLM 5.3", "glm-5.3"],
+  "glm-5.3-flash": ["GLM-5.3-Flash", "GLM 5.3 Flash", "glm-5.3-flash"],
   "grok-4.5": ["Grok 4.5", "Grok 4.5 (high)", "grok 4.5", "Grok-4.5"],
   "muse-spark-1.2": ["Muse Spark 1.2", "Muse Spark 1.2 (xhigh)", "muse spark 1.2"],
   "minimax-m3": ["MiniMax-M3", "minimax-m3", "MiniMax M3", "minimax m3"],
