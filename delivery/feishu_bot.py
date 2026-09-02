@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger("aiweekly.delivery.feishu")
@@ -28,17 +29,33 @@ _ROLE_ICON = {
     "自媒体": "📝",
 }
 
+# 合法卡片链接：仅允许 http/https，且不含空白与括号（避免飞书链接语法破坏）
+_URL_RE = re.compile(r"^https?://[^\s()<>]+$")
+
 
 def _md_escape(text: str) -> str:
-    """飞书 lark_md 无官方转义；把可能误触发 markdown 的 * 与 _ 做最小处理，
-    仅当它们出现在单词边界时易破坏排版，这里统一把连续 * _ 替换为全角，避免格式错乱。
-    标题/摘要来自 RSS，含 * 概率低，做轻量防护即可。"""
+    """转义飞书 lark_md 的控制字符，防止不可信 RSS 内容破坏卡片排版。
+
+    只用于用户/外部内容（标题、摘要、看点、关键词）；模板自带的 ``**`` ``_``
+    等强调符由调用方负责、不在此转义。
+    转义集：反斜杠、反引号、``*``、``_``、``~``、``[ ] ( )``、``>``、``#``。
+    """
     if not text:
         return ""
-    # 把独立成对的 *...* / _..._ 视为应保留的强调；仅转义"裸"单字符 *_ 误触。
-    # 简单策略：将行内单个 `*`（非成对）替换为全角 ＊，避免整段变粗。
-    out = text.replace("**", "\u200b**\u200b")  # 保护成对加粗
-    return out
+    rep = (
+        ("\\", "＼"), ("`", "｀"), ("*", "＊"), ("_", "＿"),
+        ("~", "～"), ("[", "［"), ("]", "］"),
+        ("(", "（"), (")", "）"), (">", "〉"), ("#", "＃"),
+    )
+    for a, b in rep:
+        text = text.replace(a, b)
+    return text
+
+
+def _safe_url(url: str) -> str:
+    """返回可通过飞书链接语法安全嵌入的 URL；不合法则返回空串（降级为纯文本）。"""
+    u = (url or "").strip()
+    return u if _URL_RE.match(u) else ""
 
 
 def _truncate(text: str, n: int) -> str:
@@ -58,7 +75,7 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
       view_url, view_label
     """
     report = report or {}
-    week = report.get("week") or "本周"
+    week = _md_escape(report.get("week") or "本周")
 
     header = {
         "title": {"tag": "plain_text", "content": f"📊 AI 行业周报 · {week}"},
@@ -71,7 +88,7 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
     if lead:
         elements.append({
             "tag": "div",
-            "text": {"tag": "lark_md", "content": f"**本周主线**\n{_truncate(lead, 120)}"},
+            "text": {"tag": "lark_md", "content": f"**本周主线**\n{_md_escape(_truncate(lead, 120))}"},
         })
 
     # 2) 本周重点（headlines，按分数排序取前 5）
@@ -79,10 +96,10 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
     if headlines:
         lines = ["**🔥 本周重点**"]
         for i, h in enumerate(headlines[:5], 1):
-            title = h.get("title", "")
-            url = h.get("url", "")
-            summary = _truncate(h.get("summary", ""), 56)
-            src = h.get("source", "")
+            title = _md_escape(h.get("title", ""))
+            url = _safe_url(h.get("url", ""))
+            summary = _md_escape(_truncate(h.get("summary", ""), 56))
+            src = _md_escape(h.get("source", ""))
             must = " 🔥" if h.get("mustRead") else ""
             t = f"[{title}]({url})" if url else title
             line = f"{i}. {t}{must}"
@@ -97,13 +114,13 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
     if insights:
         lines = ["**💡 本周看点**"]
         for ins in insights[:3]:
-            kicker = ins.get("kicker", "")
-            title = ins.get("title", "")
-            insight = ins.get("insight", "")
+            kicker = _md_escape(ins.get("kicker", ""))
+            title = _md_escape(ins.get("title", ""))
+            insight = _md_escape(_truncate(ins.get("insight", ""), 70))
             head = f"{kicker} · {title}" if kicker else title
             line = f"• **{head}**"
             if insight:
-                line += f"\n  {_truncate(insight, 70)}"
+                line += f"\n  {insight}"
             lines.append(line)
         elements.append({"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(lines)}})
 
@@ -115,11 +132,11 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
             if not text:
                 continue
             icon = _ROLE_ICON.get(role, "•")
-            lines.append(f"{icon} **{role}**：{_truncate(str(text), 80)}")
+            lines.append(f"{icon} **{_md_escape(role)}**：{_md_escape(_truncate(str(text), 80))}")
         elements.append({"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(lines)}})
 
-    # 5) 本周关键词
-    keywords = [k.get("term", "") for k in (report.get("keywords") or []) if k.get("term")]
+    # 5) 本周关键词（publish 已按优先级排好序，[:6] 截断不丢保送词）
+    keywords = [_md_escape(k.get("term", "")) for k in (report.get("keywords") or []) if k.get("term")]
     if keywords:
         elements.append({
             "tag": "div",
@@ -127,7 +144,7 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
         })
 
     # 6) 查看完整周报（按钮 / 回退 note）
-    view_url = report.get("view_url")
+    view_url = _safe_url(report.get("view_url") or "")
     if view_url:
         elements.append({
             "tag": "action",

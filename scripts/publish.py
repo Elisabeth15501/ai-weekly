@@ -36,8 +36,17 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from delivery.feishu_bot import build_headline_card, push  # noqa: E402
+
+# 关键词保送集（与 aiweekly.insights._PRIORITY_ALIASES 对齐，确保民间绰号等
+# 高感知词在飞书卡片 6 槽截断时不被吃掉）。导入失败则回退本地最小集。
+try:
+    from aiweekly.insights import _PRIORITY_ALIASES as _PRIORITY_KW
+except Exception:  # noqa: BLE001
+    _PRIORITY_KW = {"牛来"}
 
 logger = logging.getLogger("aiweekly.publish")
 
@@ -56,6 +65,14 @@ def _load(path: str | None) -> dict | None:
         return None
 
 
+def _safe_score(item: dict) -> float:
+    """从新闻条目安全解析 score（脏数据如 "N/A"、"high" 兜底为 0，不崩）。"""
+    try:
+        return float(item.get("score") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def build_report(
     news: dict | None,
     insights: dict | None,
@@ -68,15 +85,12 @@ def build_report(
     news = news or {}
     insights = insights or {}
 
-    # 头条：按 score 降序取前 top_n
+    # 头条：按 score 降序取前 top_n（脏数据由 _safe_score 兜底）
     items = news.get("items", []) or []
-    ranked = sorted(items, key=lambda x: float(x.get("score") or 0), reverse=True)
+    ranked = sorted(items, key=_safe_score, reverse=True)
     headlines = []
     for it in ranked[:top_n]:
-        try:
-            score = float(it.get("score") or 0)
-        except (TypeError, ValueError):
-            score = 0.0
+        score = _safe_score(it)
         headlines.append({
             "title": it.get("title", ""),
             "url": it.get("url", ""),
@@ -102,10 +116,12 @@ def build_report(
     if not isinstance(aud, dict):
         aud = {}
 
+    # 关键词：保送集（牛来等）优先，再截断到 6 槽，确保高感知词不被吃掉
+    raw_kws = [k for k in (insights.get("keywords", []) or []) if k.get("term")]
+    raw_kws.sort(key=lambda k: (0 if k.get("term") in _PRIORITY_KW else 1,))
     kws = [
         {"term": k.get("term", ""), "tag": k.get("tag", "")}
-        for k in (insights.get("keywords", []) or [])[:6]
-        if k.get("term")
+        for k in raw_kws[:6]
     ]
 
     week = news.get("week") or insights.get("week") or "本周"

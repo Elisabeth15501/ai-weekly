@@ -25,7 +25,7 @@
   * 新闻用固定 --api-json（周次不变），只有排行榜随每次 live fetch 刷新 ——
     既保证「实时榜」，又不打乱周刊的新闻内容。
   * 推送复用 git-credential-wincred 取回的 PAT（仅命令内存，不写 config、不落盘）。
-  * 推送失败不致命：本地 gh-pages 已提交，打印手动推送命令供用户补救。
+  * 推送失败显式非零退出：本地 gh-pages 已提交，但返回非零码并告警，避免自动化误判「实时榜已部署」；多策略回退（$GITHUB_TOKEN / Windows 凭据），凭据经 GIT_CONFIG_* 环境变量注入、不进 argv。
 """
 from __future__ import annotations
 
@@ -48,8 +48,35 @@ def _run(cmd: list[str], **kw) -> int:
     return subprocess.call(cmd, **kw)
 
 
+def _git_push_with_creds(creds: str) -> bool:
+    """用 insteadOf + GIT_CONFIG_* 注入凭据推送（凭据在环境变量，不进 argv）。"""
+    env = dict(os.environ, MSYS_NO_PATHCONV="1")
+    env["GIT_CONFIG_COUNT"] = "1"
+    env["GIT_CONFIG_KEY_0"] = "url.https://github.com/.insteadOf"
+    env["GIT_CONFIG_VALUE_0"] = f"https://{creds}@github.com/"
+    rc = subprocess.call(
+        ["git", "push", "origin", "gh-pages"],
+        env=env, cwd=SKILL_DIR,
+    )
+    return rc == 0
+
+
 def git_push_ghpages() -> bool:
-    """用 Windows 凭据管理器取 PAT 推送 gh-pages。成功返回 True。"""
+    """推送 gh-pages 到远端。多策略回退，凭据不进 argv（用 GIT_CONFIG_* 环境变量）。
+
+    策略1：$GITHUB_TOKEN / $GH_TOKEN（CI/托管环境）
+    策略2：本机 Windows 凭据管理器（git-credential-wincred）
+    任一成功即返回 True。
+    """
+    # 策略1：CI/托管环境常用 GITHUB_TOKEN（细粒度或 classic PAT）
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        print("  ▶ 用 $GITHUB_TOKEN 推送 gh-pages", flush=True)
+        if _git_push_with_creds(f"x-access-token:{token}"):
+            return True
+        print("  ⚠️ $GITHUB_TOKEN 推送失败，尝试 Windows 凭据管理器", flush=True)
+
+    # 策略2：本机 Windows 凭据管理器
     try:
         cred = subprocess.run(
             ["git-credential-wincred", "get"],
@@ -57,26 +84,19 @@ def git_push_ghpages() -> bool:
             capture_output=True, text=True,
         ).stdout
         user = ""
-        token = ""
+        t = ""
         for line in cred.splitlines():
             if line.startswith("username="):
                 user = line[len("username="):].strip()
             elif line.startswith("password="):
-                token = line[len("password="):].strip()
-        if not token:
-            return False
-        env = dict(os.environ, MSYS_NO_PATHCONV="1")
-        # 临时把 origin 重写为带凭据 URL，避免交互登录挂起
-        rc = subprocess.call(
-            ["git", "-c",
-             f"url.https://{user}:{token}@github.com/.insteadOf=https://github.com/",
-             "push", "origin", "gh-pages"],
-            env=env, cwd=SKILL_DIR,
-        )
-        return rc == 0
+                t = line[len("password="):].strip()
+        if t:
+            print("  ▶ 用 Windows 凭据管理器推送 gh-pages", flush=True)
+            if _git_push_with_creds(f"{user}:{t}"):
+                return True
     except Exception as exc:  # noqa: BLE001
-        print(f"  ⚠️ 自动推送失败：{exc}", flush=True)
-        return False
+        print(f"  ⚠️ 读取 Windows 凭据失败：{exc}", flush=True)
+    return False
 
 
 def main() -> int:
@@ -126,10 +146,10 @@ def main() -> int:
         print("  ✅ 已推送 gh-pages（排行榜已实时更新）。", flush=True)
         return 0
 
-    print("  ⚠️ 自动推送未成功（凭据不可用或网络受限）。本地 gh-pages 已提交，"
-          "请手动：", flush=True)
-    print(f"     cd {SKILL_DIR} && git push origin gh-pages", flush=True)
-    return 0  # 非致命：本地产物已就绪
+    # R4：推送失败必须显式非零退出，避免调度/自动化误以为「实时榜已部署」
+    print("  ❌❌ 自动推送失败：本地 gh-pages 已提交，但未能推到远端！", flush=True)
+    print(f"     请手动执行： cd {SKILL_DIR} && git push origin gh-pages", flush=True)
+    return 3
 
 
 if __name__ == "__main__":

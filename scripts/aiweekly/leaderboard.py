@@ -11,6 +11,7 @@
 """
 import json
 import logging
+import re
 import time
 import concurrent.futures
 from datetime import datetime
@@ -80,11 +81,33 @@ for _c, _vs in _ALIASES.items():
         _ALIAS_REV.setdefault(_norm_model(_v), _c.lower())
 
 
+# R5：后缀感知归一并发——避免 "Base" 与 "Base-Suffix" 被 _norm_model 剥后缀后撞键
+# （如 GLM-5.3 与 GLM-5.3-Flash、未来 Qwen3 与 Qwen3-Max）。命中已知后缀时，
+# 在归一键上追加 `~<suffix>` 标记，使它们被识别为不同实体而非误合并。
+_SUFFIX_TOKENS = {
+    "flash": "flash", "preview": "preview", "max": "max", "pro": "pro",
+    "ultra": "ultra", "mini": "mini", "lite": "lite", "turbo": "turbo",
+    "air": "air", "sol": "sol", "high": "high", "xhigh": "xhigh",
+    "thinking": "thinking", "withfallback": "withfallback",
+}
+_SUFFIX_TOKEN_RE = re.compile(
+    r"[-_\s.]+(" + "|".join(_SUFFIX_TOKENS) + r")(?:[-_\s.]|$|\()"
+)
+
+
+def _suffix_token(name: str) -> str | None:
+    if not name:
+        return None
+    m = _SUFFIX_TOKEN_RE.search(name.lower())
+    return _SUFFIX_TOKENS[m.group(1)] if m else None
+
+
 def canon_key(name: str) -> str:
     """返回模型名的跨榜归一键（小写）。先查别名表精确/归一匹配，否则回退 _norm_model。
 
     归一键用于跨源匹配（LMArena↔AA 回填、跨源差异、性价比象限、WoW 历史），
     保证同一模型的不同变体 / 大小写 / 日期戳写法被识别为同一实体。
+    R5：归一并发时携带后缀标记（``glm53~flash``），避免 Base/Base-Suffix 撞键。
     """
     if not name:
         return ""
@@ -94,7 +117,8 @@ def canon_key(name: str) -> str:
     norm = _norm_model(name)
     if norm in _ALIAS_REV:
         return _ALIAS_REV[norm]
-    return norm
+    tok = _suffix_token(name)
+    return f"{norm}~{tok}" if tok else norm
 
 
 def canon_display(name: str) -> str:

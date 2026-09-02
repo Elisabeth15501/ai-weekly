@@ -48,6 +48,12 @@ from feishu_bot import build_headline_card  # noqa: E402
 
 _TARGET_JSON = os.path.join(_HERE, "feishu_target.json")
 
+# R6：lark-cli v1.0.92 的 +messages-send 仅接受内联 --content（不支持 @file / stdin），
+# 而 Windows CreateProcess 命令行上限约 8191 字符。卡片通常 2–4KB，远低于此；
+# 但满配卡片逼近上限时会 spawn 失败且无提示。这里在临近阈值时显式告警，
+# 把「静默 spawn 失败」转为可见信号。彻底修复需 lark-cli 支持 --content @file（上游能力）。
+_MAX_CONTENT_CHARS = 6000
+
 
 def load_report(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
@@ -119,8 +125,16 @@ def resolve_target(args: argparse.Namespace):
 
 def send_card(card: dict, target_flag: str, target_value: str,
               identity: str = "bot", dry_run: bool = False) -> subprocess.CompletedProcess:
-    """调用 lark-cli 发送 interactive 卡片。返回 CompletedProcess 供调用方判断 ok。"""
+    """调用 lark-cli 发送 interactive 卡片。返回 CompletedProcess 供调用方判断 ok。
+
+    注：lark-cli 的 --content 仅接受内联 JSON（不支持 @file / stdin），故卡片整体
+    走命令行参数。接近 Windows 8191 字符上限时显式告警（见 _MAX_CONTENT_CHARS）。
+    """
     card_json = json.dumps(card, ensure_ascii=False)
+    if len(card_json) > _MAX_CONTENT_CHARS:
+        logger.warning("卡片 JSON 已达 %d 字符（阈值 %d），逼近 Windows 命令行 8191 上限，"
+                       "发送可能静默失败；建议削减摘要长度或等 lark-cli 支持 --content @file。",
+                       len(card_json), _MAX_CONTENT_CHARS)
     node, run_js = resolve_lark()
     cmd = [
         node, run_js, "im", "+messages-send",

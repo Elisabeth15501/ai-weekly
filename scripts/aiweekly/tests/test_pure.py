@@ -18,6 +18,7 @@ from aiweekly.leaderboard_sources import _norm_model  # noqa: E402
 from aiweekly.leaderboard import (  # noqa: E402
     _leaderboard_freshness,
     _build_selection_notes,
+    canon_key,
 )
 from aiweekly.model_meta import _apply_profile_as_truth  # noqa: E402
 
@@ -167,3 +168,27 @@ def test_apply_profile_no_match_leaves_row():
     # 未命中档案：保留榜单原值，不被覆盖为 None
     assert r["org"] == "ACME"
     assert r["price_out"] == 2.0
+
+
+# ---------- canon_key（R5：后缀感知归一，避免 Base/Base-Suffix 撞键）----------
+def test_canon_key_suffix_distinguishes_aliased():
+    # 已知别名族：GLM-5.3 与 GLM-5.3-Flash 必须不同键
+    assert canon_key("GLM-5.3") != canon_key("GLM-5.3-Flash")
+
+
+def test_canon_key_suffix_distinguishes_unaliased():
+    # 无别名时，后缀感知逻辑区分 Base 与 Base-Suffix（不靠手改别名）
+    assert canon_key("ZetaModel") != canon_key("ZetaModel-Turbo")
+    assert canon_key("ZetaModel") != canon_key("ZetaModel-Preview")
+
+
+def test_canon_key_suffix_token_appended():
+    # 未命中别名：后缀以 ~<token> 形式保留在归一键上
+    assert canon_key("ZetaModel-Turbo").endswith("~turbo")
+    assert canon_key("ZetaModel-Preview").endswith("~preview")
+
+
+def test_canon_key_variant_normalization_still_merges():
+    # 纯变体写法（大小写/空格/连字符）仍应归一合并
+    assert canon_key("GLM-5.3") == canon_key("GLM 5.3")
+    assert canon_key("GLM-5.3") == canon_key("glm-5.3")
