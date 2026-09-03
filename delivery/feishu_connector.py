@@ -3,7 +3,8 @@
 
 设计原则（沿用 skill 合规约束）：
 - 复用 ``delivery/feishu_bot.build_headline_card`` 构造消息卡片（Card 1.0，飞书仍支持），
-  通过 ``lark-cli im +messages-send`` 发送，密钥由连接器托管，绝不写进任何配置文件。
+  通过 lark-cli 的 raw HTTP 通道 ``api POST /open-apis/im/v1/messages`` 发送——卡片 body
+  经 stdin 传入，彻底规避 Windows 命令行长度上限（见 R6 注释）；密钥由连接器托管，绝不写进任何配置文件。
 - 仅依赖标准库 + 已连接的飞书连接器（lark-cli）。
 
 目标会话解析（优先级从高到低，命中即停）：
@@ -48,11 +49,11 @@ from feishu_bot import build_headline_card  # noqa: E402
 
 _TARGET_JSON = os.path.join(_HERE, "feishu_target.json")
 
-# R6：lark-cli v1.0.92 的 +messages-send 仅接受内联 --content（不支持 @file / stdin），
-# 而 Windows CreateProcess 命令行上限约 8191 字符。卡片通常 2–4KB，远低于此；
-# 但满配卡片逼近上限时会 spawn 失败且无提示。这里在临近阈值时显式告警，
-# 把「静默 spawn 失败」转为可见信号。彻底修复需 lark-cli 支持 --content @file（上游能力）。
-_MAX_CONTENT_CHARS = 6000
+# R6（已彻底修复）：原实现把整卡 JSON 作为 --content 命令行参数传给
+# `lark-cli im +messages-send`，受 Windows CreateProcess 命令行上限（~8191 字符）约束，
+# 满配卡片逼近上限时 spawn 失败且无提示。现改为 raw HTTP 通道
+# `api POST /open-apis/im/v1/messages`，卡片 body 经 **stdin**（--data -）传入，
+# 完全不进入 argv，从根本上消除命令行长度限制（经 --dry-run 实测请求体与原路径一致）。
 
 
 def load_report(path: str) -> dict:
@@ -127,28 +128,41 @@ def send_card(card: dict, target_flag: str, target_value: str,
               identity: str = "bot", dry_run: bool = False) -> subprocess.CompletedProcess:
     """调用 lark-cli 发送 interactive 卡片。返回 CompletedProcess 供调用方判断 ok。
 
-    注：lark-cli 的 --content 仅接受内联 JSON（不支持 @file / stdin），故卡片整体
-    走命令行参数。接近 Windows 8191 字符上限时显式告警（见 _MAX_CONTENT_CHARS）。
+    R6 彻底修复：不再把整卡 JSON 塞进命令行参数（Windows CreateProcess 命令行上限
+    ~8191 字符，满配卡片逼近上限时 spawn 失败且无提示）。改为走 lark-cli 的 raw HTTP
+    通道 ``api POST /open-apis/im/v1/messages``，卡片 body 通过 **stdin**（``--data -``）
+    传入，完全不进入 argv，从根本上消除命令行长度限制。
+
+    飞书 im/v1/messages 契约：
+      - query ``receive_id_type``：群 → chat_id，私聊 open_id
+      - body ``{msg_type, content, receive_id}``，其中 content 为**字符串化的卡片 JSON**
     """
-    card_json = json.dumps(card, ensure_ascii=False)
-    if len(card_json) > _MAX_CONTENT_CHARS:
-        logger.warning("卡片 JSON 已达 %d 字符（阈值 %d），逼近 Windows 命令行 8191 上限，"
-                       "发送可能静默失败；建议削减摘要长度或等 lark-cli 支持 --content @file。",
-                       len(card_json), _MAX_CONTENT_CHARS)
+    # content 必须是「字符串化的卡片 JSON」（与 im +messages-send 内部一致）
+    body = {
+        "msg_type": "interactive",
+        "content": json.dumps(card, ensure_ascii=False),
+        "receive_id": target_value,
+    }
+    # receive_id_type：群 → chat_id，私聊 open_id
+    receive_id_type = "chat_id" if target_flag == "--chat-id" else "open_id"
+    params = json.dumps({"receive_id_type": receive_id_type}, ensure_ascii=False)
+    body_str = json.dumps(body, ensure_ascii=False)
+
     node, run_js = resolve_lark()
     cmd = [
-        node, run_js, "im", "+messages-send",
-        target_flag, target_value,
-        "--msg-type", "interactive",
-        "--content", card_json,
+        node, run_js, "api", "POST", "/open-apis/im/v1/messages",
+        "--params", params,
+        "--data", "-",  # 大 JSON 走 stdin，不进 argv（R6 修复核心）
     ]
     if identity:
         cmd += ["--as", identity]
     if dry_run:
         cmd += ["--dry-run"]
-    logger.info("执行：node lark-cli im +messages-send %s %s --msg-type interactive --content '<card %d chars>'%s",
-                target_flag, target_value, len(card_json), " --dry-run" if dry_run else "")
-    return subprocess.run(cmd, capture_output=True, text=True)
+    logger.info("执行：node lark-cli api POST /open-apis/im/v1/messages "
+                "--params %s --data - (stdin %d chars) --as %s%s",
+                params, len(body_str), identity, " --dry-run" if dry_run else "")
+    # 关键：body 通过 stdin（input=）传入，绝不经命令行参数
+    return subprocess.run(cmd, input=body_str, capture_output=True, text=True)
 
 
 def main() -> int:
