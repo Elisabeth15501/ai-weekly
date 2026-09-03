@@ -246,7 +246,7 @@ def main() -> int:
                 if args.switch_pages:
                     deploy_cmd.append("--switch-pages")
                 _sp.run(deploy_cmd, cwd=str(REPO_ROOT), check=False)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  部署为 best-effort：失败不回滚已生成的报告，仅告警并记录
                 logger.warning("gh-pages 部署异常: %s", exc)
                 print(f"❌ gh-pages 部署异常：{exc}")
 

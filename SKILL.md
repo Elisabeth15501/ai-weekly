@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.3.0
+version: 3.3.1
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -18,7 +18,7 @@ description: >
   生成AI报告、AI新闻网站、AI新闻站。支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.3.0"
+  version: "3.3.1"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---

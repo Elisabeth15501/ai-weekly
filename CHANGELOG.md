@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.3.0 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.3.1 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -8,6 +8,32 @@
 > 所有早期版本的功能均已在 `3.1.1` 中可用。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [3.3.1] — 2026-09-03
+
+对抗式安全/健壮性审查的收尾版本：把审查报告（2026-09-02）标记的剩余项全部闭环，并补齐工程可读性。
+
+### Added
+- 无新增功能。
+
+### Changed
+- **飞书连接器通道根治（R6）**：`delivery/feishu_connector.py` 的 `send_card` 不再把整卡 JSON 作为 `--content` 命令行参数传给 lark-cli（受 Windows 命令行 ~8191 字符上限约束，满配卡片会静默 spawn 失败），改为经 `lark-cli api POST /open-apis/im/v1/messages --data -` 的 **stdin** 传入，从根本上消除 argv 上限；删除原阈值告警常量。
+- **优先别名逻辑抽纯函数（S1）**：`scripts/aiweekly/insights.py` 的 `_auto_keywords` 内联脆弱保送逻辑抽成模块级纯函数 `_apply_priority_alias(ranked, cands, top_n)`，语义等价，可单测。
+- **榜源并行整体截止（S2）**：`scripts/aiweekly/leaderboard_fetch.py` 已有并发 + 单源隔离，本版本补整体墙钟硬上限 `OVERALL_FETCH_CAP_S=180`（`wait(timeout=)` + 超时源标记 `timeout` 跳过 + 非阻塞 `shutdown`），杜绝"一个慢源拖垮整份周报"。
+
+### Fixed
+- **安全/健壮性审查闭环（C1/R1/R2/R3/R4/R5）**（已在 3.3.0 后续提交落地，本版本随发布封版）：
+  - **C1/N1**：`_md_escape` 死代码重写为真转义器（飞书卡片排版）。
+  - **R1**：`publish.py` 脏数据 `float(score)` 加 `_safe_score` 兜底。
+  - **R2**：关键词截断前按保送集（牛来）优先排序。
+  - **R3/R4**：`refresh_deploy.py` PAT 改走 `GIT_CONFIG_*` 环境变量、推送失败返回非零码（不再静默 exit 0）。
+  - **R5**：`canon_key` 后缀感知（`glm53~flash`）消除 GLM-5.3 ≡ GLM-5.3-Flash 撞键。
+- **N2（可读性）**：`scripts/publish.py` 三处 best-effort `except Exception # noqa: BLE001` 补齐「为何必须吞」注释（导入回退保送集 / 末段分发不中断报告 / deploy 不回滚报告）。
+
+### Notes
+- 本次为审查收尾 + 合规发布，无用户可见行为变化；卡片结构、报告 schema、部署链路均与 3.3.0 兼容。
 
 ---
 
