@@ -423,6 +423,26 @@ def _tokenize(text):
     return toks
 
 
+def _apply_priority_alias(ranked, cands, top_n):
+    """P2(2026-09)：民间绰号 / 关键别名「保送」进关键词聚类（S1 抽出，可读 + 可测）。
+
+    ``ranked`` 为已排序、可能已截断到 ``top_n`` 的 ``[(term, count), ...]``。
+    对每个保送词（``_PRIORITY_ALIASES``）：只要本周确实出现（在 ``cands`` 中）且尚未
+    入选，就强制进列表——列表未满则追加，已满则替换末位（不额外撑大版面）。
+    多余保送项在末尾截断回 ``top_n``。与旧内联实现逐字节等价。
+    """
+    present = {t.lower() for t, _ in ranked}
+    candidate_terms = {c.lower() for c in cands}
+    for pa in _PRIORITY_ALIASES:
+        if pa.lower() in candidate_terms and pa.lower() not in present:
+            if len(ranked) < top_n:
+                ranked.append((pa, cands.get(pa, 1)))
+            else:
+                ranked[-1] = (pa, cands.get(pa, 1))
+            present.add(pa.lower())
+    return ranked[:top_n]
+
+
 def _auto_keywords(api_data: dict, top_n: int = 8) -> list:
     """轻量 TF 聚类：从本周新闻标题/摘要自动派生 5–8 个高频主题词 + 标签。
 
@@ -475,18 +495,8 @@ def _auto_keywords(api_data: dict, top_n: int = 8) -> list:
                     key=lambda x: (x[0].lower() in seed_set, x[1]),
                     reverse=True)[:top_n]
 
-    # P2 (2026-09)：民间绰号 / 关键别名「保送」——即便词频未进 top_n，
-    # 只要本周新闻出现，就强制进入关键词聚类（让「民间怎么叫」影响感知）。
-    # 用末位替换保底，不额外撑大版面。
-    present = {t.lower() for t, _ in ranked}
-    for pa in _PRIORITY_ALIASES:
-        if pa.lower() in {c.lower() for c in cands} and pa.lower() not in present:
-            if len(ranked) < top_n:
-                ranked.append((pa, cands.get(pa, 1)))
-            else:
-                ranked[-1] = (pa, cands.get(pa, 1))
-            present.add(pa.lower())
-    ranked = ranked[:top_n]
+    # P2 (2026-09)：民间绰号 / 关键别名「保送」（抽成 _apply_priority_alias，单测覆盖）
+    ranked = _apply_priority_alias(ranked, cands, top_n)
 
     def _tag_for(term):
         tl = term.lower()

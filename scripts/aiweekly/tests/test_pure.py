@@ -8,6 +8,7 @@
 """
 import os
 import sys
+import time
 
 import pytest
 
@@ -21,6 +22,8 @@ from aiweekly.leaderboard import (  # noqa: E402
     canon_key,
 )
 from aiweekly.model_meta import _apply_profile_as_truth  # noqa: E402
+from aiweekly import insights as INS  # noqa: E402
+from aiweekly import leaderboard_fetch as LB  # noqa: E402
 
 
 # ---------- _norm_model ----------
@@ -192,3 +195,61 @@ def test_canon_key_variant_normalization_still_merges():
     # 纯变体写法（大小写/空格/连字符）仍应归一合并
     assert canon_key("GLM-5.3") == canon_key("GLM 5.3")
     assert canon_key("GLM-5.3") == canon_key("glm-5.3")
+
+
+# ---------- _apply_priority_alias（S1：优先别名保送，可读性 + 可测）----------
+def test_apply_priority_alias_promotes_outside_top_n(monkeypatch):
+    # 保送词未进 top_n 时应强制挤进列表（末位替换保底）
+    monkeypatch.setattr(INS, "_PRIORITY_ALIASES", {"保送词"})
+    cands = {"A": 9, "B": 8, "C": 7, "保送词": 2}
+    ranked = [("A", 9), ("B", 8), ("C", 7)]  # top_n=3，保送词被词频挤出
+    out = INS._apply_priority_alias(ranked, cands, 3)
+    assert len(out) == 3
+    assert out[-1][0] == "保送词"
+
+
+def test_apply_priority_alias_no_duplicate_when_already_present(monkeypatch):
+    # 已入选的保送词不应被重复插入
+    monkeypatch.setattr(INS, "_PRIORITY_ALIASES", {"保送词"})
+    cands = {"A": 9, "保送词": 5}
+    ranked = [("A", 9), ("保送词", 5), ("C", 3)]
+    out = INS._apply_priority_alias(ranked, cands, 3)
+    assert len(out) == 3
+    assert sum(1 for t, _ in out if t == "保送词") == 1
+
+
+def test_apply_priority_alias_absent_from_cands_not_inserted(monkeypatch):
+    # 本周新闻未出现的保送词不应被硬塞进列表
+    monkeypatch.setattr(INS, "_PRIORITY_ALIASES", {"保送词"})
+    cands = {"A": 9, "B": 8}
+    ranked = [("A", 9), ("B", 8)]
+    out = INS._apply_priority_alias(ranked, cands, 3)
+    assert out == [("A", 9), ("B", 8)]
+
+
+# ---------- _collect_source_results（S2：并发 + 整体截止，避免慢源拖垮）----------
+def test_collect_source_results_bounded_deadline(monkeypatch):
+    # 快源正常返回、慢源（远超整体上限）必须被标记 timeout 且函数快速返回，
+    # 证明「一个慢源拖垮整份周报生成」已被硬上限切断。
+    def fast(n):
+        return [{"model": "x", "rank": 1}]
+    def slow(n):
+        time.sleep(5)
+        return [{"model": "y", "rank": 1}]
+
+    fake = {
+        "fast": {"region": "global", "board": "comprehensive", "key": "fast",
+                 "fn": fast, "label": "Fast", "url": "http://x", "criteria": ("", "")},
+        "slow": {"region": "global", "board": "comprehensive", "key": "slow",
+                 "fn": slow, "label": "Slow", "url": "http://y", "criteria": ("", "")},
+    }
+    monkeypatch.setattr(LB, "SOURCES", fake)
+    monkeypatch.setattr(LB, "OVERALL_FETCH_CAP_S", 1)
+    t0 = time.monotonic()
+    res = LB._collect_source_results(15, "global", None)
+    dt = time.monotonic() - t0
+    assert dt < 3.0, f"应在整体上限内返回，实际耗时 {dt:.1f}s"
+    assert res["fast"]["rows"], "快源应有数据"
+    assert res["slow"]["status"] == "timeout", res["slow"]
+    # 单源失败隔离：慢源超时不应污染快源结果
+    assert res["fast"]["status"] == "ok"

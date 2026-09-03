@@ -31,6 +31,11 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 # 榜源健康监控（L2#15）：每次生成 append 一行 {ts,source,status,latency_ms,rows_count}
 HEALTH_PATH = SKILL_DIR / "leaderboard_health.jsonl"
 
+# S2(2026-09)：多源并行抓取的整体墙钟硬上限（秒）。个别慢源超过此值即标记 timeout 跳过，
+# 确保「一个慢源拖垮整份周报生成」不会发生。单源自身 _http_get timeout 通常 40–120s，
+# 重试上限约 3×120s；180s 给正常源留余量，同时把最坏总延迟压死在 3 分钟内。
+OVERALL_FETCH_CAP_S = 180
+
 # 三榜各自的评分标准说明（渲染到页面「评分标准」行，数据驱动）；定义在多源池之前，
 # 供 SOURCES 引用（模块级求值顺序要求）。
 LB_CRITERIA = {
@@ -111,21 +116,37 @@ def _collect_source_results(top_n: int, detected: str, proxy: str):
             logger.warning("榜源抓取失败 [%s]: %s", spec["label"], e)
             return key, [], lat, f"error:{type(e).__name__}"
 
+    # S2(2026-09)：硬上限总墙钟时间，避免个别慢源拖垮整份周报生成。
+    # 并发 + 单源隔离已就位（见 _one 的 try/except）；此处补「整体截止」这最后一块：
+    # 超过 OVERALL_FETCH_CAP_S 仍未完成的源标记为 timeout 并跳过；已运行线程由各自
+    # _http_get timeout 兜底、后台静默结束，shutdown(wait=False) 不再阻塞主流程。
     results = {}
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=4)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
-            futs = {ex.submit(_one, k): k for k in keys}
-            for fut in concurrent.futures.as_completed(futs):
-                k, rows, lat, st = fut.result()
-                results[k] = {"rows": rows, "latency_ms": lat, "status": st}
-        logger.info("并行抓取完成：%d 源，命中 %d",
-                    len(results), sum(1 for v in results.values() if v["rows"]))
+        futs = {ex.submit(_one, k): k for k in keys}
+        done, not_done = concurrent.futures.wait(futs, timeout=OVERALL_FETCH_CAP_S)
+        for fut in done:
+            k, rows, lat, st = fut.result()
+            results[k] = {"rows": rows, "latency_ms": lat, "status": st}
+        for fut in not_done:
+            k = futs[fut]
+            results[k] = {"rows": [], "latency_ms": OVERALL_FETCH_CAP_S * 1000,
+                          "status": "timeout"}
+            logger.warning("榜源抓取超时(整体 %ds 上限) [%s]，本源跳过",
+                           OVERALL_FETCH_CAP_S, SOURCES[k]["label"])
+        logger.info("并行抓取完成：%d 源，命中 %d（%d 超时）",
+                    len(results),
+                    sum(1 for v in results.values() if v["rows"]),
+                    sum(1 for v in results.values() if v["status"] == "timeout"))
     except Exception as e:  # noqa: BLE001  并行异常回退顺序
         logger.warning("并行抓取异常，回退顺序抓取: %s", e)
         results = {}
         for k in keys:
             k2, rows, lat, st = _one(k)
             results[k2] = {"rows": rows, "latency_ms": lat, "status": st}
+    finally:
+        # 不等待仍在运行的慢源线程（wait=False），未开始的取消（cancel_futures=True）。
+        ex.shutdown(wait=False, cancel_futures=True)
     return results
 
 
