@@ -40,6 +40,42 @@ from validate_checks import (
 )
 
 
+def check_model_profiles_accuracy(skill_dir: Path | None = None) -> dict:
+    """P0-2 模型档案准确性守护：扫描 model_profiles.json，禁止「无真实来源锚点」条目。
+
+    判定：source 以「榜单自动抓取」开头（项目内部约定：自动抓取、未联网核实）
+    或 source 为空 / 缺失 → 视为未核实，应移入 model_profiles_unverified.json。
+
+    这是一个数据治理硬守护，独立于 HTML 内容；找不到文件时降级为 warn（不阻断）。
+    """
+    if skill_dir is None:
+        skill_dir = Path(__file__).resolve().parent.parent
+    prof_path = skill_dir / "model_profiles.json"
+    if not prof_path.exists():
+        return {"ok": True, "warn": True,
+                "msg": f"未找到 model_profiles.json（{prof_path}），跳过档案准确性校验"}
+    try:
+        data = json.loads(prof_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return {"ok": False, "warn": False, "msg": f"model_profiles.json 解析失败：{e}"}
+
+    bad = []
+    for name, v in data.items():
+        src = (v or {}).get("source")
+        if not src or not str(src).strip():
+            bad.append((name, "source 缺失"))
+        elif str(src).strip().startswith("榜单自动抓取"):
+            bad.append((name, "source 未联网核实"))
+    if bad:
+        detail = "；".join(f"{n}（{r}）" for n, r in bad[:8])
+        more = f" 等共 {len(bad)} 条" if len(bad) > 8 else ""
+        return {"ok": False, "warn": False,
+                "msg": f"存在 {len(bad)} 条无来源锚点的未核实模型档案：{detail}{more}"
+                        f"——请运行 validate_models.py --fix 移入 unverified 文件"}
+    return {"ok": True, "warn": False,
+            "msg": f"模型档案全部已核实（{len(data)} 条，均带真实来源锚点）"}
+
+
 def validate(html_path: Path, opts: dict = None) -> dict:
     opts = opts or {}
     min_news = opts.get("min_news", 20)
@@ -129,6 +165,10 @@ def validate(html_path: Path, opts: dict = None) -> dict:
             "sources": sources_check,
         }
 
+    # P0-2：模型档案准确性守护（数据治理硬门槛，独立于 HTML）
+    results["model_profiles_accuracy"] = check_model_profiles_accuracy(
+        Path(__file__).resolve().parent.parent)
+
     # P2-XSS：HTML 内容级 XSS 守护（H1/H2 防回归），独立于源码静态扫描
     results["xss_safe"] = check_xss_safe(content)
 
@@ -182,6 +222,7 @@ def print_report(results: dict) -> None:
             ("无裸except(P0#19)", results.get("source_no_bare_except", {})),
             ("ISO8601日期(P0#19)", results.get("source_iso8601", {})),
             ("模块体量(P0#4)", results.get("source_module_size", {})),
+            ("模型档案准确性(P0-2)", results.get("model_profiles_accuracy", {})),
             ("数据来源", results.get("sources", {})),
         ]
     else:

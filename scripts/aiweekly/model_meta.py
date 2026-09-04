@@ -100,6 +100,10 @@ def _apply_profile_as_truth(leaderboard: dict, profiles: dict):
     # 双索引：轻量 canon（最宽容，去所有非字母数字）+ 可选别名 canon_key，提高命中率
     profiles_canon = {}
     for k, v in (profiles or {}).items():
+        # P0-2 守护：未核实条目（verified=false，来自 model_profiles_unverified.json
+        # 或历史遗留）不参与排行榜排名，绝不把无来源锚点的推测数据回填到榜单行。
+        if v.get("verified") is False:
+            continue
         profiles_canon[_canon(k)] = v
         if _ck:
             profiles_canon.setdefault(_ck(k), v)

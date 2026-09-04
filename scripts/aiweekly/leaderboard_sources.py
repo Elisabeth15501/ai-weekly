@@ -9,6 +9,7 @@
 """
 import html
 import json
+import os
 import re
 
 try:
@@ -42,10 +43,52 @@ SV_GENERAL_URL = "https://www.superclueai.com/generalpage"
 MS_MODELS_URL = "https://modelscope.cn/models"
 
 
+# ============ 国内镜像（P0-3：海外源国内不可达时自动回退）============
+# 键：源站 URL 前缀；值：镜像站对应前缀。_http_get_fallback 在主源失败时
+# 按此表改写前缀重试，再不行才回退快照（已有逻辑）。
+# 说明：
+#  - hf-mirror.com 为 HuggingFace 官方社区镜像，国内直连稳定 → 真实可用；
+#  - lmarena / AA 的镜像域名（lmarena.org.cn / aa-cn.mirror.xyz 等）为「尽力而为」，
+#    若解析不到会自动失败并继续回退，不影响主流程（best-effort）。
+URL_REWRITES = {
+    "https://datasets-server.huggingface.co": "https://hf-mirror.com/datasets-server",
+    "https://huggingface.co": "https://hf-mirror.com",
+    "https://lmarena.ai": "https://lmarena.org.cn",
+    "https://artificialanalysis.ai": "https://aa-cn.mirror.xyz",
+}
+
+# 镜像总开关：设 LEADERBOARD_USE_MIRRORS=0 可关闭（调试 / 海外环境无需镜像）
+_USE_MIRRORS = os.environ.get("LEADERBOARD_USE_MIRRORS", "1") != "0"
+
+
+def _http_get_fallback(url: str, timeout: int = 45, opener=None) -> str:
+    """抓取 URL：主源失败自动按 URL_REWRITES 改写前缀重试镜像（P0-3）。
+
+    返回首个成功响应的正文；全部失败则抛出最后一个异常，由上层 fetch_*
+    的 best-effort 块捕获并返回 None（回退缓存 / 快照）。所有候选都不静默吞掉，
+    确保「主源+镜像都挂」时仍如实降级而非假装成功。
+    """
+    if not _USE_MIRRORS:
+        return _http_get(url, timeout=timeout, opener=opener)
+    candidates = [url]
+    for orig, mirror in URL_REWRITES.items():
+        if url.startswith(orig):
+            candidates.append(mirror + url[len(orig):])
+    last_err = None
+    for cand in candidates:
+        try:
+            return _http_get(cand, timeout=timeout, opener=opener)
+        except Exception as e:  # noqa: BLE001  候选失败继续试下一个（镜像可能不存在）
+            last_err = e
+            continue
+    raise last_err or RuntimeError(f"所有源（含镜像）均不可达：{url}")
+
+
 __all__ = [
     "LM_ARENA_URL", "AA_URL", "HF_DS_API", "HF_LEADERBOARD_URL",
     "DATALARNER_URL", "LLMSTATS_URL", "OC_LLM_URL", "SV_GENERAL_URL",
-    "MS_MODELS_URL", "ORG_PREFIXES", "_clean_model_slug", "_SUFFIX_RE",
+    "MS_MODELS_URL", "URL_REWRITES", "_USE_MIRRORS", "_http_get_fallback",
+    "ORG_PREFIXES", "_clean_model_slug", "_SUFFIX_RE",
     "_norm_model", "fetch_lmarena_ranking", "OPEN_SOURCE_MODEL_KEYWORDS", "_is_open_source_model",
     "fetch_aa_ranking", "fetch_hf_open_ranking", "_parse_table_rows", "_parse_ctx",
     "_parse_money", "fetch_llmstats_ranking", "DL_ORG_SPLIT", "_split_dl_org",
@@ -99,7 +142,7 @@ def _norm_model(name: str) -> str:
 def fetch_lmarena_ranking(top_n: int = 15):
     """LMArena 综合排名（人类偏好 Elo）。解析排行榜页面服务端渲染的表格。"""
     try:
-        html = _http_get(LM_ARENA_URL, timeout=60)
+        html = _http_get_fallback(LM_ARENA_URL, timeout=60)
         soup = BeautifulSoup(html, "html.parser")
         tables = soup.find_all("table")
         if not tables:
@@ -152,7 +195,7 @@ def fetch_aa_ranking(top_n: int = 15):
       - 某模型详情页 data[] 数组（按 label 关联）：contextWindowTokens、pricing(inputPrice/outputPrice)
     """
     try:
-        html = _http_get(AA_URL, timeout=45)
+        html = _http_get_fallback(AA_URL, timeout=45)
         # label + 智能指数 + 详情页 URL（用于二次抓取上下文/价格）
         entries = re.findall(
             r'"label":"([^"]+)","artificialAnalysisIntelligenceIndex":([\d.]+),'
@@ -169,7 +212,7 @@ def fetch_aa_ranking(top_n: int = 15):
         detail_url = next((u for _, _, u in ranked if u), None)
         if detail_url:
             try:
-                d = _http_get("https://artificialanalysis.ai" + detail_url, timeout=45)
+                d = _http_get_fallback("https://artificialanalysis.ai" + detail_url, timeout=45)
                 for m in re.finditer(r'"label":"([^"]+)","contextWindowTokens":(\d+)', d):
                     ctx_map[m.group(1)] = int(m.group(2))
                 pre = re.compile(
@@ -208,7 +251,7 @@ def fetch_hf_open_ranking(top_n: int = 30):
         offset = 0
         while True:
             url = HF_DS_API + f"&offset={offset}&length=100"
-            data = json.loads(_http_get(url, timeout=45))
+            data = json.loads(_http_get_fallback(url, timeout=45))
             rows = data.get("rows", [])
             if not rows:
                 break

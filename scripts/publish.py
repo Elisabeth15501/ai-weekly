@@ -176,9 +176,17 @@ def main() -> int:
     ap.add_argument("--output", default=None, help="report.json 写出路径（默认 news 同目录/report.json）")
     ap.add_argument("--top-n", type=int, default=5, help="头条条数（默认 5）")
     ap.add_argument("--dry-run", action="store_true", help="仅构造卡片并打印，不推送")
-    ap.add_argument("--html", default=None, help="生成的周报 HTML 路径（配合 --deploy 部署到 gh-pages）")
-    ap.add_argument("--deploy", action="store_true", help="生成 report.json 后顺便部署到 gh-pages（需 --html）")
-    ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（透传给 deploy_ghpages）")
+    ap.add_argument("--html", default=None, help="生成的周报 HTML 路径（配合 --deploy 部署）")
+    ap.add_argument("--deploy", action="store_true",
+                    help="生成 report.json 后顺便部署（默认后端 github-pages，需 --html）")
+    ap.add_argument("--deploy-to", default="github-pages",
+                    choices=["github-pages", "tencent-cos", "vercel", "netlify",
+                             "cloudflare-pages", "local"],
+                    help="部署后端（P0-1：去 GitHub 化；默认 github-pages，零破坏）。"
+                         "非 github-pages 后端无需配置 GitHub。")
+    ap.add_argument("--view-base", default=None,
+                    help="周报公开基址（覆盖后端推导的 view_base，用于拼 view_url）")
+    ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（仅 github-pages）")
     ap.add_argument("--switch-pages", action="store_true", help="部署时一并把 Pages 源切到 gh-pages（需 GITHUB_TOKEN）")
     args = ap.parse_args()
 
@@ -230,25 +238,37 @@ def main() -> int:
             print(f"❌ 飞书推送失败：{e}")
             rc = 1
 
-    # 流水线最终分发步骤：把周报部署到 gh-pages（GitHub Pages）
-    if args.deploy:
+    # 流水线最终分发步骤：按 --deploy-to 部署周报到公开托管（P0-1：多后端·去 GitHub 化）
+    if args.deploy or args.deploy_to != "github-pages":
         if not args.html or not Path(args.html).exists():
-            print("⚠️ --deploy 需要有效的 --html 路径，跳过 gh-pages 部署。")
+            print("⚠️ 部署需要有效的 --html 路径，跳过部署。")
         else:
-            print("🌐 部署周报到 gh-pages…")
+            backend = args.deploy_to if args.deploy else "github-pages"
+            print(f"🌐 部署周报到 {backend}…")
             try:
-                import subprocess as _sp
-                deploy_cmd = [sys.executable,
-                              str(REPO_ROOT / "scripts" / "deploy_ghpages.py"),
-                              "--html", args.html]
-                if args.no_push:
-                    deploy_cmd.append("--no-push")
-                if args.switch_pages:
-                    deploy_cmd.append("--switch-pages")
-                _sp.run(deploy_cmd, cwd=str(REPO_ROOT), check=False)
+                sys.path.insert(0, str(REPO_ROOT / "scripts"))
+                from deploy import deploy as dispatch_deploy  # noqa: E402
+                dep = dispatch_deploy(
+                    args.html, backend=backend, view_base=args.view_base,
+                    no_push=args.no_push, dry_run=args.dry_run,
+                )
+                # 用后端返回的 view_base 补上 view_url（若本次未显式给 --view-url）
+                if not args.view_url and dep.get("view_base") and report.get("view_url") is None:
+                    base = dep["view_base"].rstrip("/")
+                    html_name = Path(args.html).name
+                    report["view_url"] = f"{base}/{html_name}?src=feishu&uid={uid}"
+                    report["view_label"] = "查看完整周报"
+                    # 回写 report.json，使飞书卡片指向正确链接
+                    Path(out).write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                    print(f"🔗 周报链接已写入 view_url：{report['view_url']}")
+                elif not args.view_url and not dep.get("view_base"):
+                    print("⚠️ 部署后端未返回公开基址，飞书卡片将不含「查看完整周报」链接"
+                          "（可在部署配置里设置 view_base / COS_BASE_URL 等）。")
             except Exception as exc:  # noqa: BLE001  部署为 best-effort：失败不回滚已生成的报告，仅告警并记录
-                logger.warning("gh-pages 部署异常: %s", exc)
-                print(f"❌ gh-pages 部署异常：{exc}")
+                logger.warning("部署异常: %s", exc)
+                print(f"❌ 部署异常：{exc}")
 
     return rc
 

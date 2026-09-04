@@ -53,11 +53,12 @@ fi
 
 echo "🐍 使用 Python: $PY"
 
-# deploy 子命令：部署周报到 gh-pages（GitHub Pages）—— 流水线最终分发步骤
+# deploy 子命令：部署周报到公开托管（P0-1：多后端·去 GitHub 化）
+# 用法：bash run_report.sh deploy --html AI_News_xxx.html [--deploy-to tencent-cos|vercel|...]
 if [ "${1:-}" = "deploy" ]; then
   shift
   cd "$SCRIPT_DIR" || exit 1
-  exec "$PY" scripts/deploy_ghpages.py "$@"
+  exec "$PY" scripts/deploy.py "$@"
 fi
 
 exec "$PY" "$@"
