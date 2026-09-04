@@ -29,6 +29,31 @@ metadata:
 > 跨平台 `SKILL.md`，遵循开放 Agent Skill 规范（Anthropic AgentSkills / OpenClaw / Coze 共用的 `SKILL.md` 标准）。
 > 单一入口、单一真相源：本文件即为技能的全部说明，无需任何平台专属包装。
 
+## 快速开始（一句话怎么用）
+
+不知道说什么话才能让本技能干活？下面 5 个真实对话直接复制即可触发全链路，**无需先读下文**：
+
+```
+用户：帮我生成一份本周 AI 行业新闻周报
+→ 技能自动激活：RSS 抓取近 7 天新闻 →（建议用 WebSearch 注入市场/融资数据）
+  → 撰写「本周看点」→ 生成单文件 HTML → 校验 → 展示。
+
+用户：这周的 AI 新闻怎么样？给我看个简报就行
+→ 技能激活，走「轻量模式」：直接在对话里输出 Markdown 分组列表，不生成网站。
+
+用户：帮我把上周的周报推送到飞书
+→ 技能激活，读取已生成的 report.json，调飞书 Webhook / 连接器推头条卡片
+  （部署托管可用 deploy.py --deploy-to 选腾讯云 COS / Vercel 等，不必依赖 GitHub Pages）。
+
+用户：生成 8 月最后一周的 AI 周报，时间范围 2026-08-25 到 2026-08-31
+→ 技能遵从你指定的时间窗，其余同完整模式。
+
+用户：用我导出的 AI HOT 数据增强这期周报
+→ 技能把你的 JSON 以 --external-news-json 注入（页脚自动署名），是否启用完全由你决定。
+```
+
+> 卡片文案 + 更多对话示例见 [references/FAQ.md](references/FAQ.md)。飞书配置一步到位见 [scripts/init_feishu_config.py](scripts/init_feishu_config.py)。
+
 生成一个**可搜索、可筛选、响应式**的 AI 行业新闻网站（单文件 HTML）。
 每条新闻附带原始报道链接，支持按分类 / 关键词筛选，桌面端和移动端均可使用。
 
@@ -169,9 +194,20 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 - 调用 `present_files` 展示
 - 总结核心发现（3-5 条）
 
-### 6.1 部署到 GitHub Pages（gh-pages 分支，可选但推荐）
+### 6.1 部署到网页托管（多后端，可选但推荐）
 
-飞书/钉钉卡片里的「查看完整周报」按钮 `view_url` 指向 `https://<owner>.github.io/<repo>/AI_News_<date>.html`——该地址由 **`gh-pages` 分支**提供（仓库 Pages 源 = `Deploy from a branch: gh-pages / /root`）。用 `run_report.sh deploy` 即可把当期周报推到该分支：
+飞书/钉钉卡片里的「查看完整周报」按钮 `view_url` 需要一个可公开访问的地址。**不一定要用 GitHub Pages**——`scripts/deploy.py` 统一入口按 `--deploy-to` 选后端：
+
+| `--deploy-to` | 适合 | GitHub 依赖 |
+|------|------|------|
+| `github-pages`（默认） | 已用 GitHub、熟悉 Pages | 需要（PAT + push + 切 Pages 源） |
+| `tencent-cos` | 国内最稳、免翻墙后台 | **不需要**（需 COS 桶 + 密钥） |
+| `vercel` / `netlify` / `cloudflare-pages` | 海外免备案、一条命令 | **不需要**（需对应平台 token） |
+| `local` | 自托管 / 内网文件服务 | **不需要** |
+
+非 github-pages 后端无需配置 GitHub，飞书卡片 `view_url` 由后端自动推导（可用 `--view-base` 覆盖）。配置示例见 `delivery/deploy_config.example.json`。
+
+默认（GitHub Pages）路径：`view_url` 指向 `https://<owner>.github.io/<repo>/AI_News_<date>.html`——该地址由 **`gh-pages` 分支**提供（仓库 Pages 源 = `Deploy from a branch: gh-pages / /root`）。用 `run_report.sh deploy` 即可把当期周报推到该分支：
 
 ```bash
 # 流水线封装：底层调用 scripts/deploy_ghpages.py
@@ -190,7 +226,9 @@ bash run_report.sh scripts/publish.py \
   --news-json news.json --insights-json insights.json \
   --audience-json audience_summary.json \
   --html AI_News_YYYY-MM-DD.html --deploy
-#   --deploy           生成 report.json 后顺带部署到 gh-pages
+#   --deploy           生成 report.json 后顺带部署（默认 github-pages）
+#   --deploy-to tencent-cos   改用腾讯云 COS（国内最稳，无需 GitHub）
+#   --deploy-to vercel        改用 Vercel（海外免备案，无需 GitHub）
 #   --no-push          部署时仅本地提交不推送
 #   --switch-pages     部署时一并把 Pages 源切到 gh-pages
 ```
@@ -416,16 +454,24 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 | `scripts/validate_report.py` | v3.0 质量检查（含 XSS 守护，自动识别 v2/v3 格式） |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
 | `scripts/deploy_report.py` | 部署摘要提取（框架无关通知文本） |
-| `scripts/deploy_ghpages.py` | **部署到 GitHub Pages**：git worktree 操作 `gh-pages` 分支，累加根 `index.html` 存档页并推送 |
-| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy` 顺带部署 gh-pages） |
+| `scripts/deploy_ghpages.py` | **部署到 GitHub Pages**：git worktree 操作 `gh-pages` 分支，累加根 `index.html` 存档页并推送（底层被 `deploy.py` 调用） |
+| `scripts/deploy.py` | **统一部署入口（P0-1）**：按 `--deploy-to` 选后端（github-pages/tencent-cos/vercel/netlify/cloudflare-pages/local），非 GitHub 后端无需配置 GitHub |
+| `scripts/validate_models.py` | **模型档案守护（P0-2）**：`--check` 扫描 `model_profiles.json` 有无未核实条目；`--fix` 将无来源推测条目移入 `model_profiles_unverified.json` |
+| `scripts/leaderboard_diagnose.py` | **排行榜源诊断（P0-3）**：逐个源探测可达性 + 统计国内镜像回退命中 |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy`/`--deploy-to` 顺带部署） |
 | `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
 | `delivery/feishu_connector.py` | 飞书连接器直推 CLI（lark-cli，密钥不落盘），复用前者的卡片构造 |
+| `scripts/init_feishu_config.py` | **飞书配置向导（P1-3）**：交互式生成 `feishu_config.json`（Webhook）或 `feishu_target.json`（连接器），免去手动建文件 |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
-| `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，联网核实的机构/许可证/成本等），每次生成自动加载、新模型研究后合并写回 |
+| `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，逐条 `verified=true` + 真实来源），每次生成自动加载、新模型研究后合并写回 |
 | `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（检测为空自动删除；运行方据此联网补档） |
+| `model_profiles_unverified.json` | **隔离存放（P0-2）**：被 `validate_models.py` 移出的无来源推测条目，不参与排行榜，待联网核实后回填 |
 | `cn_leaderboard_snapshot.json` | 国内排行榜快照（实时不可达时回退） |
+| `delivery/deploy_config.example.json` | 部署配置示例（COS/Vercel 等后端参数） |
+| `delivery/feishu_config.example.json` | 飞书 Webhook 配置示例（`feishu_config.json` 模板） |
 | `references/data_sources.md` | 备用数据源参考 |
 | `references/report_structure.md` | v2.0 报告结构参考 |
+| `references/FAQ.md` | **常见问题集中解答（P1-2）**：安装配置 / 首次使用 / 飞书推送 / GitHub Pages / 网络 / 模型数据 |
 | `data/history.csv` | 历史指标数据 |
 
 ## 参考资料

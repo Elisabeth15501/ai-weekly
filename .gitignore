@@ -39,6 +39,7 @@ __pycache__/
 
 # 飞书/钉钉 Webhook 凭证（含真实机器人地址，绝不入库；仅 feishu_config.example.json 入库）
 delivery/feishu_config.json
+delivery/feishu_target.json
 delivery/dingtalk_config.json
 
 # GitHub PAT（本地免交互 push 用，绝不入库）
