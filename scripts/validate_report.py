@@ -37,6 +37,7 @@ from validate_checks import (
     check_market_signals_cn, check_empty_category_tabs, check_keyword_filter,
     check_keyword_clustering, check_weekly_dashboard, check_xss_safe,
     check_no_bare_except, check_iso8601, check_module_size,
+    check_constraints,
 )
 
 
@@ -223,6 +224,7 @@ def print_report(results: dict) -> None:
             ("ISO8601日期(P0#19)", results.get("source_iso8601", {})),
             ("模块体量(P0#4)", results.get("source_module_size", {})),
             ("模型档案准确性(P0-2)", results.get("model_profiles_accuracy", {})),
+            ("硬约束审计(P2-1)", results.get("constraints", {})),
             ("数据来源", results.get("sources", {})),
         ]
     else:

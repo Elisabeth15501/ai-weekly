@@ -15,6 +15,7 @@ from .keywords import (
     check_weekly_dashboard, check_xss_safe,
 )
 from .source import (_iter_source_files, check_no_bare_except, check_iso8601, check_module_size)
+from .constraints import check_constraints
 
 __all__ = [
     "_detect_format", "check_file_exists", "check_data_sources", "_extract_js_var",
@@ -27,4 +28,5 @@ __all__ = [
     "check_empty_category_tabs", "check_keyword_filter", "check_keyword_clustering",
     "check_weekly_dashboard", "check_xss_safe",
     "_iter_source_files", "check_no_bare_except", "check_iso8601", "check_module_size",
+    "check_constraints",
 ]

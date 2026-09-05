@@ -238,7 +238,8 @@ def deploy(html_path, backend: str = "github-pages", view_base: str | None = Non
           **kwargs) -> dict:
     html_path = Path(html_path)
     if not html_path.exists():
-        raise FileNotFoundError(f"HTML 报告不存在：{html_path}")
+        from aiweekly.errors import err_missing_file  # noqa: PLC0415
+        raise err_missing_file(html_path)
 
     backend = backend or "github-pages"
     if backend == "github-pages":
@@ -278,7 +279,13 @@ def main() -> int:
             print(f"🌐 周报公开基址：{res['view_base']}")
         print(f"✅ 部署完成（pushed={res.get('pushed')}）")
     except Exception as exc:  # noqa: BLE001
-        print(f"❌ 部署失败：{exc}", file=sys.stderr)
+        from aiweekly.errors import UserFacingError, print_error  # noqa: PLC0415
+        if isinstance(exc, UserFacingError):
+            print_error(exc)
+        else:
+            print_error(UserFacingError("ERR-UNEXPECTED", "部署过程发生未预期错误",
+                                        ["检查上方错误信息", "若问题持续，请提交 issue 到 GitHub"],
+                                        verbose=repr(exc), log_extra=traceback.format_exc()))
         return 1
     return 0
 

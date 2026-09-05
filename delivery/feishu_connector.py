@@ -82,11 +82,18 @@ def resolve_lark() -> tuple[str, str]:
         if os.path.isdir(cand):
             pkg_dir = cand
     if not pkg_dir:
-        raise RuntimeError("找不到 lark-cli 安装目录，请确认飞书连接器已安装")
+        from aiweekly.errors import UserFacingError
+        raise UserFacingError("ERR-FS-CON-001", "找不到 lark-cli 安装目录",
+                              ["确认飞书连接器已安装：WorkBuddy → 设置 → 连接器 → 安装 'Lark CLI'",
+                               "或用 --chat-id / --user-id 参数绕过连接器模式"])
     run_js = os.path.join(pkg_dir, "node_modules", "@larksuite", "cli",
                           "scripts", "run.js")
     if not os.path.exists(run_js):
-        raise RuntimeError(f"找不到 lark-cli 入口脚本：{run_js}")
+        from aiweekly.errors import UserFacingError
+        raise UserFacingError("ERR-FS-CON-002", "找不到 lark-cli 入口脚本",
+                              [f"期望位置：{run_js}",
+                               "重新安装飞书连接器后重试"],
+                              verbose=f"pkg_dir={pkg_dir!r} 但 run.js 不在预期路径")
 
     node = shutil.which("node")
     if not node:
@@ -97,7 +104,10 @@ def resolve_lark() -> tuple[str, str]:
                 node = c
                 break
     if not node:
-        raise RuntimeError("找不到 node 可执行文件，请确认 Node 可用")
+        from aiweekly.errors import UserFacingError
+        raise UserFacingError("ERR-FS-NODE-001", "找不到 node 可执行文件",
+                              ["安装 Node.js：https://nodejs.org/",
+                               "或 WorkBuddy 已自带 node，确保 PATH 包含 ~/.workbuddy/binaries/node/versions/*"])
     return node, run_js
 
 

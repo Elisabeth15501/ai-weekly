@@ -72,6 +72,18 @@ metadata:
 - **零运维**：生成后直接可用的静态 HTML
 - **跨平台单源**：本 `SKILL.md` 同时服务 Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy；引擎接口另见 `manifest.json`（LangGraph / Dify / Coze 等框架的最小接口描述）。兼容性按 AgentSkills 规范声明；**已实测 WorkBuddy，其余平台尚未逐一回归**，如遇加载问题请反馈。
 
+## 二.5、硬约束（不可绕过的边界）
+
+| 约束 | 上限 | 违反后果 |
+|---|---|---|
+| 单次抓取新闻条数 | ≤100 条 | 超过截取前 100，保留高评分项 |
+| HTML 体积建议 | ≤5 MB | 超过自动压缩 Chart.js 数据点 |
+| 每榜排行榜模型数 | ≤50 条 | 超过截取 top 50 |
+| 趋势线数据点 | ≤20 点 | 超出处以均值或分段 |
+| 趋势线渲染前提 | ≥2 周快照数据 | 第 1 周数据趋势线为空（非 Bug） |
+
+> 详细参见 `scripts/aiweekly/const.py` 和 `scripts/validate_checks/constraints.py`（`validate_report.py --html` 会审计）。
+
 ## 三、不要做（硬规则）
 
 1. **不要凭训练数据脑补数字**——所有市场数据、融资金额必须有可追溯来源

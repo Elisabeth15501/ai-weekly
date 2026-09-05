@@ -17,6 +17,15 @@ SUMMARY_TARGET = 110     # 归一化后目标长度
 MUSTREAD_TOP_N = 8       # 评分最高的前 N 条标记为必读
 LEADERBOARD_STALE_DAYS = 3  # 排行榜快照距报告日超过此天数即视为「非本周抓取」告警
 
+# 从 aiweekly.const 重新导出，供上游模块按需 import 统一常量（P2-1）
+from aiweekly.const import (  # noqa: F401  # pylint: disable=unused-import
+    NEWS_MAX_ITEMS,
+    NEWS_SUMMARY_MAX_CHARS,
+    LEADERBOARD_MAX_MODELS,
+    HTML_MAX_SIZE_BYTES,
+    SUMMARY_TARGET_CHARS as SUMMARY_TARGET_CONST,
+)
+
 # 信源短名映射（键为 RSS feed 原始标题，值为页面展示短名）
 SOURCE_ALIASES = {
     "量子位": "量子位", "QbitAI": "量子位", "量子位 QbitAI": "量子位",
