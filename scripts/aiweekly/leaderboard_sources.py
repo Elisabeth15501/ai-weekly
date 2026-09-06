@@ -251,7 +251,7 @@ def fetch_hf_open_ranking(top_n: int = 30):
         offset = 0
         while True:
             url = HF_DS_API + f"&offset={offset}&length=100"
-            data = json.loads(_http_get_fallback(url, timeout=45))
+            data = json.loads(_http_get_fallback(url, timeout=60))
             rows = data.get("rows", [])
             if not rows:
                 break

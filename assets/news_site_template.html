@@ -905,7 +905,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <ul class="lb-explain-list">
       <li><b>LMArena</b>：人类偏好 Elo——真实用户盲测投票「哪个回答更好」，最贴近使用体感。</li>
       <li><b>Artificial Analysis（AA）</b>：多基准综合「智能指数」——代码/推理/知识等多项能力加权，偏客观能力。</li>
-      <li><b>LLM-Stats</b>：开源模型综合榜——聚合多公开基准，衡量开源模型整体实力。</li>
+      <li><b>LLM-Stats / DataLearner</b>：开源模型综合榜——聚合多公开基准（MMLU-Pro / GPQA / HLE 等）衡量开源模型整体实力；页面左列标签随真实命中源动态显示（LLM-Stats 或 DataLearner）。</li>
       <li><b>Hugging Face Open LLM</b>：开源社区榜——社区共建、侧重可复现的开源评测。</li>
       <li class="lb-explain-note" id="lbExplainNote"></li>
     </ul>
@@ -1666,7 +1666,7 @@ function renderRanking() {
   setText('aaSrc', aa.display_name || aa.source || 'Artificial Analysis');
   setHTML('aaTag', regionBadgeHTML(aa));
   setHref('aaLink', aa.url);
-  setText('lsSrc', ls.display_name || ls.source || 'LLM-Stats Open LLM Leaderboard');
+  setText('lsSrc', ls.display_name || ls.source || '开源模型榜（实时源）');
   setHTML('lsTag', regionBadgeHTML(ls));
   setHref('lsLink', ls.url);
   setText('hfSrc', hf.display_name || hf.source || 'Hugging Face Open LLM Leaderboard');
@@ -1737,7 +1737,7 @@ function renderRanking() {
       const label = ({
         'comprehensive.lmarena': lm.display_name || lm.source || 'LMArena',
         'comprehensive.aa': aa.display_name || aa.source || 'AA',
-        'open_source.ls': ls.display_name || ls.source || 'LLM-Stats',
+        'open_source.ls': ls.display_name || ls.source || '开源模型榜',
         'open_source.hf': hf.display_name || hf.source || 'HF',
       })[k] || k;
       return `${label}（${age}天前）`;

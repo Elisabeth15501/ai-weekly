@@ -26,6 +26,7 @@
 - **错误提示人性化**：`ERR-*` 错误码体系 + `UserFacingError`，部署 / 推送失败给出含解决步骤的友好提示，不再丢裸 RuntimeError
 - **硬约束集中声明**：单次抓取 ≤100 条新闻、每榜排行榜 ≤50 条模型、HTML ≤5 MB（`scripts/aiweekly/const.py` 统一常量 + `validate_checks/constraints.py` 事后审计）
 - **独立 FAQ 文档**：`references/FAQ.md` 九节 + 排错速查表，覆盖安装 / 配置 / 网络 / 模型数据等常见坑
+- **实时排行榜刷新更稳（R3/R4）**：慢源 LMArena/HF/AA 超时提额（60–75s）且整体墙钟上限放宽至 240s，减少因网络抖动导致的空榜；`scripts/install_scheduler.py` 把每日 09:00 刷新注册为 Windows 任务计划 / Linux cron，会话不在线也能刷新（WorkBuddy automation 仍作即时触发，系统调度仅兜底）
 
 ---
 

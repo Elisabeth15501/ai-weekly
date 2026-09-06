@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.0
+version: 3.4.1
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -18,7 +18,7 @@ description: >
   生成AI报告、AI新闻网站、AI新闻站。支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.0"
+  version: "3.4.1"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -470,6 +470,7 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 | `scripts/deploy.py` | **统一部署入口（P0-1）**：按 `--deploy-to` 选后端（github-pages/tencent-cos/vercel/netlify/cloudflare-pages/local），非 GitHub 后端无需配置 GitHub |
 | `scripts/validate_models.py` | **模型档案守护（P0-2）**：`--check` 扫描 `model_profiles.json` 有无未核实条目；`--fix` 将无来源推测条目移入 `model_profiles_unverified.json` |
 | `scripts/leaderboard_diagnose.py` | **排行榜源诊断（P0-3）**：逐个源探测可达性 + 统计国内镜像回退命中 |
+| `scripts/install_scheduler.py` | **R4 系统级调度兜底**：注册每日 09:00 刷新任务（Windows 任务计划 / Linux cron），会话不在线也能刷新 |
 | `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy`/`--deploy-to` 顺带部署） |
 | `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
 | `delivery/feishu_connector.py` | 飞书连接器直推 CLI（lark-cli，密钥不落盘），复用前者的卡片构造 |

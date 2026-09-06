@@ -481,13 +481,10 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
             slot = "aa" if s.get("key") == "aa" else ("lmarena" if s.get("key") == "lm" else None)
             if slot:
                 comp[slot] = live_slot(s, rows)
-    # 国内实时源回退（L2#14 增强）：全局源 LMArena/AA 不可达时，
-    # 用 OpenCompass 司南 / SuperCLUE 实时数据补综合榜双列，保证 cn 区域真出实时榜
-    # （原先仅回退陈旧 cn_snap 缓存文件，实时 cn 源结果被丢弃）。
-    if not comp["lmarena"]["rows"] and (results.get("oc", {}) or {}).get("rows"):
-        comp["lmarena"] = live_slot(SOURCES["oc"], results["oc"]["rows"])
-    if not comp["aa"]["rows"] and (results.get("sv", {}) or {}).get("rows"):
-        comp["aa"] = live_slot(SOURCES["sv"], results["sv"]["rows"])
+    # R2 修正（来源诚实化）：oc/sv 为 JS 渲染 SPA，国内简单 HTTP 抓取几乎必返回空
+    # （leaderboard_health.jsonl 实测 0% 实时率），原「oc/sv 补综合榜双列」回退永不触发——
+    # 删去死代码，不假装「cn 区域真出实时榜」。cn 综合榜实际依赖 aa(96%)/lm(35~67%)，
+    # 二者皆失败才回退 cn_snap 静态快照（已标注 is_cache=True）。oc/sv/ms 仍留池作 best-effort。
     # 综合榜不足 / 全失败：国内环境回退快照，否则回退本地缓存
     if not comp["lmarena"]["rows"]:
         if detected == "cn" and cn_snap.get("comprehensive"):
@@ -508,22 +505,35 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
 
     # —— 开源榜（双列：LLM-Stats + Hugging Face）——
     os_board = {"ls": {"rows": []}, "hf": {"rows": []}}
-    # LLM-Stats（llm-stats 主源，datalearner 兜底）—— 均从并行结果读取
+    # R1 修正（来源透明）：左列数据源随真实命中动态变化，杜绝「标 LLM-Stats、实为 DataLearner」误导。
+    # 优先级 LLM-Stats(ls) → DataLearner(dl) → ModelScope(ms) 兜底；命中哪个就用哪个的
+    # label/criteria/url 渲染，页面来源标注与数据严格一致（ls 源国内实测 0% 实时率，
+    # 故多数情况下左列即显示 DataLearner · 开源模型榜，这是真实来源而非降级伪装）。
     ms_rows = (results.get("ms", {}) or {}).get("rows")  # 国内实时源回退（ModelScope 开源热度）
-    ls_rows = (results.get("ls", {}).get("rows")
-               or results.get("dl", {}).get("rows")
-               or ms_rows)
-    if ls_rows:
-        os_board["ls"] = live_slot(SOURCES["ls"], ls_rows)
+    _ls_spec, ls_rows = None, None
+    for _key, _rows, _spec in (
+        ("ls", results.get("ls", {}).get("rows"), SOURCES["ls"]),
+        ("dl", results.get("dl", {}).get("rows"), SOURCES["dl"]),
+    ):
+        if _rows:
+            _ls_spec, ls_rows = _spec, _rows
+            break
+    else:
+        if ms_rows:
+            _ls_spec, ls_rows = SOURCES["ms"], ms_rows
+    if _ls_spec and ls_rows:
+        os_board["ls"] = live_slot(_ls_spec, ls_rows)
     elif detected == "cn" and cn_snap.get("open_source"):
         for key in cn_snap["open_source"]:
             os_board["ls"] = snap_slot(cn_snap["open_source"][key], cn_snap.get("snapshot_date", ""))
             break
-    # Hugging Face（独立源，与 LLM-Stats 并排展示）；全局源不可达时回退 ModelScope 实时热度
-    hf_src = SOURCES["hf"] if (results.get("hf", {}) or {}).get("rows") else SOURCES["ms"]
-    hf_rows = (results.get("hf", {}).get("rows") or ms_rows)
+    # Hugging Face（独立源，与左列并排展示）；HF 不可达时回退 ModelScope 实时热度（诚实标注来源）
+    hf_spec = SOURCES["hf"]
+    hf_rows = results.get("hf", {}).get("rows")
+    if not hf_rows and ms_rows:
+        hf_spec, hf_rows = SOURCES["ms"], ms_rows
     if hf_rows:
-        os_board["hf"] = live_slot(hf_src, hf_rows)
+        os_board["hf"] = live_slot(hf_spec, hf_rows)
     elif detected == "cn" and cn_snap.get("open_source"):
         for key in cn_snap["open_source"]:
             os_board["hf"] = snap_slot(cn_snap["open_source"][key], cn_snap.get("snapshot_date", ""))

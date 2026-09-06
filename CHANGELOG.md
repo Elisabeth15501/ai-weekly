@@ -11,6 +11,27 @@
 
 ---
 
+## [3.4.1] — 2026-09-07
+实时排行榜复盘（优化方案 v2·第十节）R1–R4 修复：来源透明化（R1）+ 国内源诚实化（R2）+ 慢源超时提额（R3）+ 系统级调度兜底（R4）。核心：榜单来源标注与真实数据严格一致；删除永不触发的"国内实时源回退"死代码；LMArena/HF/AA 慢源超时提额并放宽整体墙钟上限；新增 `install_scheduler.py` 把每日刷新注册为操作系统级任务，会话不在线也能刷新。
+
+### Added
+- **R4 系统级调度兜底**（`scripts/install_scheduler.py`）：新增注册器，按 OS 自动选 Windows 任务计划 / Linux cron，每日 09:00 调用 `refresh_deploy.py` 刷新排行榜；`--uninstall` / `--dry-run` / `--time` 选项齐全；WorkBuddy automation 仍作即时触发，系统调度仅兜底
+
+### Changed
+- **R3 慢源超时提额**（`leaderboard_sources.py` / `leaderboard_fetch.py`）：LMArena 超时 60→75s、Hugging Face 45→60s、Artificial Analysis 45→60s；整体墙钟硬上限 `OVERALL_FETCH_CAP_S` 180→240s，给慢源留足重试墙钟（3×75s=225s < 240s）
+- **R4 刷新编排更稳健**（`refresh_deploy.py`）：`--api-json`/`--output` 缺省自动落位（`<skill>/workspace/news.json` / `AI_News_live.html`），便于系统调度无参调用；生成步骤失败自动重试 1 次（网络抖动避免一次性放弃整轮刷新）
+
+### Fixed
+- **R1 开源榜来源透明**（`leaderboard.py` / `leaderboard_fetch.py` / `news_site_template.html`）：`ls`(LLM-Stats) 源国内实测 0% 实时率，开源榜左列此前用 `dl`(DataLearner) 数据却标"LLM-Stats"——改为按真实命中源动态选 `label`/`criteria`/`url`，命中 `dl` 即显示 `DataLearner · 开源模型榜`；新增 `LB_CRITERIA["dl"]` 真实评分标准；前端图例与兜底默认值同步诚实化
+- **R2 国内源诚实化**（`leaderboard.py` / `leaderboard_sources.py`）：探测确认 OpenCompass/SuperCLUE/ModelScope 均为 SPA、简单 HTTP 抓不到（能力性限制非 bug），原"oc/sv 国内实时源回退"两段 `if` 死代码（实测 0% 永不触发）已删除；cn 综合榜如实依赖 aa/lm 实时源、二者皆失败回退 `cn_snap` 静态快照（已标 `is_cache`）；三源仍留池作 best-effort
+
+### 验证
+- R1 单测（mock `ls` 空 + `dl` 有数据）：开源榜左列 `source` 输出 `DataLearner · 开源模型榜`、`is_cache=False`
+- R4 `install_scheduler.py --dry-run` 正确拼装 schtasks/cron 命令（未落盘）
+- `py_compile` 全部通过；`leaderboard.py` 797 行 < 800 行模块体量守护上限
+
+---
+
 ## [3.4.0] — 2026-09-05
 SkillHub 评测驱动优化全面落地（P0 阻断级 + P1 体验级 + P2 完善级），响应官方评测报告 4.52/5 指出的 5 类问题。核心目标：飞书推送不再依赖 GitHub Pages、模型数据经得起来源核验、海外源国内稳定可达、新用户学习成本降低。
 

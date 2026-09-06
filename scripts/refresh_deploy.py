@@ -114,16 +114,19 @@ def main() -> int:
     gen = SKILL_DIR / "scripts" / "generate_site.py"
     deploy = SKILL_DIR / "scripts" / "deploy_ghpages.py"
 
+    # R4：缺省参数自动落位，便于系统级调度（cron/任务计划）无参调用
+    api_json = Path(args.api_json) if args.api_json else (SKILL_DIR / "workspace" / "news.json")
+    if not api_json.exists():
+        print(f"  ❌ 找不到新闻 JSON：{api_json}（请用 --api-json 指定，"
+              f"或放置 workspace/news.json）", flush=True)
+        return 2
+    output = Path(args.output) if args.output else (SKILL_DIR / "workspace" / "AI_News_live.html")
+
     # 1) 实时生成（默认 live fetch，不传 --ranking-json / --no-live-ranking）
-    rc = _run([
-        str(VENV_PY), str(gen),
-        "--api-json", args.api_json,
-        "--output", args.output,
-        "--region", args.region,
-        "--ranking-top", str(args.ranking_top),
-    ])
+    #    R4：生成失败自动重试 1 次（网络抖动常见），避免单次失败即放弃整轮刷新
+    rc = _generate_with_retry(gen, api_json, output, args.region, args.ranking_top)
     if rc != 0:
-        print("  ❌ generate_site.py 失败，中止。", flush=True)
+        print("  ❌ generate_site.py 连续重试仍失败，中止。", flush=True)
         return rc
 
     # 2) 本地提交到 gh-pages

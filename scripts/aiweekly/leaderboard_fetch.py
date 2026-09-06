@@ -33,7 +33,8 @@ HEALTH_PATH = SKILL_DIR / "leaderboard_health.jsonl"
 
 # S2(2026-09)：多源并行抓取的整体墙钟硬上限（秒）。个别慢源超过此值即标记 timeout 跳过，
 # 确保「一个慢源拖垮整份周报生成」不会发生。单源自身 _http_get timeout 通常 40–120s，
-# 重试上限约 3×120s；180s 给正常源留余量，同时把最坏总延迟压死在 3 分钟内。
+# 重试上限约 3×75s；R3(2026-09) 把墙钟上限从 180s 提到 240s，给 LMArena/HF 慢源
+# 留足重试墙钟（慢源 lm/hf 提至 60–75s 后，3×75s=225s 仍 < 240s 上限）。
 OVERALL_FETCH_CAP_S = 180
 
 # 三榜各自的评分标准说明（渲染到页面「评分标准」行，数据驱动）；定义在多源池之前，
@@ -49,6 +50,10 @@ LB_CRITERIA = {
            "综合得分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、GPQA（研究生级科学问答）、"
            "HumanEval（代码生成）、MATH（数学竞赛解题）、SWE-bench（软件工程实战·修复真实 GitHub issue）、"
            "HLE（人类终极考试）；同时标注许可证、上下文窗口与输入输出单价，便于自部署 / 商用评估。"),
+    "dl": ("评分标准：DataLearner LLM Leaderboard 综合分（基于 HLE 等公开基准归一化）。"
+           "DataLearner 开源榜以 HLE（人类终极考试·极难跨学科学术题，逼近专家上限）为主分，"
+           "并标注「开源情况」（如 免费商用）与机构，便于自部署 / 商用评估；"
+           "上下文窗口与单价由模型资料卡（model_profiles.json）兜底注入，未匹配家族一律留空（绝不编造）。"),
     "hf": ("评分标准：Hugging Face Open LLM Leaderboard 平均分（Average ⬆️）。在多项权威基准上的"
            "加权平均分（满分 100，越高越强），主要涵盖：MMLU-Pro（研究生级综合知识）、MATH（数学竞赛解题）、"
            "HumanEval（代码生成）、GPQA（研究生级科学问答）、MuSR（多步逻辑推理·长篇谜题 / 谋杀推理等需多步推演）、"
@@ -82,7 +87,7 @@ SOURCES = {
     "dl": {"region": "global", "board": "open_source", "key": "dl",
            "fn": lambda n: fetch_datalearner_ranking(n),
            "label": "DataLearner · 开源模型榜", "url": DATALARNER_URL,
-           "criteria": LB_CRITERIA["ls"]},
+           "criteria": LB_CRITERIA["dl"]},
     "hf": {"region": "global", "board": "open_source", "key": "hf",
            "fn": lambda n: fetch_hf_open_ranking(n * 2),
            "label": "Hugging Face · Open LLM Leaderboard", "url": HF_LEADERBOARD_URL,
