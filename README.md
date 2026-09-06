@@ -20,6 +20,12 @@
 - **模型资料卡**：26+ 模型档案（成本 / 上下文 / 许可证 / 币种），以 `model_profiles.json` 为唯一权威源
 - **可定时**：支持每周自动生成最新版网站
 - **安全加固**：RSS 不可信内容经 `<script>` 上下文 JSON 注入与 URL 属性突破均已防御
+- **多后端部署**：`deploy.py` 统一入口支持 GitHub Pages / 腾讯云 COS / Vercel / Netlify / Cloudflare Pages / 本地 6 种托管，飞书卡片 `view_url` 与部署解耦，非 GitHub 后端完全不碰 GitHub
+- **国内镜像自动回退**：LMArena / HuggingFace / Artificial Analysis 主源不可达时自动切换 hf-mirror 等国内镜像，再失败才回退快照（诊断见 `scripts/leaderboard_diagnose.py`）
+- **交互式飞书配置**：`scripts/init_feishu_config.py` 交互式生成 `feishu_config.json`（webhook / 连接器双模式 + 格式校验），首次配置不再手写出错
+- **错误提示人性化**：`ERR-*` 错误码体系 + `UserFacingError`，部署 / 推送失败给出含解决步骤的友好提示，不再丢裸 RuntimeError
+- **硬约束集中声明**：单次抓取 ≤100 条新闻、每榜排行榜 ≤50 条模型、HTML ≤5 MB（`scripts/aiweekly/const.py` 统一常量 + `validate_checks/constraints.py` 事后审计）
+- **独立 FAQ 文档**：`references/FAQ.md` 九节 + 排错速查表，覆盖安装 / 配置 / 网络 / 模型数据等常见坑
 
 ---
 

@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.3.1 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.4.0 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -11,8 +11,36 @@
 
 ---
 
-## [3.3.1] — 2026-09-03
+## [3.4.0] — 2026-09-05
+SkillHub 评测驱动优化全面落地（P0 阻断级 + P1 体验级 + P2 完善级），响应官方评测报告 4.52/5 指出的 5 类问题。核心目标：飞书推送不再依赖 GitHub Pages、模型数据经得起来源核验、海外源国内稳定可达、新用户学习成本降低。
 
+### Added
+- **P0-1 统一部署分发器**（`scripts/deploy.py`）：新增统一入口，支持 6 种后端（github-pages / tencent-cos / vercel / netlify / cloudflare-pages / local）；`publish.py --deploy-to` + `run_report.sh deploy` 改调 `deploy.py`（向后兼容）；飞书卡片 `view_url` 与部署后端解耦，非 github-pages 后端完全不碰 GitHub；附 `delivery/deploy_config.example.json` 配置示例
+- **P0-2 模型档案准确性守护**（`scripts/validate_models.py` / `model_profiles.json`）：将 15 条无来源推测条目（`source=榜单自动抓取·未联网核实`）移入 `model_profiles_unverified.json`，主表 72→57 条全部 `verified=true`；`model_meta._apply_profile_as_truth` 跳过 `verified=false`；`validate_report.py` 新增 `check_model_profiles_accuracy`（校验 24/24 → 25/25）
+- **P0-3 海外源国内镜像**（`leaderboard_sources.py` / `scripts/aiweekly/utils.py`）：新增 `URL_REWRITES`（HF/LMArena/AA 主源 → hf-mirror.com 等国内镜像）+ `_http_get_fallback` 主源失败自动回退镜像，全失败走快照兜底；`HF_MIRROR` / `AA_MIRROR` / `LM_MIRROR` 环境变量可覆盖；新增 `scripts/leaderboard_diagnose.py` 诊断工具
+- **P1-1 SKILL.md 快速开始**（`SKILL.md`）：顶部新增「快速开始」章节（5 个真实对话示例），部署章节更新为多后端写法
+- **P1-2 独立 FAQ 文档**（`references/FAQ.md`）：新建九节 + 排错速查表，README / SKILL.md 加 FAQ 入口
+- **P1-3 交互式飞书配置**（`scripts/init_feishu_config.py`）：webhook / connector 双模式交互式生成 `feishu_config.json` + 格式校验；`SKILL.md` 补配置指引
+- **P1-4 错误提示人性化**（`scripts/aiweekly/errors.py`）：新增 `ERR-*` 错误码注册表 + `UserFacingError` 异常类 + `print_error()`；`deploy.py` / `feishu_connector.py` 关键错误改用含解决步骤的友好提示；日志落盘 `~/.aiweekly/run.log`
+- **P2-1 硬约束常量集中声明**（`scripts/aiweekly/const.py`）：新增 `NEWS_MAX_ITEMS=100` / `LEADERBOARD_TOP_N=50` / `HTML_MAX_SIZE_BYTES=5MB` / `CHART_MAX_DATA_POINTS=20` / `LEADERBOARD_MAX_MODELS=50`；`scripts/validate_checks/constraints.py` 新增 `check_constraints()` 事后审计；`validate_report.py` 接入（校验 25/25）
+- **P2-2 文档层硬约束**（`SKILL.md` / `README.md`）：SKILL.md 第二节.5 新增「硬约束」小节；README「已知限制」补充约束链接
+- **P2-3 SkillHub 元数据**（`manifest.json`）：版本升至 3.4.0，新增 `features` 字段（10 项核心优势）
+- `delivery/deploy_config.example.json`：部署配置示例
+
+### Changed
+- `run_report.sh deploy` 子命令改调 `deploy.py`（向后兼容）；`publish.py` 新增 `--deploy-to`
+- `news.py` 从 `const.py` 重新导出统一常量（行为不变）
+- 验证套件：25/25 → 26/25（constraints 为 warn 级非硬门槛）
+
+### Fixed
+- **P0-2**：15 条无来源锚点的推测模型移出主表，避免伪造数据污染榜单
+- **P1-4**：部署失败不再输出裸 RuntimeError，改为含解决步骤的 ERR-* 错误码
+
+### 验证
+- `validate_report.py` 26/25 全过（constraints 为 warn 级）；对抗式审查 verify 31/31 / test 21
+- 国内镜像回退经 `leaderboard_diagnose.py` 实测命中；模型档案 57 条全部 `verified=true`
+
+## [3.3.1] — 2026-09-03
 对抗式安全/健壮性审查的收尾版本：把审查报告（2026-09-02）标记的剩余项全部闭环，并补齐工程可读性。
 
 ### Added
@@ -178,5 +206,6 @@
 | 3.0.0 | 2026-08-10 | VCS 标记 | 跨框架兼容 + 工程债收尾 |
 | 3.1.0 | 2026-08-11 | VCS 标记 | 单一跨平台 SKILL.md + plugin.json |
 | 3.1.1 | 2026-08-16 | **首个正式发行** | 分发/实时榜/合规/CI 门禁 |
+| 3.4.0 | 2026-09-05 | **SkillHub 评测驱动** | P0/P1/P2 全部落地
 
 _注：1.0.0 / 2.0.0 的版本号与日期为根据《优化计划》"已落地"记录重建，未在版本库中单独标记；如与实际心智模型不符，可在本文件中直接调整。_
