@@ -99,6 +99,27 @@ def git_push_ghpages() -> bool:
     return False
 
 
+def _generate_with_retry(gen: Path, api_json: Path, output: Path,
+                         region: str, ranking_top: int) -> int:
+    """实时生成站点（默认 live fetch 排行榜）。网络抖动时自动重试 1 次。
+
+    等价于：generate_site.py --api-json ... --output ... --region ... --ranking-top ...
+    不传 --ranking-json / --no-live-ranking，从而每次都走实时抓取。
+    """
+    cmd = [
+        str(VENV_PY), str(gen),
+        "--api-json", str(api_json),
+        "--output", str(output),
+        "--region", region,
+        "--ranking-top", str(ranking_top),
+    ]
+    rc = _run(cmd)
+    if rc == 0:
+        return 0
+    print("  ⚠️ generate_site.py 首次失败，重试 1 次（网络抖动常见）…", flush=True)
+    return _run(cmd)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="实时刷新排行榜并重部署到 gh-pages")
     ap.add_argument("--api-json", required=True, help="固定周次新闻 JSON（--api-json）")

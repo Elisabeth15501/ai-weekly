@@ -167,7 +167,9 @@ def main() -> int:
     ap.add_argument("--platform", default="feishu", choices=["feishu"],
                     help="目标平台（当前仅 feishu）")
     ap.add_argument("--news-json", required=True, help="news.json 路径")
-    ap.add_argument("--insights-json", required=True, help="insights.json 路径")
+    ap.add_argument("--insights-json", default=None,
+                    help="insights.json 路径（可选；缺省时由本周新闻自动派生看点/关键词，"
+                         "与 generate_site.py 行为一致——静态 insights.json 已废弃，勿再传入）")
     ap.add_argument("--audience-json", default=None, help="audience_summary.json（可选，缺省用 insights.audience_summary）")
     ap.add_argument("--report-json", default=None, help="直接复用已生成的 report.json（跳过组装）")
     ap.add_argument("--webhook", default=None, help="飞书自定义机器人 Webhook 地址")
@@ -198,11 +200,29 @@ def main() -> int:
         print(f"♻️ 复用已有 report.json：{args.report_json}")
     else:
         news = _load(args.news_json)
-        insights = _load(args.insights_json)
-        audience = _load(args.audience_json)
-        if not news or not insights:
-            print("❌ 缺少 news.json 或 insights.json，无法组装报告。")
+        if not news:
+            print("❌ 缺少 news.json，无法组装报告。")
             return 1
+        # insights 缺省时由本周新闻自动派生（与 generate_site 一致）；派生失败则降级为空卡
+        if args.insights_json:
+            insights = _load(args.insights_json)
+        else:
+            insights = None
+            try:
+                from aiweekly import insights as INS
+                items = news.get("items") or []
+                auto_ins = INS._auto_insights(news, 6)
+                insights = {
+                    "insights": auto_ins,
+                    "keywords": INS._auto_keywords(news, 8),
+                    "lead": INS._auto_lead(items, len(items), auto_ins),
+                    "audience_summary": INS._DEFAULT_AUDIENCE_SUMMARY,
+                    "week": news.get("week"),
+                }
+            except Exception as e:  # noqa: BLE001  best-effort：派生异常则降级为空卡（仅头条）
+                print(f"  ⚠️ 自动派生看点失败（降级为空卡）：{e}")
+                insights = None
+        audience = _load(args.audience_json)
         report = build_report(news, insights, audience, args.view_url, uid, top_n=args.top_n)
 
     out = args.output or str(Path(args.news_json).resolve().parent / "report.json")
