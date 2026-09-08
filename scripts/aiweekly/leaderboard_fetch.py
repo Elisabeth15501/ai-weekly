@@ -19,10 +19,11 @@ from pathlib import Path
 from aiweekly.utils import _retry_fetch
 from aiweekly.leaderboard_sources import (
     LM_ARENA_URL, AA_URL, HF_LEADERBOARD_URL, DATALARNER_URL,
-    LLMSTATS_URL, OC_LLM_URL, SV_GENERAL_URL, MS_MODELS_URL,
+    LLMSTATS_URL, OC_LLM_URL, SV_GENERAL_URL, MS_MODELS_URL, HF_MIRROR_API,
     fetch_lmarena_ranking, fetch_aa_ranking, fetch_hf_open_ranking,
     fetch_llmstats_ranking, fetch_datalearner_ranking,
     fetch_opencompass_ranking, fetch_superclue_ranking, fetch_modelscope_ranking,
+    fetch_hf_mirror_popular, NO_CN_MIRROR_SOURCES,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,8 +96,15 @@ SOURCES = {
     "ms": {"region": "cn", "board": "open_source", "key": "ms",
            "fn": lambda n: fetch_modelscope_ranking(n),
            "label": "ModelScope 魔搭 · 开源模型热度", "url": MS_MODELS_URL,
-           "criteria": ("评分标准：ModelScope 魔搭社区开源模型热度（按页面热度排序）。"
-                        "反映国内开源生态活跃度，非能力基准。")},
+           "criteria": ("评分标准：ModelScope 魔搭社区开源模型热度（按下载量排序，数据取自官方 "
+                        "openapi/v1/models）。反映国内开源生态活跃度，非能力基准。")},
+    # 2026-09-09 新增：HF 原站在国内不可达（datasets-server 无可用镜像，实测 401），
+    # 改由 hf-mirror.com 取热门开源模型，保证国内环境开源榜不空。
+    "hm": {"region": "cn", "board": "open_source", "key": "hm",
+           "fn": lambda n: fetch_hf_mirror_popular(n),
+           "label": "HF 镜像 · 热门开源模型", "url": HF_MIRROR_API,
+           "criteria": ("评分标准：Hugging Face 热门开源模型下载量（经 hf-mirror.com 国内镜像获取，"
+                        "仅收录文本生成/对话类）。反映实际采用热度，非能力基准分；国内可直接访问。")},
 }
 
 

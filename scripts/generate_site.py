@@ -109,23 +109,30 @@ import aiweekly.leaderboard as LB
 import aiweekly.insights as INS
 
 from aiweekly.render import generate  # P1#1 Phase 3：渲染层已抽出
+from aiweekly.diagnostics import print_user_hints  # 告警「人话翻译」展示层
 
 
 class _CountingWriter:
-    """P1#12：包装 stdout，统计本次运行的 ⚠️/❌ 出现次数（供 run.log 聚合）。"""
+    """P1#12：统计 ⚠️/❌ 并收集告警原文，供末尾 print_user_hints() 翻译成人话。"""
 
     def __init__(self, stream):
         self._stream = stream
         self.warns = 0
         self.errors = 0
+        self.messages: list[str] = []
 
     def write(self, s: str) -> int:
-        self.warns += s.count("⚠️")
-        self.errors += s.count("❌")
+        if "⚠️" in s:
+            self.warns += s.count("⚠️")
+            self.messages.append(s.strip())
+        if "❌" in s:
+            self.errors += s.count("❌")
+            self.messages.append(s.strip())
         return self._stream.write(s)
 
     def flush(self):
         return self._stream.flush()
+
 
 
 def _parse_csv_arg(s: str):
@@ -474,6 +481,8 @@ def main():
         encoding="utf-8",
     )
     print(f"📝 运行日志已保存：{run_log}（warnings={_counter.warns} / errors={_counter.errors}）")
+
+    print_user_hints(getattr(_counter, "messages", []))
 
     # Chart.js 已内联进 HTML(见上方 [CHARTJS_LIB_PLACEHOLDER] 替换),无需附带外部 js 文件
 

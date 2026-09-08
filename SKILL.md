@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.2
+version: 3.4.3
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -10,15 +10,19 @@ license: MIT
 compatibility: Claude Code, OpenAI Codex, OpenCode, OpenClaw, Coze, WorkBuddy
 description: >
   AI 行业新闻网站生成工具。生成一个可搜索、可筛选、支持暗色模式的 AI 新闻网站（单文件 HTML）。
+  **直接说人话就能触发，不需要记命令**（例：「这周 AI 有什么大事」「给我看个 AI 简报」）。
   新闻默认全部来自 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，自治无单点依赖）；技能**不内置任何第三方商业 API**。
   如需用 AI HOT 或其他「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以
   --external-news-json 注入，是否启用完全由用户决定。每条新闻含原始来源链接。
   市场/融资图表数据由 WebSearch 获取后注入，未提供时明确标注「示例/估算」。
-  触发词：AI周报、AI行业周报、AI新闻、weekly AI report、人工智能周报、AI行业动态、
-  生成AI报告、AI新闻网站、AI新闻站。支持自动化：每周一上午 9 点自动生成最新版网站。
+  触发词·生成（任意一句即可）：AI周报、AI行业周报、AI新闻、人工智能周报、AI行业动态、生成AI报告、
+  AI新闻网站、AI新闻站、这周AI有什么大事、AI圈最近怎么样、给我看个AI简报、AI新闻汇总、
+  做个AI周报、AI行业速览、我想看AI动态、weekly AI report、AI news digest。
+  触发词·分发与运维：把周报推送到飞书、部署到 GitHub Pages、重生成 8/24 那期周报、刷新模型排行榜。
+  支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.2"
+  version: "3.4.3"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -53,6 +57,75 @@ metadata:
 ```
 
 > 卡片文案 + 更多对话示例见 [references/FAQ.md](references/FAQ.md)。飞书配置一步到位见 [scripts/init_feishu_config.py](scripts/init_feishu_config.py)。
+
+### 1.1 真实对话场景（多轮：澄清 / 纠偏 / 排障 / 边界）
+
+上面 5 条是「一句话触发」的语法层。下面是更接近真实使用的多轮对话——
+覆盖**时间窗歧义怎么澄清、中途改主意怎么处理、抓取失败怎么排障、历史周报复现的真实边界**。
+这些场景里的每条命令都已在 3.4.2 实测可用。
+
+**① 时间窗歧义：先反问，不猜**
+
+```
+用户：这周的 AI 周报呢？
+Agent：今天 9/9（周三），本周一是 9/7，所以「这周」有两种理解——
+      · W37（8/31–9/7）：news.json 里已有 115 条，可以直接生成
+      · W38（9/7–9/9）：只有 2 天数据，条数会偏少
+      你要哪个？
+用户：用 W37 那份
+Agent：好 → generate_site.py --api-json news.json --date 2026-09-07 -o AI_News_2026-09-07.html
+```
+
+> **`--date` 是周期截止日**，显式传它才能保证「报告周期」与「文件名」一致。
+> 不传会被写成「今天−7 ~ 今天」，历史周报会被逐步改写成当期内容。**重生成历史周报时必须显式传。**
+
+**② 中途改主意：没有的功能直说，别硬凑**
+
+```
+用户：图表太占地方了，能去掉吗？
+Agent：没有隐藏图表区块的开关，硬删会破坏报告完整性。三个真选项——
+      ① 轻量模式：对话里直接给你 Markdown 分组列表，不出 HTML（最快）
+      ② 保留网站但不注入市场数据：图表显示「示例/估算数据」标注
+      ③ 改模板折叠该区块：要动 assets/news_site_template.html，我可以做
+      你要哪个？
+用户：① 就行
+Agent：→ 轻量模式，对话内直接输出分组列表
+```
+
+**③ 抓取异常：先诊断，别交一份空报告**
+
+```
+用户：跑一下这周周报
+Agent：⚠️ RSS 只回来 3 条，14 个源里国内源全挂。先体检一下：
+      → fetch_ai_news.py --check-feeds
+      结果：3 个源超时、其余被限流。三个方案——
+      ① 10 分钟后重试（限流常见，多半自愈）
+      ② 用现有 3 条生成（页脚会标注源健康度，不假装数据完整）
+      ③ WebSearch 手动补齐后写成同结构 JSON，走 --api-json
+      我建议先 ①。
+用户：那就重试一次
+```
+
+**④ 历史周报复现：保留期是硬边界**
+
+```
+用户：把 8/24 那期重新生成一份
+Agent：先说清边界——RSS 源只保留约 1 周，现在回抓 8/24 那周只能拿个位数条目，
+      **无法忠实复现**。两个路径——
+      ① 有当时的快照（如 news_w34.json）→ 直接用它 + --date 2026-08-24
+      ② 没有快照 → 只能用最新周数据，但那样标题会与内容不符，我不建议
+      你本地有那周的备份吗？
+用户：有，news_w34.json
+Agent：→ generate_site.py --api-json news_w34.json --date 2026-08-24 -o AI_News_2026-08-24.html
+```
+
+**⑤ 参数细化：榜单条数与翻译行为**
+
+```
+用户：模型榜多给我看几条，另外英文标题别翻译了
+Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translate-title -o AI_News.html
+      （摘要仍会翻译，只保留英文标题原文）
+```
 
 生成一个**可搜索、可筛选、响应式**的 AI 行业新闻网站（单文件 HTML）。
 每条新闻附带原始报道链接，支持按分类 / 关键词筛选，桌面端和移动端均可使用。
@@ -416,6 +489,45 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 
 排行榜来源优先级：`--ranking-json` > 多源池实时（按 region 排序）> 国内快照 / 本地缓存 > 显示「暂无实时数据」。
 图表数据未注入时，图表注释自动标注「示例/估算数据」，不伪装为实时。
+
+### 8.1 国内用户怎么办：实测数据与诚实结论（2026-09-09 复核）
+
+**先说结论：LMArena 与 Artificial Analysis 没有官方国内镜像，国内受限网络下这两榜拿不到——这是硬边界，不假装能解决。**
+
+下面是 33 次真实运行统计出的**各榜源成功率**（`leaderboard_health.jsonl`）：
+
+| 源 | 标记 | 成功率 | 国内受限网络下 |
+|---|---|---|---|
+| Artificial Analysis | global | **97%** ✅ | ❌ 需代理（无官方镜像） |
+| DataLearner | global | **81.8%** ✅ | ❌ 需代理 |
+| LMArena | global | 48.5% | ❌ 需代理（无官方镜像） |
+| HuggingFace Open LLM | global | 42.4% | ⚠️ 原站需代理，但**已新增 HF 镜像源** |
+| LLM-Stats | global | 0% | ❌ 长期空，等同失效 |
+| OpenCompass 司南 | **cn** | **0%** ❌ | 页面为 SPA，抓不到结构化数据 |
+| SuperCLUE | **cn** | **0%** ❌ | 同上 |
+| ModelScope 魔搭 | **cn** | 0% → **已修复** | ✅ 改用官方 `openapi/v1/models` 后可直连 |
+
+> ⚠️ 表中三个标记为 `cn` 的"国内源"，实测**成功率全是 0%**——它们只是"服务器在国内"，
+> 页面却是 JS 渲染的 SPA，HTTP 直抓只能拿到骨架。所以"国内环境优先国内源"这条策略
+> 过去实际是失效的（代码在跑，但从没拿到过数据）。
+
+**已补齐的国内可直连源（2026-09-09 新增/修复）**
+
+| 源 | 地址 | 状态 |
+|---|---|---|
+| ModelScope 魔搭 | `www.modelscope.cn/openapi/v1/models` | ✅ 官方 API，国内直连，含下载量/许可证 |
+| HF 镜像热门模型 | `hf-mirror.com/api/models` | ✅ 国内直连，仅收录文本生成/对话类 |
+
+**同时清除了两个"假镜像"（重要）**：代码里曾登记 `lmarena.org.cn`（**域名根本不存在**）
+与 `aa-cn.mirror.xyz`（返回的是 mirror.xyz **博客平台**页面，与 AA 无关）。
+后者尤其危险——HTTP 200 但内容无关，一旦解析出数据会直接污染榜单。
+> 教训：**镜像必须逐个验证「域名存在 + 返回预期内容」，只看 HTTP 200 不够**。
+
+**翻不了墙时的三条实际出路**
+
+1. **接受降级**：开源榜由「HF 镜像 + ModelScope」两个国内源供给（热度榜，非能力基准，报告会注明）；综合榜若拿不到就显示「暂无实时数据」——**绝不编造名次**。
+2. **配置代理**：`--proxy http://host:port` 或 `HTTPS_PROXY=...`，走通后 LMArena / AA 即可恢复。
+3. **自备数据注入**：`--ranking-json` 传入你自己的榜单 JSON，完全绕开网络抓取。
 
 ### 配置代理（可选，提升受限网络下海外源可达性）
 

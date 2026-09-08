@@ -41,20 +41,29 @@ LLMSTATS_URL = "https://llm-stats.com/leaderboards/open-llm-leaderboard"
 OC_LLM_URL = "https://rank.opencompass.org.cn/leaderboard-llm"
 SV_GENERAL_URL = "https://www.superclueai.com/generalpage"
 MS_MODELS_URL = "https://modelscope.cn/models"
+# 官方开放 API（实测可用；/api/v1/models 是 404，别再用旧路径）
+MS_OPENAPI_URL = "https://www.modelscope.cn/openapi/v1/models"
+HF_MIRROR_API = "https://hf-mirror.com/api/models"
 
 
 # ============ 国内镜像（P0-3：海外源国内不可达时自动回退）============
 # 键：源站 URL 前缀；值：镜像站对应前缀。_http_get_fallback 在主源失败时
 # 按此表改写前缀重试，再不行才回退快照（已有逻辑）。
-# 说明：
-#  - hf-mirror.com 为 HuggingFace 官方社区镜像，国内直连稳定 → 真实可用；
-#  - lmarena / AA 的镜像域名（lmarena.org.cn / aa-cn.mirror.xyz 等）为「尽力而为」，
-#    若解析不到会自动失败并继续回退，不影响主流程（best-effort）。
+# 说明（2026-09-09 实测复核，务必以实测为准，勿凭想象加镜像）：
+#  - hf-mirror.com 根域与 /api/models 实测 200 + JSON → **真实可用**；
+#  - hf-mirror.com/datasets-server 实测 **401**（该路径不对外）→ datasets-server 无可用镜像；
+#  - lmarena.org.cn 实测 **域名不存在**（ConnectionError）→ 曾在此登记，已移除；
+#  - aa-cn.mirror.xyz 实测 200 但返回的是 **mirror.xyz 博客平台**页面（与 AA 无关），
+#    属「假镜像」：不仅无用，一旦解析出内容还可能污染榜单 → 已移除。
+# 教训：镜像必须逐个 curl 验证「域名存在 + 返回预期内容」，只看 HTTP 200 不够。
 URL_REWRITES = {
-    "https://datasets-server.huggingface.co": "https://hf-mirror.com/datasets-server",
     "https://huggingface.co": "https://hf-mirror.com",
-    "https://lmarena.ai": "https://lmarena.org.cn",
-    "https://artificialanalysis.ai": "https://aa-cn.mirror.xyz",
+}
+
+# 无国内镜像、且境外网络不可达时须如实告知用户的源（不伪装成「暂无数据」）
+NO_CN_MIRROR_SOURCES = {
+    "lm": "LMArena（lmarena.ai）无官方国内镜像，国内环境通常需代理才能访问",
+    "aa": "Artificial Analysis（artificialanalysis.ai）无官方国内镜像，国内环境通常需代理才能访问",
 }
 
 # 镜像总开关：设 LEADERBOARD_USE_MIRRORS=0 可关闭（调试 / 海外环境无需镜像）
@@ -87,12 +96,14 @@ def _http_get_fallback(url: str, timeout: int = 45, opener=None) -> str:
 __all__ = [
     "LM_ARENA_URL", "AA_URL", "HF_DS_API", "HF_LEADERBOARD_URL",
     "DATALARNER_URL", "LLMSTATS_URL", "OC_LLM_URL", "SV_GENERAL_URL",
-    "MS_MODELS_URL", "URL_REWRITES", "_USE_MIRRORS", "_http_get_fallback",
+    "MS_MODELS_URL", "MS_OPENAPI_URL", "HF_MIRROR_API", "NO_CN_MIRROR_SOURCES",
+    "URL_REWRITES", "_USE_MIRRORS", "_http_get_fallback",
     "ORG_PREFIXES", "_clean_model_slug", "_SUFFIX_RE",
     "_norm_model", "fetch_lmarena_ranking", "OPEN_SOURCE_MODEL_KEYWORDS", "_is_open_source_model",
     "fetch_aa_ranking", "fetch_hf_open_ranking", "_parse_table_rows", "_parse_ctx",
     "_parse_money", "fetch_llmstats_ranking", "DL_ORG_SPLIT", "_split_dl_org",
     "fetch_datalearner_ranking", "fetch_opencompass_ranking", "fetch_superclue_ranking", "fetch_modelscope_ranking",
+    "fetch_hf_mirror_popular",
 ]
 
 
@@ -590,28 +601,79 @@ def fetch_superclue_ranking(top_n: int = 15):
 
 
 def fetch_modelscope_ranking(top_n: int = 15):
-    """ModelScope 魔搭开源模型热度榜（国内可直连，尽力而为）。"""
+    """ModelScope 魔搭开源模型热度榜（国内可直连）。
+
+    2026-09-09 重写：原先抓 `modelscope.cn/models` 页面再 BeautifulSoup 找链接，
+    但该页是 SPA（服务端只回骨架），实测 **33 次调用 0 次成功** → 形同虚设。
+    改用官方开放 API `openapi/v1/models`（实测 200 + JSON，含 downloads/likes/license/params），
+    按下载热度排序。注意：这是**热度榜，不是能力基准**，score 存的是下载量。
+    """
+    url = (f"{MS_OPENAPI_URL}?PageSize={max(top_n, 20)}&PageNumber=1"
+           f"&SortBy=Downloads")
     try:
-        html = _http_get(MS_MODELS_URL, timeout=40)
-        soup = BeautifulSoup(html, "html.parser")
-        # 热度榜为 SPA，若页面无结构化模型链接则降级
-        links = soup.select("a[href*='/models/']")
-        if not links:
+        data = json.loads(_http_get(url, timeout=40))
+        if not data.get("success"):
             return None
-        seen, out = set(), []
-        for a in links:
-            name = a.get_text(strip=True)
-            if not name or name in seen or len(name) > 60:
+        models = (data.get("data") or {}).get("models") or []
+        out = []
+        for m in models:
+            mid = (m.get("id") or "").strip()
+            if not mid:
                 continue
-            seen.add(name)
+            org, _, tail = mid.rpartition("/")
+            name = (m.get("display_name") or "").strip() or tail or mid
             out.append(_enrich_cost({
-                "rank": len(out) + 1, "model": name, "org": "",
-                "open_source": True, "score": None,
+                "model": name,
+                "org": org or "",
+                "score": m.get("downloads"),          # 热度（下载量），非能力分
+                "license": (m.get("license") or "—"),
+                "open_source": True,
+                "likes": m.get("likes"),
+                "params": m.get("params"),
             }))
             if len(out) >= top_n:
                 break
         return out if out else None
     except Exception as e:
         print(f"  ⚠️ ModelScope 抓取失败：{e}")
+        return None
+
+
+def fetch_hf_mirror_popular(top_n: int = 15):
+    """Hugging Face 热门开源模型（走 hf-mirror.com，国内可直连）。
+
+    背景：Open LLM Leaderboard 的 datasets-server 在国内不可达（hf-mirror 的
+    datasets-server 路径实测 401），导致 hf 源国内成功率极低。
+    本函数改走 hf-mirror 的 `/api/models`（实测 200 + JSON），按下载量取热门模型，
+    只保留文本生成/对话类（过滤 embedding、tokenizer 等非 LLM 条目）。
+    注意：这是**热度榜，不是基准评分**，score 存的是下载量。
+    """
+    url = f"https://hf-mirror.com/api/models?sort=downloads&limit={max(top_n * 4, 60)}"
+    try:
+        data = json.loads(_http_get(url, timeout=40))
+        out = []
+        for m in data:
+            mid = (m.get("id") or "").strip()
+            if not mid:
+                continue
+            tags = m.get("tags") or []
+            # 只要文本生成/对话类，过滤 sentence-transformers / tokenizer 等
+            if not any(t in ("text-generation", "conversational", "text2text-generation")
+                       for t in tags):
+                continue
+            org, _, tail = mid.rpartition("/")
+            out.append(_enrich_cost({
+                "model": tail or mid,
+                "org": org or "",
+                "score": m.get("downloads"),          # 热度（下载量），非能力分
+                "license": "—",
+                "open_source": True,
+                "likes": m.get("likes"),
+            }))
+            if len(out) >= top_n:
+                break
+        return out if out else None
+    except Exception as e:
+        print(f"  ⚠️ HF 镜像热门榜抓取失败：{e}")
         return None
 
