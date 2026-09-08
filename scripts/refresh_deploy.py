@@ -30,7 +30,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -99,12 +101,38 @@ def git_push_ghpages() -> bool:
     return False
 
 
+def _report_date(api_json: Path, output: Path) -> str | None:
+    """推导报告周期截止日（--date），确保「文件名日期 == 报告周期」。
+
+    坑（2026-09-08 实测）：generate_site.py 不传 --date 时取「当天」，于是
+    每天刷新都会把历史周报的标题/周期改写成「今天-7 ~ 今天」，
+    出现 AI_News_2026-08-31.html 里装的却是 9/1-9/8 周内容的事故。
+
+    优先级：
+      1) 新闻 JSON 的 date_end（新闻抓取时的周期截止日，最权威）
+      2) 输出文件名里的日期 AI_News_YYYY-MM-DD.html（兜底）
+      3) None（交给 generate_site 自己决定）
+    """
+    try:
+        data = json.loads(Path(api_json).read_text(encoding="utf-8"))
+        end = (data or {}).get("date_end")
+        if isinstance(end, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end):
+            return end
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️ 读取 {api_json} 的 date_end 失败：{exc}", flush=True)
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", Path(output).name)
+    return m.group(1) if m else None
+
+
 def _generate_with_retry(gen: Path, api_json: Path, output: Path,
-                         region: str, ranking_top: int) -> int:
+                         region: str, ranking_top: int,
+                         report_date: str | None = None) -> int:
     """实时生成站点（默认 live fetch 排行榜）。网络抖动时自动重试 1 次。
 
     等价于：generate_site.py --api-json ... --output ... --region ... --ranking-top ...
+            [--date YYYY-MM-DD]
     不传 --ranking-json / --no-live-ranking，从而每次都走实时抓取。
+    --date 必须显式传：否则报告周期会漂移到「当天」，与文件名/新闻周次不符。
     """
     cmd = [
         str(VENV_PY), str(gen),
@@ -113,6 +141,8 @@ def _generate_with_retry(gen: Path, api_json: Path, output: Path,
         "--region", region,
         "--ranking-top", str(ranking_top),
     ]
+    if report_date:
+        cmd += ["--date", report_date]
     rc = _run(cmd)
     if rc == 0:
         return 0
@@ -143,9 +173,22 @@ def main() -> int:
         return 2
     output = Path(args.output) if args.output else (SKILL_DIR / "workspace" / "AI_News_live.html")
 
+    # 关键：报告周期 --date 必须显式推导（见 _report_date 注释）。
+    # 新闻 JSON 的周期截止日与输出文件名不一致时，以新闻周期为准并改写文件名，
+    # 避免「文件名 8-31、内容 9/1-9/8」这类周次错位再次进 gh-pages 存档。
+    report_date = _report_date(api_json, output)
+    m_out = re.search(r"(\d{4}-\d{2}-\d{2})", output.name)
+    if report_date and m_out and m_out.group(1) != report_date:
+        print(f"  ⚠️ 输出文件名日期 {m_out.group(1)} 与新闻周期截止日 "
+              f"{report_date} 不一致，以新闻周期为准：改用 "
+              f"AI_News_{report_date}.html", flush=True)
+        output = output.parent / f"AI_News_{report_date}.html"
+    print(f"  🗓️ 报告周期截止日：{report_date or '(未指定，取当天)'}", flush=True)
+
     # 1) 实时生成（默认 live fetch，不传 --ranking-json / --no-live-ranking）
     #    R4：生成失败自动重试 1 次（网络抖动常见），避免单次失败即放弃整轮刷新
-    rc = _generate_with_retry(gen, api_json, output, args.region, args.ranking_top)
+    rc = _generate_with_retry(gen, api_json, output, args.region,
+                              args.ranking_top, report_date)
     if rc != 0:
         print("  ❌ generate_site.py 连续重试仍失败，中止。", flush=True)
         return rc
@@ -154,7 +197,7 @@ def main() -> int:
     rc = _run([
         str(VENV_PY), str(deploy),
         "--no-push",
-        "--html", args.output,
+        "--html", str(output),
     ])
     if rc != 0:
         print("  ❌ deploy_ghpages.py 失败，中止。", flush=True)
