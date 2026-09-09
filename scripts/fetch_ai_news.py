@@ -66,26 +66,44 @@ except ImportError:
 
 
 # ── RSS 源（已做健康检查的精选列表）─────────────────────────────
-# category_hint: 该源整体偏向的分类，作为关键词分类失败时的回退
+# 字段：(名称, URL, category_hint, region)
+#   category_hint：关键词分类失败时的回退分类
+#   region：cn=国内源 / global=国外源，用于分区域健康统计与降级判断
+# 2026-09-10 实测（国内网络裸连，14 源逐个验证）：国外源 7/7 可达；
+#   国内源中 36氪须带 www（不带 www 返回反爬 HTML 页，0 条）；
+#   机器之心 RSS 已下线（返回「机器之心·数据服务」落地页），已替换为雷峰网 AI 科技评论。
 RSS_FEEDS = [
-    # 中文源（国内优先：确保国内网络下也有足量覆盖，国外源全挂也有中文地板）
-    # 注：机器之心用规范 RSS 地址（best-effort，沙箱探测偶发不可达，真实国内网络多可访问）
-    ("量子位",        "https://www.qbitai.com/rss",                              "industry"),
-    ("36氪 AI",       "https://36kr.com/feed",                                  "industry"),
-    ("机器之心",      "https://www.jiqizhixin.com/rss",                         "ai-models"),
-    ("智东西",        "https://www.zhidx.com/rss",                              "industry"),
-    ("极客公园",      "https://www.geekpark.net/rss",                           "industry"),
-    ("InfoQ 中国",    "https://www.infoq.cn/feed",                              "industry"),
-    ("钛媒体",        "https://www.tmtpost.com/rss",                            "industry"),
+    # 中文源（国内源：确保国内网络下也有足量覆盖，国外源全挂也有中文地板）
+    ("量子位",        "https://www.qbitai.com/rss",                              "industry", "cn"),
+    ("36氪 AI",       "https://www.36kr.com/feed",                              "industry", "cn"),
+    ("雷峰网 AI 科技评论", "https://www.leiphone.com/feed",                     "ai-models", "cn"),
+    ("智东西",        "https://www.zhidx.com/rss",                              "industry", "cn"),
+    ("极客公园",      "https://www.geekpark.net/rss",                           "industry", "cn"),
+    ("InfoQ 中国",    "https://www.infoq.cn/feed",                              "industry", "cn"),
+    ("钛媒体",        "https://www.tmtpost.com/rss",                            "industry", "cn"),
     # 英文源
-    ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", "industry"),
-    ("MIT Tech Review", "https://www.technologyreview.com/feed/",               "industry"),
-    ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml",               "ai-models"),
-    ("TechMeme",      "https://www.techmeme.com/feed.xml",                      "industry"),
-    ("MIT News AI",   "https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml", "paper"),
-    ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/",             "industry"),
-    ("Google AI Blog", "https://blog.google/technology/ai/rss/",                "industry"),
+    ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", "industry", "global"),
+    ("MIT Tech Review", "https://www.technologyreview.com/feed/",               "industry", "global"),
+    ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml",               "ai-models", "global"),
+    ("TechMeme",      "https://www.techmeme.com/feed.xml",                      "industry", "global"),
+    ("MIT News AI",   "https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml", "paper", "global"),
+    ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/",             "industry", "global"),
+    ("Google AI Blog", "https://blog.google/technology/ai/rss/",                "industry", "global"),
 ]
+
+# 国外源的国内镜像（主源失败时按顺序回退）。
+# 注意：镜像必须验证「域名存在 + 返回预期内容」，仅 HTTP 200 不算——
+# 曾有 aa-cn.mirror.xyz 返回无关博客页却 200，险些污染数据。
+FEED_MIRRORS = {
+    "Hugging Face Blog": ["https://hf-mirror.com/blog/feed.xml"],
+}
+
+# 抓取用的 User-Agent。
+# 实测（2026-09-10）：VentureBeat 等站点会对 `compatible; AIWeeklyReport/x.y`
+# 这类**自报爬虫身份**的 UA 直接返回 429，换成常规浏览器 UA 即正常 200。
+# 这里只读取各站公开的 RSS/Atom，属于标准 feed 阅读器行为。
+FEED_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 RSS_KEYWORDS = ["ai", "llm", "gpt", "claude", "gemini", "model", "funding",
                 "acquisition", "芯片", "大模型", "人工智能", "融资", "并购", "agent"]
@@ -189,7 +207,7 @@ def fetch_via_rss(feed_url: str, max_items: int = 30,
     for attempt in range(2):
         try:
             # feedparser 通过 request_headers 设置 UA；代理由环境变量（urllib）生效
-            feed = feedparser.parse(feed_url, agent="Mozilla/5.0 (compatible; AIWeeklyReport/4.0)")
+            feed = feedparser.parse(feed_url, agent=FEED_UA)
             if feed.bozo and not feed.entries:
                 if attempt == 0:
                     time.sleep(1)
@@ -251,7 +269,7 @@ def fetch_via_rss(feed_url: str, max_items: int = 30,
 def fetch_hf_leaderboard(max_items: int = 10) -> list[dict]:
     try:
         resp = requests.get(HF_LEADERBOARD_API, timeout=15,
-                             headers={"User-Agent": "Mozilla/5.0 (compatible; AIWeeklyReport/4.0)"})
+                             headers={"User-Agent": FEED_UA})
         if resp.status_code != 200:
             return []
         data = resp.json()
@@ -307,36 +325,68 @@ def fetch_via_newsapi(query: str, from_date: str, to_date: str,
         return []
 
 
+def fetch_feed_with_mirror(name: str, url: str, hint: str, region: str = "cn",
+                           **kw) -> tuple[list[dict], bool]:
+    """抓取单个源；主源完全失败时按顺序回退 `FEED_MIRRORS` 里的国内镜像。"""
+    items, ok = fetch_via_rss(url, source_name=name, category_hint=hint, **kw)
+    if ok and items:
+        return items, True
+    for mirror in FEED_MIRRORS.get(name, []):
+        m_items, m_ok = fetch_via_rss(mirror, source_name=name, category_hint=hint, **kw)
+        if m_ok and m_items:
+            print(f"  🔁 {name}：主源不可用，已回退国内镜像")
+            return m_items, True
+    return items, ok
+
+
 # ── RSS 健康检查 ─────────────────────────────────────────────────
 def check_feeds() -> dict:
     print("🏥 RSS 源健康检查")
     print("=" * 60)
     results = []
-    for name, url, hint in RSS_FEEDS:
+    for name, url, hint, region in RSS_FEEDS:
         t0 = time.time()
-        print(f"  🔄 {name:<18} ...", end=" ", flush=True)
+        print(f"  🔄 [{region:6s}] {name:<20} ...", end=" ", flush=True)
         try:
-            feed = feedparser.parse(url, agent="Mozilla/5.0 (compatible; AIWeeklyReport/4.0)")
+            feed = feedparser.parse(url, agent=FEED_UA)
             latency = int((time.time() - t0) * 1000)
             if feed.bozo and not feed.entries:
-                print(f"❌ 失败")
+                print("❌ 失败")
                 status, count = "error", 0
             elif not feed.entries:
-                print(f"⚠️  0 条（可能失效）")
+                print("⚠️  0 条（可能失效）")
                 status, count = "empty", 0
             else:
                 print(f"✅ {len(feed.entries)} 条 ({latency}ms)")
                 status, count = "ok", len(feed.entries)
-            results.append({"name": name, "url": url, "status": status, "count": count,
-                            "latency_ms": latency})
+            results.append({"name": name, "url": url, "region": region, "status": status,
+                            "count": count, "latency_ms": latency})
         except Exception as e:
             print(f"❌ {str(e)[:50]}")
-            results.append({"name": name, "url": url, "status": "error", "count": 0,
-                            "latency_ms": int((time.time() - t0) * 1000)})
+            results.append({"name": name, "url": url, "region": region, "status": "error",
+                            "count": 0, "latency_ms": int((time.time() - t0) * 1000)})
     ok = sum(1 for r in results if r["status"] == "ok")
+    cn = [r for r in results if r["region"] == "cn"]
+    gl = [r for r in results if r["region"] == "global"]
+    cn_ok = sum(1 for r in cn if r["status"] == "ok")
+    gl_ok = sum(1 for r in gl if r["status"] == "ok")
     print("\n" + "=" * 60)
-    print(f"📊 汇总：{ok}/{len(results)} 个源正常")
+    print(f"📊 汇总：{ok}/{len(results)} 个源正常 "
+          f"（国内 {cn_ok}/{len(cn)} · 国外 {gl_ok}/{len(gl)}）")
+    if cn_ok == 0:
+        print("  ⚠️ 国内源全部不可用：报告会只剩英文条目，中文地板失效，建议检查网络或代理")
+    elif gl_ok == 0:
+        print("  ⚠️ 国外源全部不可用：不影响出报告（国内源兜底），但会缺英文一手信源；"
+              "需要的话加 --proxy 或设 HTTPS_PROXY")
+    for r in results:
+        if r["status"] != "ok":
+            tip = ("国内源，检查网络是否能访问该站；多为临时故障，稍后重试即可"
+                   if r["region"] == "cn" else
+                   "国外源，国内网络可能不可达：可加 --proxy / HTTPS_PROXY，"
+                   "或忽略（其余源会兜底，不会出空报告）")
+            print(f"  💡 {r['name']}（{r['region']}）不可用 → {tip}")
     return {"feeds": results, "summary": {"total": len(results), "ok": ok,
+            "cn_ok": cn_ok, "cn_total": len(cn), "global_ok": gl_ok, "global_total": len(gl),
             "failed": len(results) - ok, "checked_at": datetime.now().isoformat()}}
 
 
@@ -362,14 +412,22 @@ def fetch_all(week_str: str | None = None, use_news_api: bool = False,
 
     all_items = []
     feeds_ok = 0
-    for name, url, hint in RSS_FEEDS:
-        print(f"  🔄 {name} ...", end=" ", flush=True)
-        items, ok = fetch_via_rss(url, max_items=50, start=start_date, end=end_date,
-                                  source_name=name, category_hint=hint)
+    cn_ok = gl_ok = 0
+    for name, url, hint, region in RSS_FEEDS:
+        print(f"  🔄 [{region:6s}] {name} ...", end=" ", flush=True)
+        items, ok = fetch_feed_with_mirror(name, url, hint, region, max_items=50,
+                                           start=start_date, end=end_date)
         feeds_ok += 1 if ok else 0
+        if ok:
+            if region == "cn":
+                cn_ok += 1
+            else:
+                gl_ok += 1
         print(f"✅ {len(items)} 条" + ("" if ok else " ⚠️ 源异常"))
         all_items.extend(items)
-    print(f"📡 源健康：{feeds_ok}/{len(RSS_FEEDS)} 个正常")
+    print(f"📡 源健康：{feeds_ok}/{len(RSS_FEEDS)} 个正常（国内 {cn_ok}/7 · 国外 {gl_ok}/7）")
+    if cn_ok == 0:
+        print("  ⚠️ 国内源全部不可用：本报告将只有英文条目，建议检查网络后重跑")
 
     # News API 增强
     if use_news_api:

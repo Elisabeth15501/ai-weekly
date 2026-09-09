@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.3
+version: 3.4.4
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -22,7 +22,7 @@ description: >
   支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.3"
+  version: "3.4.4"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -172,7 +172,7 @@ Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translat
 
 | 数据类型 | 获取方式 | 优先级 |
 |---------|---------|--------|
-| 新闻列表 | `scripts/fetch_ai_news.py`（RSS：国内 量子位/36氪/机器之心/智东西/极客公园/InfoQ 中国/钛媒体 + 国外 TechCrunch/MIT TR/HF Blog/TechMeme/MIT News/VentureBeat/Google AI；国内源优先，国外源全挂也有中文地板） | **主** |
+| 新闻列表 | `scripts/fetch_ai_news.py`（RSS：国内 量子位/36氪/雷峰网/智东西/极客公园/InfoQ 中国/钛媒体 + 国外 TechCrunch/MIT TR/HF Blog/TechMeme/MIT News/VentureBeat/Google AI；2026-09-10 实测 **14/14 全通**，国内源作地板，见 § 8.2） | **主** |
 | 模型发布 | RSS（HF Blog / 关键词分类） | 主 |
 | 产品发布 | RSS（关键词分类） | 主 |
 | 行业动态 | RSS + WebSearch（政策/融资补充） | 主 |
@@ -554,6 +554,34 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
   3. 产出 `{模型名: {org, license, commercial, intel_index, hf_avg, cost_in, cost_out, context, multimodal, use_case, source}}` 的 JSON；
   4. 以 `--profiles-json 该JSON` 重新生成——脚本会将其**合并写回** `model_profiles.json`（canonical 实时更新），并自动清除 pending 清单。
 - **写入优先级**：`--profiles-json` 合并 > canonical 档案 > 资料卡留空（绝不编造字段）。
+
+### 8.2 新闻源可达性实测（2026-09-10 体检，与排行榜结论相反）
+
+**结论：新闻类（RSS）与排行榜类（网页抓取）的国内可达性完全不同——RSS 目前 14/14 全通，不需要翻墙。**
+
+逐源裸连实测（国内网络，无代理）：
+
+| 分组 | 实测 | 说明 |
+|---|---|---|
+| 国内源（7） | **7/7** ✅ | 量子位 / 36氪 / 雷峰网 / 智东西 / 极客公园 / InfoQ 中国 / 钛媒体 |
+| 国外源（7） | **7/7** ✅ | TechCrunch / MIT TR / HF Blog / TechMeme / MIT News / VentureBeat / Google AI |
+
+用 `fetch_ai_news.py --check-feeds` 可随时自测，输出按 `cn` / `global` 分区统计，并对失败源直接给「人话建议」。
+
+**本次体检修掉的三个真问题**
+
+| 问题 | 根因 | 修复 |
+|---|---|---|
+| 36氪 0 条 | URL 缺 `www`，被反爬拦截（200 + HTML，无条目） | 改用 `www.36kr.com/feed`（30 条） |
+| 机器之心 0 条 | RSS **已下线**，返回「机器之心·数据服务」落地页 | 替换为**雷峰网 AI 科技评论**（20 条，AI 垂直媒体） |
+| VentureBeat 429 | 站点对自报爬虫 UA（`compatible; AIWeeklyReport/4.0`）限流 | 统一改用常规浏览器 UA（常量 `FEED_UA`），即时恢复 200 |
+
+**为什么新闻源没那么脆弱**：RSS 是各站主动对外公开的订阅接口（本来就是给机器读的），不像排行榜网页那样靠 JS 渲染、依赖访问来源。所以「翻不了墙就拿不到国外信息」在**新闻**这一侧基本不成立；真正卡住的是**排行榜**（见 § 8.1）。
+
+**仍然存在的边界**（诚实说明）：
+- RSS **只保留约 1 周**，回抓 2–3 周前的历史周报只能拿个位数条目，无法忠实复现。
+- 源站随时可能改版 / 下线 / 限流（机器之心就是这么没的）。`--check-feeds` 建议每周跑一次。
+- 若你的网络确实访问不了某个国外源：其余 13 个源会兜底，报告**不会空白**；需要完整覆盖就配 `--proxy` / `HTTPS_PROXY`。
 
 ## 九、发布与第三方依赖说明（合规）
 

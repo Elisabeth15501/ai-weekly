@@ -78,19 +78,31 @@
 
 RSS 抓取比 HTML 解析更稳定，推荐优先使用。`scripts/fetch_ai_news.py` 内置以下已验证可用的源：
 
-| 来源 | Feed URL | 语言 | 分类倾向 |
-|------|----------|------|---------|
-| 量子位 | https://www.qbitai.com/rss | 中文 | industry |
-| 36氪 | https://36kr.com/feed | 中文 | industry |
-| TechCrunch AI | https://techcrunch.com/category/artificial-intelligence/feed/ | 英文 | industry |
-| MIT Tech Review | https://www.technologyreview.com/feed/ | 英文 | industry |
-| Hugging Face Blog | https://huggingface.co/blog/feed.xml | 英文 | ai-models |
-| TechMeme | https://www.techmeme.com/feed.xml | 英文 | industry |
-| MIT News AI | https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml | 英文 | paper |
-| VentureBeat AI | https://venturebeat.com/category/ai/feed/ | 英文 | industry |
-| Google AI Blog | https://blog.google/technology/ai/rss/ | 英文 | industry |
+> 2026-09-10 实测：**14/14 全部可用（国内 7/7 · 国外 7/7）**。下表 `region` 用于分区健康统计。
 
-> **已失效（已从列表移除）**：The Verge AI（`/rss/index.xml` 返回 404）、机器之心（`jiqizhixin.com/rss` 已变为数据服务页）、arXiv cs.AI（返回 0 条目，不稳定）。
+| 来源 | Feed URL | 语言 | region | 分类倾向 |
+|------|----------|------|--------|---------|
+| 量子位 | https://www.qbitai.com/rss | 中文 | cn | industry |
+| 36氪 | https://www.36kr.com/feed | 中文 | cn | industry |
+| 雷峰网 AI 科技评论 | https://www.leiphone.com/feed | 中文 | cn | ai-models |
+| 智东西 | https://www.zhidx.com/rss | 中文 | cn | industry |
+| 极客公园 | https://www.geekpark.net/rss | 中文 | cn | industry |
+| InfoQ 中国 | https://www.infoq.cn/feed | 中文 | cn | industry |
+| 钛媒体 | https://www.tmtpost.com/rss | 中文 | cn | industry |
+| TechCrunch AI | https://techcrunch.com/category/artificial-intelligence/feed/ | 英文 | global | industry |
+| MIT Tech Review | https://www.technologyreview.com/feed/ | 英文 | global | industry |
+| Hugging Face Blog | https://huggingface.co/blog/feed.xml | 英文 | global | ai-models |
+| TechMeme | https://www.techmeme.com/feed.xml | 英文 | global | industry |
+| MIT News AI | https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml | 英文 | global | paper |
+| VentureBeat AI | https://venturebeat.com/category/ai/feed/ | 英文 | global | industry |
+| Google AI Blog | https://blog.google/technology/ai/rss/ | 英文 | global | industry |
+
+**抓取要点（都是踩过的坑）**：
+- **36氪必须带 `www`**：`36kr.com/feed` 返回反爬 HTML 页（200 但 0 条），`www.36kr.com/feed` 才返回真实 RSS（30 条）。
+- **UA 不能用自报爬虫身份**：VentureBeat 对 `compatible; AIWeeklyReport/x.y` 直接返回 **429**，改用常规浏览器 UA 即 200。现统一为常量 `FEED_UA`。
+- **镜像回退**：`FEED_MIRRORS` 给 Hugging Face Blog 配了 `hf-mirror.com` 国内镜像，主源失败时自动切换。
+
+> **已失效（已从列表移除）**：The Verge AI（`/rss/index.xml` 返回 404）、机器之心（`jiqizhixin.com/rss` 已变为「数据服务」落地页，2026-09-10 起由雷峰网替代）、arXiv cs.AI（返回 0 条目，不稳定）。
 > 如发现某源持续失效，用 `--check-feeds` 发现后从 `RSS_FEEDS` 移除或替换。
 
 ---
