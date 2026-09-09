@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.4
+version: 3.4.5
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -22,7 +22,7 @@ description: >
   支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.4"
+  version: "3.4.5"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -177,8 +177,8 @@ Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translat
 | 产品发布 | RSS（关键词分类） | 主 |
 | 行业动态 | RSS + WebSearch（政策/融资补充） | 主 |
 | 学术论文 | RSS（arXiv/MIT News 类源）+ WebSearch | 主 |
-| 市场数据（规模/采用率/份额） | **WebSearch → Statista / Gartner / IDC**，结果通过 `--market-data` / `--cn-market-data` 注入 | 主（需搜索） |
-| 融资并购金额 | **WebSearch → Crunchbase / 烯牛数据 / IT桔子**，结果通过 `--funding-data` / `--cn-funding-data` 注入 | 主（需搜索） |
+| 市场数据（规模/采用率/份额） | **口径路由（见 § 8.3）**：`--region cn` 时**国内源优先**——中国信通院·中商产业研究院 / IDC 中国 / 艾瑞（可自行核对）；国外源 Statista / Gartner / Grand View Research 为**可选增强**（海外机构静态快照，作对照）。结果通过 `--market-data` / `--cn-market-data` 注入 | 主（需搜索） |
+| 融资并购金额 | **口径路由**：`--region cn` 时国内源优先——IT桔子 / 烯牛数据 / 新浪创投Plus（可自行核对）；国外源 Crunchbase / CB Insights 为**可选增强**。结果通过 `--funding-data` / `--cn-funding-data` 注入 | 主（需搜索） |
 | 模型排行榜 | **网络环境自适应多源池**（国外源 LMArena/Artificial Analysis/Hugging Face + 国内源 OpenCompass 司南/SuperCLUE/ModelScope）；按运行环境（国内/国外）自动排序优先级，实时源全失败则回退国内快照或本地缓存，绝不空白 | 主 |
 | 政策监管 | RSS + WebSearch | 主 |
 | **外部 API 增强（可选）** | 用户自备 AI 行业知识类 API（如 AI HOT）导出 JSON，以 `--external-news-json` 注入，页脚自动署名；是否启用由用户决定 | 可选增强 |
@@ -582,6 +582,23 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 - RSS **只保留约 1 周**，回抓 2–3 周前的历史周报只能拿个位数条目，无法忠实复现。
 - 源站随时可能改版 / 下线 / 限流（机器之心就是这么没的）。`--check-feeds` 建议每周跑一次。
 - 若你的网络确实访问不了某个国外源：其余 13 个源会兜底，报告**不会空白**；需要完整覆盖就配 `--proxy` / `HTTPS_PROXY`。
+
+### 8.3 市场数据口径路由：国内优先，国外为可选增强（2026-09-10）
+
+**先说边界：市场数据不是实时抓取的。** 它是运行方用 WebSearch 核实后以 `--market-data` / `--cn-market-data` 等参数注入的**静态快照**（快照日期印在每张图下方）。所以"国内优先"不是说国外源抓不到，而是说**两套数字该信哪个**。
+
+| 口径 | 国内源（可自行核对） | 国外源（可选增强） |
+|---|---|---|
+| 市场规模 | 中国信通院·中商产业研究院、IDC 中国、艾瑞 | Grand View Research、Statista、Gartner |
+| 融资并购 | IT桔子、烯牛数据、新浪创投Plus | Crunchbase、CB Insights |
+
+**`--region cn` 时（或自动探测为国内网络）的处理**：
+
+1. **主口径切到国内**：市场板块顶部插入一条「口径路由条」（服务端预渲染，禁 JS 也可见）——「当前口径：国内优先，中国口径为主；全球口径属海外机构静态快照，仅作趋势对照，国内无法一手核实」。
+2. **每张图注标可核实性**：国内源图注加「✅ 国内公开数据，可自行核对」；全球源图注加「🌍 海外机构静态快照 · 作对照」。
+3. **不编造**：未注入真实数据时用基准值并在图注标注快照日期，**不伪装成实时**。
+
+**为什么这么设计**：GVR / Crunchbase 这类海外机构数据国内用户无法一手核实（要翻墙、且多为付费墙后），把它们和"信通院白皮书面上的数字"标成同等可靠是误导。路由条的作用就是把"该信哪个、哪个只是对照"明写给用户。
 
 ## 九、发布与第三方依赖说明（合规）
 

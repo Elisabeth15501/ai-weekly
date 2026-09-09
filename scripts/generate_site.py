@@ -444,6 +444,7 @@ def main():
         leaderboard_data=leaderboard_data,
         model_profiles=model_profiles_data,
         insights=insights,
+        region=((leaderboard_data or {}).get("meta") or {}).get("region") or args.region,
         lead=args.lead,
         keywords=keywords,
         keyword_search_base=args.keyword_search_base,

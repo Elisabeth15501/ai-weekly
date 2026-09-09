@@ -71,6 +71,30 @@ DEFAULT_CN_FUNDING_SOURCE = "新浪创投Plus 2025 国内一级市场 AI 行业�
 # 兜底免责（已不再默认触发；表述改为诚实的「静态快照」而非「示例/估算」）
 ESTIMATE_NOTE = "数据快照（静态，非实时）"
 
+def build_market_routing_note(region: str = "auto") -> str:
+    """市场数据「口径路由」提示条（服务端预渲染，禁 JS 也可见）。
+
+    国内适配性：国内用户应优先采信国内口径（信通院 / IT桔子，可自行核对），
+    全球口径来自海外机构静态快照，作趋势对照而非主口径——这点必须说清楚，
+    否则读者会误以为两套数字同等可靠。
+    region 取白名单值，避免任何注入面。
+    """
+    if region == "cn":
+        lead = "🇨🇳 当前口径：国内优先"
+        body = ("中国口径（中国信通院·中商产业研究院 / 新浪创投Plus / IT桔子）为主——"
+                "均为国内公开数据，可自行核对；全球口径（Grand View Research / Crunchbase）"
+                "属海外机构静态快照，仅作趋势对照，国内无法一手核实。")
+    elif region == "global":
+        lead = "🌍 当前口径：全球为主"
+        body = ("全球口径（Grand View Research / Crunchbase）为主；"
+                "中国口径（信通院 / IT桔子）作区域对照。两者均为静态快照，非实时数据。")
+    else:
+        lead = "📊 两套口径并列"
+        body = ("同一指标给出全球与中国两套口径，来源与快照日期见每张图下方。"
+                "均为静态快照而非实时数据，引用前请核对快照日期。")
+    return f'<div class="market-routing"><b>{lead}</b> — {body}</div>'
+
+
 def build_charts(market_data=None, market_labels=None,
                  funding_data=None, funding_labels=None,
                  cn_market_data=None, cn_market_labels=None,

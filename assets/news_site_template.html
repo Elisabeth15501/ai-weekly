@@ -357,6 +357,8 @@ a:hover { text-decoration: underline; }
 .chart-forecast-hint { font-size: 11px; color: var(--text-tertiary); }
 .chart-ref { font-size: 11px; color: #b45309; background: rgba(217,119,6,0.08); border-left: 3px solid #d97706; border-radius: 3px; padding: 6px 9px; margin-top: 6px; line-height: 1.5; }
 .markets-section h2 .markets-sub { font-size: 13px; font-weight: 400; color: var(--text-tertiary); margin-left: 8px; }
+.market-routing { font-size: 12.5px; line-height: 1.75; color: var(--text-secondary); background: var(--bg-soft); border: 1px solid var(--border); border-left: 3px solid var(--primary, #4f7cff); border-radius: 8px; padding: 10px 14px; margin: 12px 0 16px; }
+.market-routing b { color: var(--text); font-weight: 700; }
 .chart-takeaway { font-size: 12.5px; line-height: 1.65; color: var(--text-secondary); background: var(--card-bg); border-left: 3px solid var(--accent); border-radius: 4px; padding: 9px 12px; margin: 14px 0 4px; }
 .chart-takeaway b { color: var(--text); font-weight: 700; }
 .region-tag { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1; padding: 3px 9px; border-radius: 999px; margin-bottom: 8px; }
@@ -827,6 +829,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
 <!-- ========== MARKETS ========== -->
 <div class="markets-section" id="marketsSection">
   <h2>📊 市场数据 <span class="markets-sub">规模与钱流向哪——给独立开发者、产品经理与自媒体的决策背景</span></h2>
+  [MARKET_ROUTING_NOTE]
   <p class="section-source">🔗 数据来源（国内+国外）：[MARKET_SOURCE_SUMMARY] · 单位：全球用十亿美元（$B，约 ¥7.2/$），中国用亿元（RMB） · 数据快照：[DATA_SNAPSHOT]（静态快照，非实时）</p>
   <div class="charts-grid">
     <div class="chart-card">
@@ -834,21 +837,21 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
       <h3>AI 市场规模（十亿美元）</h3>
       <canvas id="marketSizeChart"></canvas>
       <p class="chart-takeaway">📈 年复合增速 <b>30.6%</b>（Grand View Research）：约每 2.5 年翻一番，高速扩张期 = 持续增量机会。<br><span class="chart-forecast-hint">▨ 浅色柱 = CAGR 外推（2027F/2028F，非实测），深蓝 = 实测/机构估算。</span></p>
-      <div class="chart-note">来源：[MARKET_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[MARKET_SOURCE] · 快照 [DATA_SNAPSHOT] · <span title="海外机构数据，国内网络通常无法一手核实，仅作趋势对照">🌍 海外机构静态快照 · 作对照</span></div>
     </div>
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>AI 核心产业规模（亿元）</h3>
       <canvas id="cnMarketChart"></canvas>
       <p class="chart-takeaway">🇨🇳 2025 突破 <b>1.2 万亿</b>（中国信通院），2026E 达 1.7 万亿——<b>同比增速 +41.7%</b>（2025 为 +30.6%，绿线），加速扩张。<br>本土基本盘最贴近开发者与创业者。</p>
-      <div class="chart-note">来源：[CN_MARKET_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[CN_MARKET_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
     </div>
     <div class="chart-card">
       <span class="region-tag region-global">🌍 全球</span>
       <h3>AI 融资趋势（十亿美元）</h3>
       <canvas id="fundingChart"></canvas>
       <p class="chart-takeaway">💰 2026 上半年融资已 <b>$510B</b>（Crunchbase），超 2025 全年；资本向头部模型公司集中。</p>
-      <div class="chart-note">来源：[FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · <span title="海外机构数据，国内网络通常无法一手核实，仅作趋势对照">🌍 海外机构静态快照 · 作对照</span></div>
       <div class="chart-ref">📊 参考线：AI 占全球 VC 比重 <b>&gt;70%</b>（Crunchbase H1 2026）——本图即 AI 融资，已处历史高位。</div>
     </div>
     <div class="chart-card">
@@ -856,21 +859,21 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
       <h3>AI 融资趋势（亿元）</h3>
       <canvas id="cnFundingChart"></canvas>
       <p class="chart-takeaway">💡 2025 披露融资 <b>656 亿元</b>（同比 +67%）；2026 上半年更飙至 <b>3076 亿</b>（IT桔子），结构剧变见下方洞察。</p>
-      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
     </div>
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>2026H1 融资赛道结构（亿元）</h3>
       <canvas id="cnStructureChart"></canvas>
       <p class="chart-takeaway">🧩 大模型 <b>1598 亿</b>、具身智能 <b>906 亿</b>、AIGC 应用 <b>596 亿</b>、基础层 <b>725 亿</b>——钱正从「通用大模型」外溢到场景层。</p>
-      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
     </div>
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>融资头部集中度（亿元）</h3>
       <canvas id="cnConcentrationChart"></canvas>
       <p class="chart-takeaway">🏛️ TOP3 大模型独揽 <b>930 亿（30%）</b>，TOP4–30 名约 770 亿，其余赛道约 1376 亿——钱极度向头部集中。</p>
-      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT]</div>
+      <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
     </div>
   </div>
 

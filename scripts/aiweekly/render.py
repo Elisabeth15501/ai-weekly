@@ -22,7 +22,7 @@ from aiweekly.leaderboard import (
     _apply_profile_as_truth, _leaderboard_freshness,
 )
 from aiweekly.market import (
-    build_charts, BASE_SOURCES,
+    build_charts, build_market_routing_note, BASE_SOURCES,
     DEFAULT_MARKET_SOURCE, DEFAULT_FUNDING_SOURCE,
     DEFAULT_CN_MARKET_SOURCE, DEFAULT_CN_FUNDING_SOURCE,
     _extract_market_signals, _compute_weekly_stats, _lb_name_map,
@@ -178,7 +178,8 @@ def generate(api_data: dict, output_path: str = None,
              translate_retries: int = 2,
              translate_num_predict: int = 600,
              translate_title: bool = True,
-             translate_cache: str = None) -> str:
+             translate_cache: str = None,
+             region: str = "auto") -> str:
     """生成完整的新闻网站 HTML。
 
     Args:
@@ -321,6 +322,9 @@ def generate(api_data: dict, output_path: str = None,
         data_snapshot = (_parse_date_arg(report_date).strftime("%Y-%m-%d")
                          if report_date else datetime.now().astimezone().strftime("%Y-%m-%d"))
     template = template.replace("[DATA_SNAPSHOT]", data_snapshot)
+
+    # 市场数据口径路由（国内适配性）：说明当前该以哪套口径为主、哪套仅作对照
+    template = template.replace("[MARKET_ROUTING_NOTE]", build_market_routing_note(region))
 
     # 页脚数据来源：基础列表 + 用户自备的外部 API（仅当用户显式提供）
     # 外部来源名/URL 由用户 CLI 提供，按不可信输入处理：转义 + 仅放行安全协议
