@@ -252,6 +252,7 @@ def deploy(
     switch_pages: bool = False,
     commit_msg: str | None = None,
     verbose: bool = True,
+    extra: list[str] | None = None,
 ) -> dict:
     repo = resolve_repo(repo)
     html_path = Path(html_path)
@@ -282,6 +283,16 @@ def deploy(
         shutil.copyfile(html_path, site_dir / html_name)
         if verbose:
             print(f"📄 已放入 {html_name}")
+
+        # 附带文件（如 translations.json 译文源），与周报同批发布
+        for f in (extra or []):
+            p = Path(f)
+            if p.is_file():
+                shutil.copyfile(p, site_dir / p.name)
+                if verbose:
+                    print(f"📄 已放入附加文件 {p.name}")
+            elif verbose:
+                print(f"⚠️ 附加文件不存在，已跳过：{f}")
 
         # 收集所有报告并再生 index.html
         reports = sorted(
@@ -361,6 +372,8 @@ def main() -> int:
     ap.add_argument("--switch-pages", action="store_true",
                     help="部署后通过 API 把 Pages 源切到该分支（需 GITHUB_TOKEN）")
     ap.add_argument("--commit-msg", default=None, help="自定义提交信息")
+    ap.add_argument("--extra", nargs="*", default=[],
+                    help="随周报一并发布的附加文件（如 translations.json 译文源）")
     args = ap.parse_args()
     try:
         deploy(
@@ -371,6 +384,7 @@ def main() -> int:
             dry_run=args.dry_run,
             switch_pages=args.switch_pages,
             commit_msg=args.commit_msg,
+            extra=args.extra,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"❌ 部署失败：{exc}", file=sys.stderr)

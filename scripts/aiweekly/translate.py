@@ -42,6 +42,10 @@ DEFAULT_WORKERS = 3
 DEFAULT_RETRIES = 2
 # 译文 token 上限；摘要偏长，400 易截断，提到 600 更稳
 DEFAULT_NUM_PREDICT = 600
+# 「译文是否含足够中文」的判定阈值：摘要长，要求 ≥3 汉字；
+# 标题短，≥1 即可（"Mother tongue"→"母语"仅 2 字却完全正确，用 3 会误杀）
+DEFAULT_MIN_CJK = 3
+MIN_CJK_TITLE = 1
 
 # 编辑口吻 prompt：自然中文科技报道、去机翻套话、保留专有名词、只输出译文
 _EDITOR_PROMPT = (
@@ -109,7 +113,7 @@ def _clean_translation(out: str) -> str:
 
 def _ollama_translate(text, model=DEFAULT_MODEL, timeout=DEFAULT_TIMEOUT,
                       num_predict=DEFAULT_NUM_PREDICT, prompt=_EDITOR_PROMPT,
-                      client=None):
+                      client=None, min_cjk=DEFAULT_MIN_CJK):
     """单次英文→中文，best-effort，失败返回 None。
 
     Args:
@@ -138,8 +142,10 @@ def _ollama_translate(text, model=DEFAULT_MODEL, timeout=DEFAULT_TIMEOUT,
                 data = json.loads(resp.read().decode("utf-8"))
         out = (data.get("response") or "").strip()
         out = _clean_translation(out)
-        # 几乎无中文 -> 失败
-        if len(_CJK_HAN.findall(out)) < 3:
+        # 几乎无中文 -> 失败。阈值可配：摘要用 3（长文本不该只有零星汉字），
+        # 标题用 MIN_CJK_TITLE=1——"Mother tongue"→"母语" 仅 2 字却是正确译文，
+        # 沿用 3 会把短标题的正确译文误判为失败（2026-09-10 回填时发现）。
+        if len(_CJK_HAN.findall(out)) < min_cjk:
             return None
         # 长度合理性：输入较长时译文不应过度膨胀（跑题/复读循环）
         if len(text) > 80 and len(out) > len(text) * 4:
@@ -207,6 +213,77 @@ class _TranslateCache:
             pass  # 缓存写失败不阻断主流程
 
 
+def _title_key(title: str, n: int = 24) -> str:
+    """标题归一化指纹：去空白/转小写/取前 n 字，用于校验「是否同一条报道」。"""
+    return re.sub(r"\s+", "", (title or "")).lower()[:n]
+
+
+class RemoteTranslationSource:
+    """远程译文源（如 GitHub Pages 上的 translations.json）。
+
+    目的：让**没有本地 Ollama** 的用户也能拿到中文译文。
+    译文由本项目每周生成周报时顺带积累，按原文 URL 索引发布。
+
+    格式见 ``TRANSLATIONS_SCHEMA``（ai-weekly-translations/v1）：
+    ``{"schema":..., "count":N, "entries": {url: {src_hash, cn_title, cn_summary}}}``
+
+    ``src_hash`` 用于校验原文是否变化——变化则视为未命中，避免张冠李戴。
+    任何网络/解析失败都静默降级（返回未命中），绝不阻断报告生成。
+    """
+
+    def __init__(self, url: Optional[str], timeout: float = 15.0):
+        self.url = (url or "").strip()
+        self.timeout = timeout
+        self.data: dict = {}
+        self.loaded = False
+        self.error: Optional[str] = None
+
+    def load(self) -> bool:
+        """拉取远程译文源；已加载过则不再重复请求。失败返回 False。"""
+        if self.loaded:
+            return not self.error
+        self.loaded = True
+        if not self.url:
+            self.error = "未配置译文源地址"
+            return False
+        try:
+            req = urllib.request.Request(
+                self.url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            self.data = payload.get("entries") or {}
+            return True
+        except Exception as e:  # noqa: BLE001  网络问题一律降级
+            self.error = f"{type(e).__name__}: {str(e)[:80]}"
+            return False
+
+    def get(self, item: dict, src: str):
+        """按 URL 取译文，并用标题做轻量校验。
+
+        为什么不用 ``src_hash`` 严格校验：译文源里的 ``src_hash`` 基于**渲染后**
+        （已归一化：去掉「New York Times:」这类前缀、压缩空白）的 summary，
+        而本方法拿到的 ``src`` 是 news.json 的**原始** summary，两者几乎必然不等，
+        严格校验会把大量正确译文判为未命中（实测命中率仅 32%）。
+        URL 本身已是强标识，再辅以标题前缀校验足以防错配。
+        """
+        if not self.load() or not self.data:
+            return None
+        url = (item.get("url") or "").strip()
+        if not url:
+            return None
+        v = self.data.get(url)
+        if not v:
+            return None
+        tk = v.get("title_key")
+        if tk and _title_key(item.get("title")) != tk:
+            return None   # 同一 URL 但标题变了，可能不是同一条报道
+        return v
+
+    @property
+    def size(self) -> int:
+        return len(self.data)
+
+
 class OllamaUnavailable(RuntimeError):
     """显式标记「翻译服务不可用」，供调用方选择是否告警（非致命）。"""
 
@@ -231,7 +308,8 @@ class Translator:
     def __init__(self, enabled: bool = False, model: str = DEFAULT_MODEL,
                  timeout: int = DEFAULT_TIMEOUT, max_workers: int = DEFAULT_WORKERS,
                  retries: int = DEFAULT_RETRIES, num_predict: int = DEFAULT_NUM_PREDICT,
-                 translate_title: bool = True, cache_path: Optional[str] = None):
+                 translate_title: bool = True, cache_path: Optional[str] = None,
+                 remote_url: Optional[str] = None):
         self.enabled = enabled
         self.model = model
         self.timeout = timeout
@@ -240,9 +318,11 @@ class Translator:
         self.num_predict = max(50, int(num_predict))
         self.translate_title = translate_title
         self._cache = _TranslateCache(cache_path) if cache_path else None
+        self._remote = RemoteTranslationSource(remote_url) if remote_url else None
         self._available: Optional[bool] = None   # 懒探测结果缓存
         # 可观测统计
-        self.stats = {"translated": 0, "failed": 0, "cache_hit": 0, "skipped": 0}
+        self.stats = {"translated": 0, "failed": 0, "cache_hit": 0,
+                      "remote_hit": 0, "skipped": 0}
 
     # ── 可用性 ──────────────────────────────────────────────────────
     def available(self) -> bool:
@@ -253,14 +333,19 @@ class Translator:
         return self._available
 
     # ── 单条 ────────────────────────────────────────────────────────
-    def translate(self, text: str, prompt: str = _EDITOR_PROMPT) -> Optional[str]:
-        """翻译单段英文；未启用 / 空串 / 失败均返回 None（按 retries 重试）。"""
+    def translate(self, text: str, prompt: str = _EDITOR_PROMPT,
+                  min_cjk: int = DEFAULT_MIN_CJK) -> Optional[str]:
+        """翻译单段英文；未启用 / 空串 / 失败均返回 None（按 retries 重试）。
+
+        ``min_cjk``：判定「译文是否含足够中文」的汉字阈值。译标题时传
+        ``MIN_CJK_TITLE``（=1），否则「母语」这类仅 2 字的正确译文会被误判为失败。
+        """
         if not self.enabled or not text or not text.strip():
             return None
         for _ in range(self.retries + 1):
             out = _ollama_translate(
                 text, model=self.model, timeout=self.timeout,
-                num_predict=self.num_predict, prompt=prompt)
+                num_predict=self.num_predict, prompt=prompt, min_cjk=min_cjk)
             if out:
                 return out
         return None
@@ -282,7 +367,8 @@ class Translator:
         if cn:
             item["cn_summary"] = cn
             if self.translate_title and (item.get("title") or "").strip():
-                t = self.translate(item["title"], prompt=_TITLE_PROMPT)
+                t = self.translate(item["title"], prompt=_TITLE_PROMPT,
+                                   min_cjk=MIN_CJK_TITLE)
                 if t:
                     item["cn_title"] = t
         return item
@@ -302,32 +388,44 @@ class Translator:
         if not targets:
             return 0
 
-        # 先查本地缓存（不依赖 Ollama）：命中即复用，即使 Ollama 离线也能用历史译文
+        # 先查本地缓存，再查远程译文源——两者都不需要本地 Ollama，
+        # 因此即使 Ollama 离线，历史译文与社区译文仍可复用（无本地模型的用户靠远程源）
         todo = []
         for it in targets:
             src = (it.get("summary") or it.get("title") or "").strip()
             cached = self._cache.get(it, src) if self._cache else None
             if cached:
+                self.stats["cache_hit"] += 1
+            elif self._remote:
+                cached = self._remote.get(it, src)
+                if cached:
+                    self.stats["remote_hit"] += 1
+            if cached:
                 it["cn_summary"] = cached.get("cn_summary", "")
                 if cached.get("cn_title"):
                     it["cn_title"] = cached["cn_title"]
-                self.stats["cache_hit"] += 1
             else:
                 todo.append((it, src))
 
+        reused = self.stats["cache_hit"] + self.stats["remote_hit"]
         if not todo:
-            print(f"  ♻️ 本地缓存命中 {self.stats['cache_hit']}/{len(targets)} 条"
-                  f"（无需调用 Ollama）")
-            return 0
+            print(f"  ♻️ 译文复用 {reused}/{len(targets)} 条"
+                  f"（本地缓存 {self.stats['cache_hit']}"
+                  f" + 远程源 {self.stats['remote_hit']}，无需调用 Ollama）")
+            # 注意：返回复用条数而非 0——调用方据此判断"是否真的补上了中文"
+            return reused
 
-        # 仍有未命中缓存的条目，才需要 Ollama；不可达则保留英文原文
+        # 仍有未命中的条目，才需要 Ollama；不可达则保留英文原文
         if not self.available():
             ok, detail = ollama_health(timeout=3.0, model=self.model)
-            print(f"  ⚠️ 跳过英文中译（{len(todo)} 条未命中缓存且 Ollama 不可用："
-                  f"{detail}）；已命中缓存 {self.stats['cache_hit']} 条仍复用")
+            print(f"  ⚠️ 跳过英文中译（{len(todo)} 条未命中且 Ollama 不可用："
+                  f"{detail}）；已复用译文 {reused} 条"
+                  f"（本地缓存 {self.stats['cache_hit']}"
+                  f" + 远程源 {self.stats['remote_hit']}）")
             return 0
         print(f"  🩺 本地 Ollama 可用，新译 {len(todo)} 条英文报道"
-              f"（缓存命中 {self.stats['cache_hit']} 条）")
+              f"（已复用 {reused} 条：缓存 {self.stats['cache_hit']}"
+              f" + 远程 {self.stats['remote_hit']}）")
 
         def worker(pair):
             it, src = pair
@@ -336,7 +434,8 @@ class Translator:
             if cn and self.translate_title:
                 t = (it.get("title") or "").strip()
                 if t:
-                    cn_title = self.translate(t, prompt=_TITLE_PROMPT)
+                    cn_title = self.translate(t, prompt=_TITLE_PROMPT,
+                                              min_cjk=MIN_CJK_TITLE)
             return cn, cn_title
 
         n_done = 0
@@ -353,14 +452,16 @@ class Translator:
                         if self._cache:
                             self._cache.put(it, futs[fut][1], cn, cn_title)
                         n_done += 1
+                        self.stats["translated"] += 1
                     else:
                         self.stats["failed"] += 1
             if self._cache:
                 self._cache.save()
 
-        done_total = n_done + self.stats["cache_hit"]
-        print(f"  🌐 翻译统计：新译 {n_done} / 缓存命中 {self.stats['cache_hit']} "
-              f"/ 失败 {self.stats['failed']}（共 {len(targets)} 条英文待译）")
+        done_total = n_done + reused
+        print(f"  🌐 翻译统计：新译 {n_done} / 缓存 {self.stats['cache_hit']} "
+              f"/ 远程源 {self.stats['remote_hit']} / 失败 {self.stats['failed']}"
+              f"（共 {len(targets)} 条英文待译）")
         if done_total < len(targets):
             print(f"  ⚠️ 英文中译完成 {done_total}/{len(targets)} 条"
                   f"（其余因超时/失败保留英文原文）")
@@ -368,7 +469,7 @@ class Translator:
 
 
 __all__ = [
-    "Translator", "OllamaUnavailable",
+    "Translator", "OllamaUnavailable", "RemoteTranslationSource",
     "ollama_base_url", "ollama_health", "_ollama_translate",
     "DEFAULT_MODEL", "DEFAULT_TIMEOUT", "DEFAULT_WORKERS", "DEFAULT_RETRIES",
     "DEFAULT_NUM_PREDICT",

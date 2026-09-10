@@ -101,10 +101,7 @@ TEMPLATE_PATH = SKILL_DIR / "assets" / "news_site_template.html"
 # （json.JSONDecodeError / OSError）。
 
 
-# ── P1#1 Phase 2/3：榜单 / 市场 / 看点 / 渲染 已抽到 aiweekly 子包 ──
-# L3 重构：移除 60+ 名称的 re-export 脆耦合，改为显式模块别名访问。
-# 历史上为兼容 `from generate_site import X` 的调用点保留 re-export；经全仓检索已无任何
-# 外部调用，故调用点统一带模块前缀（LB./INS.），可读性与可维护性更好。
+# ── P1#1 / L3：榜单 / 市场 / 看点 / 渲染 已抽到 aiweekly 子包，调用点统一带模块前缀 ──
 import aiweekly.leaderboard as LB
 import aiweekly.insights as INS
 
@@ -258,6 +255,9 @@ def main():
     parser.add_argument("--no-translate-title", dest="translate_title",
                         action="store_false", default=True,
                         help="关闭中文标题翻译（默认开启：卡片标题显示中文+原文小字）")
+    parser.add_argument("--translations-url", default=None,
+                        help="远程译文源 URL（无本地 Ollama 时复用已发布译文；"
+                             "默认 https://<Pages>/translations.json）")
     parser.add_argument("--translate-cache", default=None,
                         help="译文缓存文件路径（默认：与 --api-json 同目录的 .translate_cache.json；"
                              "命中即复用、带原文哈希防脏，避免每周重译）")
@@ -460,6 +460,7 @@ def main():
         translate_retries=args.translate_retries,
         translate_num_predict=args.translate_num_predict,
         translate_title=args.translate_title,
+        translations_url=args.translations_url,
         translate_cache=args.translate_cache or (
             os.path.join(os.path.dirname(os.path.abspath(args.api_json)), ".translate_cache.json")
             if (args.translate_en and args.api_json) else None),

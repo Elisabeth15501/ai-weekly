@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.5
+version: 3.4.6
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -22,7 +22,7 @@ description: >
   支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.5"
+  version: "3.4.6"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -599,6 +599,49 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 3. **不编造**：未注入真实数据时用基准值并在图注标注快照日期，**不伪装成实时**。
 
 **为什么这么设计**：GVR / Crunchbase 这类海外机构数据国内用户无法一手核实（要翻墙、且多为付费墙后），把它们和"信通院白皮书面上的数字"标成同等可靠是误导。路由条的作用就是把"该信哪个、哪个只是对照"明写给用户。
+
+### 8.4 英文报道中文翻译：三级取值 + 译文源（2026-09-10）
+
+英文报道的中文总结（`cn_title` / `cn_summary`）按**三级优先级**取值，前两级都**不需要本地模型**：
+
+| 优先级 | 来源 | 前提 | 说明 |
+|---|---|---|---|
+| 1 | **本地译文缓存** `.translate_cache.json` | 曾在本机翻译过 | 零开销，`src_hash` 校验原文未变 |
+| 2 | **远程译文源** `--translations-url` | 能访问 Pages | **没有本地 Ollama 的用户靠这一级**（见下） |
+| 3 | **本地 Ollama 实时翻译** `qwen2.5:7b` | 本机装了 Ollama 且在运行 | 约 19s/条（CPU 推理），best-effort |
+
+**三级都落空 → 保留英文原文**，并在结束时的「💡 给你的提示」里说明原因（不会静默）。
+
+> ⚠️ **运营方必读**：历史上有期次（8/24、8/31）因为生成那一刻 Ollama 没运行而**整期没有中文**，且事后无法补救——RSS 只保留约 1 周，原始 `news.json` 回抓不到。**生成前请确认 Ollama 在线，或配置 `--translations-url`。**
+
+#### 远程译文源（给没有本地模型的用户）
+
+每周生成周报时顺带把译文汇总发布到 Pages：
+
+```
+https://elisabeth15501.github.io/ai-weekly/translations.json
+```
+
+- 格式：`{"schema":"ai-weekly-translations/v1","count":N,"entries":{<原文URL>:{src_hash,cn_title,cn_summary}}}`
+- 按**原文 URL** 索引，`src_hash` 校验原文是否变化（变了就视为未命中，避免张冠李戴）
+- 拉取失败静默降级，绝不阻断生成
+
+用法：
+
+```bash
+python scripts/generate_site.py --api-json news.json -o AI_News.html \
+  --translations-url https://elisabeth15501.github.io/ai-weekly/translations.json
+```
+
+#### 历史期次回填
+
+已发布的 HTML 若缺译文，可用回填脚本**直接改 HTML 内的 `NEWS_DATA`**（不需要原始 `news.json`）：
+
+```bash
+python scripts/backfill_translations.py --check AI_News_*.html        # 只核查
+python scripts/backfill_translations.py --no-ollama AI_News_*.html    # 只复用缓存，离线可用
+python scripts/backfill_translations.py --emit-source translations.json AI_News_*.html
+```
 
 ## 九、发布与第三方依赖说明（合规）
 
