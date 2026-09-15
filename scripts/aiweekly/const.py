@@ -53,6 +53,18 @@ HTTP_TIMEOUT_SECONDS: int = 30    # 单次 HTTP 请求超时
 HTTP_MAX_RETRIES: int = 3         # 失败重试次数
 HTTP_RETRY_DELAY_SECONDS: float = 1.0  # 重试间隔
 
+# ---------------------------------------------------------------------------
+# 译文源（远程 / 离线）—— P0(v3.4.7)：默认开启，无本地 Ollama 也有中文
+# ---------------------------------------------------------------------------
+# 远程译文源（GitHub Pages 上每周随周报发布的累计译文，175+ 条）。
+# 默认开启：没有本地 Ollama 的用户也能拿到中文，不再「强依赖本地模型」。
+DEFAULT_TRANSLATIONS_URL: str = (
+    "https://elisabeth15501.github.io/ai-weekly/translations.json"
+)
+# 离线译文包（随技能附带，完全断网时改用 --translations-url 指向本文件）。
+# 由发布流程从 gh-pages 同步，路径相对技能根目录。
+OFFLINE_TRANSLATIONS_FILE: str = "translations_offline.json"
+
 __all__ = [
     "NEWS_MAX_ITEMS", "NEWS_MIN_SCORE", "NEWS_DATE_CUTOFF_DAYS", "NEWS_SUMMARY_MAX_CHARS",
     "LEADERBOARD_TOP_N", "LEADERBOARD_MAX_MODELS", "LEADERBOARD_STALE_DAYS",
@@ -61,4 +73,5 @@ __all__ = [
     "SUMMARY_TARGET_CHARS", "MUSTREAD_TOP_N", "SELECTION_NOTES_MAX_LENGTH",
     "DEPLOY_TIMEOUT_SECONDS", "DEPLOY_MAX_RETRIES",
     "HTTP_TIMEOUT_SECONDS", "HTTP_MAX_RETRIES", "HTTP_RETRY_DELAY_SECONDS",
+    "DEFAULT_TRANSLATIONS_URL", "OFFLINE_TRANSLATIONS_FILE",
 ]

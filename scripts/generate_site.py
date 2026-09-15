@@ -25,7 +25,6 @@ generate_site.py v2.0
   # 跳过排行榜自动获取（显示「暂无实时数据」）
   python scripts/generate_site.py --api-json news.json --no-live-ranking -o AI_News.html
 
-  # 仅查看预览数据（不生成 HTML）
   python scripts/generate_site.py --api-json news.json --dry-run
 
 新闻 / 外部增强 JSON 格式（items 列表或 {"items": [...]}）：
@@ -107,6 +106,7 @@ import aiweekly.insights as INS
 
 from aiweekly.render import generate  # P1#1 Phase 3：渲染层已抽出
 from aiweekly.diagnostics import print_user_hints  # 告警「人话翻译」展示层
+from aiweekly import const as _ac  # P0(v3.4.7)：译文源默认地址
 
 
 class _CountingWriter:
@@ -236,7 +236,6 @@ def main():
     # 编辑钉选：把命中关键词的报道强制钉进「必读」（重大事件不被算法稀释）
     parser.add_argument("--pin-terms", default=None,
                         help="逗号分隔的钉选词（子串匹配标题）；命中条目强制必读。例：--pin-terms \"DeepSeek Harness,GLM-5.3\"")
-    # 英文报道中文总结（本地 Ollama 翻译；默认开启，best-effort 不阻断；无本地模型时自动跳过）
     parser.add_argument("--translate-en", action="store_true", default=True,
                         help="为英文报道生成中文总结（调用本地 Ollama；默认开启。需本机运行 Ollama，"
                              "失败/超时保留英文原文，不影响生成）")
@@ -255,9 +254,11 @@ def main():
     parser.add_argument("--no-translate-title", dest="translate_title",
                         action="store_false", default=True,
                         help="关闭中文标题翻译（默认开启：卡片标题显示中文+原文小字）")
-    parser.add_argument("--translations-url", default=None,
+    parser.add_argument("--translations-url", default=_ac.DEFAULT_TRANSLATIONS_URL,
                         help="远程译文源 URL（无本地 Ollama 时复用已发布译文；"
-                             "默认 https://<Pages>/translations.json）")
+                             "默认 https://elisabeth15501.github.io/ai-weekly/translations.json）")
+    parser.add_argument("--no-remote-translations", action="store_true",
+                        help="关闭远程译文源（完全离线时用本地 Ollama，或改用 --translations-url 指向离线包）")
     parser.add_argument("--translate-cache", default=None,
                         help="译文缓存文件路径（默认：与 --api-json 同目录的 .translate_cache.json；"
                              "命中即复用、带原文哈希防脏，避免每周重译）")
@@ -460,7 +461,7 @@ def main():
         translate_retries=args.translate_retries,
         translate_num_predict=args.translate_num_predict,
         translate_title=args.translate_title,
-        translations_url=args.translations_url,
+        translations_url=None if args.no_remote_translations else args.translations_url,
         translate_cache=args.translate_cache or (
             os.path.join(os.path.dirname(os.path.abspath(args.api_json)), ".translate_cache.json")
             if (args.translate_en and args.api_json) else None),

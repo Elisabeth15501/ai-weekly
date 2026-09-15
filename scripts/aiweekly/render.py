@@ -142,6 +142,48 @@ def _js_str(s: str) -> str:
              .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
 
 
+def _build_capability_card(translate_en: bool, audience_summary: bool,
+                            cn_market_data: bool, leaderboard_data: bool,
+                            insights: bool) -> str:
+    """生成「能力自检卡」HTML（服务端预渲染，禁 JS 也可见）。
+
+    E1（v3.4.7）：让用户在报告顶部一眼看到本期启用了哪些能力、哪些没启用以及
+    如何开启——回应评测 completeness 4.7「用户可能遗漏部分高级功能」。
+    """
+    on, off = [], []
+    # 恒定能力
+    on.append("RSS 抓取（14 源）")
+    if translate_en:
+        on.append("英文中译（远程译文源默认开启）")
+    else:
+        off.append(("英文中译", "--translate-en"))
+    if leaderboard_data:
+        on.append("模型排行榜（综合+开源）")
+    else:
+        off.append(("模型排行榜", "--leaderboard-json"))
+    if cn_market_data:
+        on.append("市场双口径（国内+全球）")
+    else:
+        off.append(("国内口径市场数据", "--cn-market-data"))
+    if insights:
+        on.append("本周看点编辑洞察")
+    if audience_summary:
+        on.append("受众分角色摘要")
+    else:
+        off.append(("受众分角色摘要", "--audience-summary"))
+    # 飞书推送是部署后的分发步骤，恒列「未启用」并给开启提示
+    off.append(("飞书推送", "--feishu（部署阶段）"))
+
+    def tag(text, cls):
+        return f'<span class="cap-tag {cls}">{html.escape(text)}</span>'
+
+    on_html = " ".join(tag(t, "cap-on") for t in on)
+    off_html = " ".join(
+        f'{tag(t, "cap-off")} <code>{cmd}</code>' for t, cmd in off)
+    return (f'<div class="cap-row"><b>本期已启用</b>　{on_html}</div>'
+            f'<div class="cap-row"><b>未启用</b>　{off_html}</div>')
+
+
 def _safe_url(u: str) -> str:
     """仅放行 http(s)/mailto 协议的 URL，其余回退 '#'（防 javascript: 等危险协议）。"""
     from urllib.parse import urlparse
@@ -313,6 +355,15 @@ def generate(api_data: dict, output_path: str = None,
     _srcs = [s for s in [market_source, funding_source, cn_market_source, cn_funding_source] if s]
     market_summary = "；".join(_srcs) if _srcs else "数据快照（静态，非实时）"
     template = template.replace("[MARKET_SOURCE_SUMMARY]", market_summary)
+    # E1（v3.4.7）：能力自检卡——服务端预渲染，禁 JS 也可见
+    _cap_html = _build_capability_card(
+        translate_en=translate_en,
+        audience_summary=bool(audience_summary),
+        cn_market_data=bool(cn_market_data),
+        leaderboard_data=bool(leaderboard_data),
+        insights=bool(insights),
+    )
+    template = template.replace("[CAPABILITY_CARD_PLACEHOLDER]", _cap_html)
     if _srcs:
         market_footer = "市场数据来源（国内+国外）：" + "；".join(_srcs)
     else:

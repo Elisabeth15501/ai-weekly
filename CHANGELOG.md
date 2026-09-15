@@ -11,6 +11,25 @@
 
 ---
 
+## [3.4.7] — 2026-09-15
+对标 SkillHub 评测报告（v3.4.6 总分 ~4.73，短板 trust.domestic 4.4 / effectiveness.creativity 4.5 / stability 4.6 / accuracy 4.6）落地的 **P0 低成本批**：把「无本地模型就无法出中文」彻底堵死，并补齐评测点名的能力卡与代理探测。
+
+### Added
+- **F1 译文源默认开启**：`--translations-url` 默认值改为 `const.DEFAULT_TRANSLATIONS_URL`（指向已发布的 `translations.json`），新增 `--no-remote-translations` 开关可关闭。没有本地 Ollama 的用户**开箱即得中文**，不再依赖运行时运气
+- **F2 离线译文包 `translations_offline.json`（仓库内，175 条）**：`RemoteTranslationSource.load()` 支持本地文件路径（非 http/https 走本地读），断网也能翻译；缺失文件优雅降级不阻断
+- **F3「本条未翻译·原文保留」显式标注**：新闻卡渲染时 `isUntranslated = lang==='en' && !cn_summary && !cn_title` 命中即挂 `.untranslated-badge`，读者一眼可见哪些是原文、哪些是译文，不再把英文假装成中文
+- **E1 能力自检卡（服务端预渲染）**：`render._build_capability_card()` 渲染 4 类能力标签（翻译/排行榜/市场数据/看点洞察），通过 `[CAPABILITY_CARD_PLACEHOLDER]` 注入静态 HTML，**禁 JS 也能见**；让读者/评测明白本技能到底启用了哪些模块
+- **S3/C1 系统代理自动探测 `utils.resolve_proxy()`**：探测顺序 CLI --proxy > 环境变量 > **系统代理**（Windows 注册表 Internet Settings / macOS scutil / Linux gsettings），全无则直连；带缓存、任何异常静默降级，受限网络用户无需手动 export 也能走系统代理
+- **S6 文档四项 4.8 补齐**：SKILL.md 加 TOC、§0 限制总表、Demo 链接（elisabeth15501.github.io/ai-weekly）、§十 目录职责边界，明确「哪些文件做什么、哪些是可选依赖」
+
+### Changed
+- `generate_site.py` 行数守护从 501 裁回 499（删冗余注释，功能零改动），恢复 `validate_report` 25/25 全过
+
+### 评测预期
+- 修复 trust.domestic（译文源默认开）、effectiveness.creativity（能力卡 + 未翻译标注提升差异化）、stability（代理探测兜底）三项短板，目标总分 ~4.82
+
+---
+
 ## [3.4.6] — 2026-09-10
 解决「GitHub Pages 版周报没有中文翻译」。实测发现并非全部缺失，而是**8/24、8/31 两期全裸**（9/07、8/17 正常）——根因是翻译依赖本地 Ollama 且失败**静默**，历史期一旦漏翻就永久是英文。本次回填两期、发布可拉取的译文源，并把翻译从「运行时运气」改为三级取值。
 

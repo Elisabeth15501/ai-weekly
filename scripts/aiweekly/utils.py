@@ -7,6 +7,8 @@ import json
 import os
 import random
 import ssl
+import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -24,10 +26,181 @@ _PROXY_OVERRIDE = None  # 由 CLI 通过 --proxy 设置
 _SOCKS_ACTIVE = False  # 由 _configure_proxy() 在启用 SOCKS 时置位
 
 
-def _resolved_proxy() -> str:
-    return _PROXY_OVERRIDE or os.environ.get("HTTPS_PROXY") \
+def resolve_proxy() -> str:
+    """探测可用的出站代理，优先级：CLI --proxy > 环境变量 > 系统代理。
+
+    - CLI --proxy：由 generate_site.py 写入 ``_PROXY_OVERRIDE``；
+    - 环境变量：``HTTPS_PROXY`` / ``https_proxy`` / ``HTTP_PROXY`` / ``http_proxy``；
+    - 系统代理：Windows 注册表 Internet Settings、macOS ``scutil --proxy``、
+      Linux ``gsettings``（无需用户手动 ``export`` 环境变量，受限网络下也能自动走代理）；
+    全无则返回 ``""``（直连）。任何探测异常均静默降级为直连，绝不阻断抓取。
+
+    示例：
+        >>> resolve_proxy()                                   # doctest: +SKIP
+        ''
+    """
+    p = _PROXY_OVERRIDE or os.environ.get("HTTPS_PROXY") \
         or os.environ.get("https_proxy") or os.environ.get("HTTP_PROXY") \
-        or os.environ.get("http_proxy") or ""
+        or os.environ.get("http_proxy")
+    if p:
+        return p
+    return _detect_system_proxy()
+
+
+def _resolved_proxy() -> str:
+    """向后兼容别名：复用 ``resolve_proxy()`` 的完整探测链（generate_site.py 仍引用）。"""
+    return resolve_proxy()
+
+
+# 系统代理探测结果缓存：避免每次 ``_build_opener()`` / ``_probe()`` 重复读注册表/调子进程。
+_SYSTEM_PROXY_CACHE = None
+
+
+def _detect_system_proxy() -> str:
+    """探测操作系统级代理设置（env/CLI 均未指定时的最后兜底）。
+
+    支持 Windows 注册表、macOS ``scutil --proxy``、Linux ``gsettings``。
+    任何异常均静默返回 ``""``（回退直连），探测失败不阻断上层抓取。
+    """
+    global _SYSTEM_PROXY_CACHE
+    if _SYSTEM_PROXY_CACHE is not None:
+        return _SYSTEM_PROXY_CACHE
+    _SYSTEM_PROXY_CACHE = ""
+    try:
+        if os.name == "nt":
+            _SYSTEM_PROXY_CACHE = _win_proxy_from_registry()
+        elif sys.platform == "darwin":
+            _SYSTEM_PROXY_CACHE = _mac_proxy_from_scutil()
+        elif os.name == "posix":
+            _SYSTEM_PROXY_CACHE = _linux_proxy_from_gsettings()
+    except Exception:  # noqa: BLE001 系统代理探测失败应静默降级为直连
+        _SYSTEM_PROXY_CACHE = ""
+    return _SYSTEM_PROXY_CACHE
+
+
+def _norm_proxy_endpoint(endpoint: str) -> str:
+    """给缺 scheme 的代理端点补 ``http://``，确保 urllib ProxyHandler 可用。"""
+    endpoint = (endpoint or "").strip()
+    if not endpoint:
+        return ""
+    if "://" in endpoint:
+        return endpoint
+    return "http://" + endpoint
+
+
+def _norm_proxy_server(server: str) -> str:
+    """把系统代理串（可能含 per-scheme 或多条目）规整为单个代理 URL。
+
+    Windows 注册表 ``ProxyServer`` 常为 ``http=host:port;https=host:port``
+    或裸 ``host:port``。优先取 https，其次 http，最后裸串。
+    """
+    server = (server or "").strip()
+    if not server:
+        return ""
+    parts = [p.strip() for p in server.split(";") if p.strip()]
+    if len(parts) > 1:
+        for p in parts:
+            low = p.lower()
+            if low.startswith("https="):
+                return _norm_proxy_endpoint(p.split("=", 1)[1])
+            if low.startswith("http="):
+                return _norm_proxy_endpoint(p.split("=", 1)[1])
+    return _norm_proxy_endpoint(server)
+
+
+def _win_proxy_from_registry() -> str:
+    """从 Windows 注册表读取 IE/系统代理（Internet Settings）。
+
+    ``ProxyEnable=1`` 且 ``ProxyServer`` 非空时返回规整后的代理 URL；
+    否则返回 ``""``（直连）。``AutoConfigURL``(PAC) 不解析（需取 .pac 内容，
+    复杂度高、价值低，受限网络下 PAC 多已不可用，故忽略）。
+    """
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+        ) as key:
+            try:
+                enabled, _ = winreg.QueryValueEx(key, "ProxyEnable")
+            except OSError:
+                return ""
+            if not enabled:
+                return ""
+            try:
+                server, _ = winreg.QueryValueEx(key, "ProxyServer")
+            except OSError:
+                return ""
+            return _norm_proxy_server(server)
+    except OSError:
+        return ""
+
+
+def _mac_proxy_from_scutil() -> str:
+    """macOS：解析 ``scutil --proxy`` 输出的系统代理配置。
+
+    优先 ``HTTPSProxy:HTTPSPort``，其次 ``HTTPProxy:HTTPPort``；
+    ``*Enable=0`` 或无值返回 ``""``。
+    """
+    try:
+        out = subprocess.run(
+            ["scutil", "--proxy"], capture_output=True, text=True, timeout=10
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    cfg: dict = {}
+    for line in out.splitlines():
+        line = line.strip()
+        if ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        k, v = k.strip(), v.strip()
+        if k in ("HTTPEnable", "HTTPSEnable", "HTTPProxy", "HTTPSProxy",
+                 "HTTPPort", "HTTPSPort"):
+            cfg[k] = v
+    https_on = cfg.get("HTTPSEnable") == "1"
+    http_on = cfg.get("HTTPEnable") == "1"
+    if https_on and cfg.get("HTTPSProxy"):
+        return _norm_proxy_endpoint(
+            f"{cfg['HTTPSProxy']}:{cfg.get('HTTPSPort', '443')}")
+    if http_on and cfg.get("HTTPProxy"):
+        return _norm_proxy_endpoint(
+            f"{cfg['HTTPProxy']}:{cfg.get('HTTPPort', '80')}")
+    return ""
+
+
+def _linux_proxy_from_gsettings() -> str:
+    """Linux(GNOME)：读取 gsettings 系统代理（mode=manual 时有效）。
+
+    优先 https，其次 http；非 manual 模式或无 gsettings 返回 ``""``。
+    """
+    try:
+        mode = subprocess.run(
+            ["gsettings", "get", "org.gnome.system.proxy", "mode"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip().strip("'\"")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if mode != "manual":
+        return ""
+    for grp in ("org.gnome.system.proxy.https", "org.gnome.system.proxy.http"):
+        try:
+            host = subprocess.run(
+                ["gsettings", "get", grp, "host"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip().strip("'\"")
+            port = subprocess.run(
+                ["gsettings", "get", grp, "port"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip().strip("'\"")
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if host:
+            return _norm_proxy_endpoint(f"{host}:{port or '8080'}")
+    return ""
 
 
 def _configure_proxy():
@@ -253,7 +426,7 @@ def save_json(path, obj, indent: int = 2) -> None:
 
 __all__ = [
     "_UA", "_PROXY_OVERRIDE", "_SOCKS_ACTIVE",
-    "_resolved_proxy", "_configure_proxy", "_build_opener",
+    "resolve_proxy", "_resolved_proxy", "_configure_proxy", "_build_opener",
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_iso_datetime", "_parse_date_arg", "_parse_snapshot_date",
     "load_json", "save_json",

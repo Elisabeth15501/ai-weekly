@@ -98,6 +98,28 @@ a:hover { text-decoration: underline; }
 }
 .header-title { font-size: 18px; font-weight: 700; white-space: nowrap; }
 .header-date { font-size: 13px; color: var(--text-secondary); }
+
+/* 能力自检卡（E1）：服务端预渲染，禁 JS 也可见 */
+.cap-card {
+  max-width: 1200px; margin: 14px auto 0; padding: 12px 18px;
+  background: var(--chart-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 13px; line-height: 1.7;
+  transition: background var(--transition), border var(--transition);
+}
+.cap-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.cap-row + .cap-row { margin-top: 4px; }
+.cap-row b { color: var(--text-secondary); margin-right: 2px; }
+.cap-tag {
+  display: inline-block; font-size: 12px; font-weight: 600; border-radius: 4px;
+  padding: 1px 8px; margin: 2px 0;
+}
+.cap-on { color: #15803d; background: rgba(22,163,74,0.12); }
+.cap-off { color: #b45309; background: rgba(245,158,11,0.14); }
+.cap-card code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; background: rgba(127,127,127,0.16);
+  padding: 1px 5px; border-radius: 3px;
+}
 .header-right { display: flex; align-items: center; gap: 12px; }
 
 /* Dark mode toggle */
@@ -318,6 +340,15 @@ a:hover { text-decoration: underline; }
 .lang-badge {
   font-size: 10px; font-weight: 700; color: #2563eb;
   background: rgba(37,99,235,0.12); border-radius: 3px; padding: 1px 5px;
+}
+/* 未翻译标注（F3）：英文报道未命中任何译文源时显式提示，而非静默留英文 */
+.untranslated-badge {
+  display: inline-block; font-size: 10px; font-weight: 700; color: #b45309;
+  background: rgba(245,158,11,0.16); border-radius: 3px; padding: 1px 5px;
+  margin-right: 4px; vertical-align: middle;
+}
+.untranslated-badge.thumb {
+  color: #fff; background: #d97706; margin-left: 4px;
 }
 .card-meta {
   display: flex; align-items: center; justify-content: space-between;
@@ -755,6 +786,9 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     </div>
   </div>
 </header>
+
+<!-- ========== CAPABILITY CARD (能力自检，服务端预渲染，禁 JS 也可见) ========== -->
+<div class="cap-card" id="capCard">[CAPABILITY_CARD_PLACEHOLDER]</div>
 
 <!-- ========== SEARCH ========== -->
 <div class="search-section">
@@ -1291,13 +1325,16 @@ function renderCards(items) {
     const timeAgo = formatTimeAgo(n.publishedAt);
     const isEnCn = (n.lang === 'en' && n.cn_summary);
     const isEnTitle = (n.lang === 'en' && n.cn_title);
+    const isUnTranslated = (n.lang === 'en' && !n.cn_summary);
     const titleHtml = isEnTitle
       ? `<span class="cn-title">${escapeHtml(n.cn_title)}</span>`
         + `<span class="en-title-sub" style="display:block;font-size:11px;color:#94a3b8;margin-top:3px;font-weight:400;">${escapeHtml(n.title)}</span>`
       : escapeHtml(n.title);
     const summaryHtml = isEnCn
       ? `<span class="cn-badge">中文</span> ${escapeHtml(n.cn_summary)}`
-      : escapeHtml(n.summary);
+      : (isUnTranslated
+          ? `<span class="untranslated-badge">未翻译·原文保留</span> ${escapeHtml(n.summary)}`
+          : escapeHtml(n.summary));
     const enOrigHtml = isEnCn
       ? `<div class="card-summary-en">原文：${escapeHtml(n.summary)}</div>` : "";
     return `
@@ -1306,6 +1343,7 @@ function renderCards(items) {
         <span>${getCategoryIcon(n.category)}</span>
         <span class="cat-label">${getCategoryLabel(n.category)}</span>
         ${n.lang === 'en' ? '<span class="lang-badge">EN</span>' : ''}
+        ${isUnTranslated ? '<span class="untranslated-badge thumb">未翻译</span>' : ''}
         ${n.mustRead ? '<span class="mustread-badge">🔥必读</span>' : ''}
       </div>
       <div class="card-body">

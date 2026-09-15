@@ -239,7 +239,13 @@ class RemoteTranslationSource:
         self.error: Optional[str] = None
 
     def load(self) -> bool:
-        """拉取远程译文源；已加载过则不再重复请求。失败返回 False。"""
+        """拉取远程译文源；已加载过则不再重复请求。失败返回 False。
+
+        支持两种地址：
+        - ``http(s)://...`` 远程 URL（默认，GitHub Pages 上的 ``translations.json``）；
+        - 本地文件路径（完全离线场景）：``--translations-url translations_offline.json``
+          指向随技能附带的离线译文包，断网也能拿到中文。
+        """
         if self.loaded:
             return not self.error
         self.loaded = True
@@ -247,13 +253,21 @@ class RemoteTranslationSource:
             self.error = "未配置译文源地址"
             return False
         try:
-            req = urllib.request.Request(
-                self.url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
+            if re.match(r"^https?://", self.url):
+                req = urllib.request.Request(
+                    self.url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+            else:
+                # 本地文件（离线包）：相对路径相对于当前工作目录解析
+                if not os.path.isfile(self.url):
+                    self.error = f"本地译文源文件不存在: {self.url}"
+                    return False
+                with open(self.url, "r", encoding="utf-8") as fh:
+                    payload = json.loads(fh.read())
             self.data = payload.get("entries") or {}
             return True
-        except Exception as e:  # noqa: BLE001  网络问题一律降级
+        except Exception as e:  # noqa: BLE001  网络/文件问题一律降级
             self.error = f"{type(e).__name__}: {str(e)[:80]}"
             return False
 

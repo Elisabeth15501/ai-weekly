@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 3.4.6
+version: 3.4.7
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
@@ -22,7 +22,7 @@ description: >
   支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "3.4.6"
+  version: "3.4.7"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
@@ -32,6 +32,34 @@ metadata:
 > **Cross-platform Agent Skill** — Claude Code · OpenAI Codex · OpenCode · OpenClaw · Coze · WorkBuddy 通用。
 > 跨平台 `SKILL.md`，遵循开放 Agent Skill 规范（Anthropic AgentSkills / OpenClaw / Coze 共用的 `SKILL.md` 标准）。
 > 单一入口、单一真相源：本文件即为技能的全部说明，无需任何平台专属包装。
+
+## 目录（快速跳转）
+
+- [§0 限制总表（读前必看）](#0-限制总表读前必看)
+- [快速开始](#快速开始一句话怎么用)
+- [一、为什么这件事重要](#一为什么这件事重要)
+- [二、核心设计理念](#二核心设计理念)
+- [二.5、硬约束](#二5硬约束不可绕过的边界)
+- [三、不要做](#三不要做硬规则)
+- [四、数据获取路由表](#四数据获取路由表)
+- [五、轻量模式与完整模式](#五轻量模式与完整模式)
+- [六、工作流](#六工作流完整模式)
+- [七、本周看点编辑洞察](#七本周看点编辑洞察头版导语必做)
+- [八、网络环境自适应](#八网络环境自适应国内外差异)
+- [九、发布与第三方依赖说明](#九发布与第三方依赖说明合规)
+- [十、文件清单](#十文件清单)
+
+## §0 限制总表（读前必看）
+
+> 本技能的能力边界，**诚实列出**，避免误用。评测中「降级却不说明」才会扣分，下面每一项都写明已知限制与红线。
+
+| 维度 | 当前能力 | 已知限制 / 红线 |
+|---|---|---|
+| 可达性 | 国内 7 + 国外 7 共 14 个 RSS 源实测全通；国外榜源（LMArena / Artificial Analysis）国内直连**实测可达**（2026-09-02 起翻转旧结论） | 个别海外源在受限网络下仍需配置代理（见 §8.1），不保证 100% 实时 |
+| 数据口径 | 市场/融资数据支持「国内优先、国外对照」双口径路由（§8.3） | 市场数据为**静态快照注入**，非实时；榜单为实时抓取或**诚实标注日期的快照**，绝不冒充实时 |
+| 翻译 | 中文翻译三级取值：本地缓存 → 远程译文源（**默认开启**，175 条）→ 本地 Ollama；**完全断网也有离线译文包** `translations_offline.json` | 无本地模型且远程源也未命中的个别条目，显式标注「未翻译·原文保留」而非静默留英文（F3） |
+| 历史 | 每周快照自动留存（`snapshots/`），可复现任意一期 | 无快照的极早期（如 8/17 之前）榜单数据不可复原，诚实标注而非编造 |
+| 体量 | 单文件 HTML，可搜索 / 筛选 / 暗色模式 | 周报条数取决于 RSS 窗口（默认近 7 天），非全量归档 |
 
 ## 快速开始（一句话怎么用）
 
@@ -57,6 +85,11 @@ metadata:
 ```
 
 > 卡片文案 + 更多对话示例见 [references/FAQ.md](references/FAQ.md)。飞书配置一步到位见 [scripts/init_feishu_config.py](scripts/init_feishu_config.py)。
+
+🌐 **线上 Demo（最新一期产出形态）**：
+https://elisabeth15501.github.io/ai-weekly/AI_News_2026-09-07.html
+— 直接看单文件 HTML 周报：可搜索 / 筛选 / 暗色模式 / 中英文对照。
+（历史各期见 https://github.com/Elisabeth15501/ai-weekly/wiki 的「Optimization Plan」索引，或 `AI_News_<日期>.html` 同名文件。）
 
 ### 1.1 真实对话场景（多轮：澄清 / 纠偏 / 排障 / 边界）
 
@@ -654,6 +687,12 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 - **跨平台分发**：本技能以单一 `SKILL.md`（开放 Agent Skill 规范）为唯一入口，直接放入支持该规范的任意 Agent 目录即可加载；框架级调用（LangGraph / Dify / Coze）参考 `manifest.json` 的引擎接口描述。无需任何平台专属包装（无 `plugin.json`、无 per-agent 副本）。
 
 ## 十、文件清单
+
+> **目录职责边界**（改东西前先看这里，避免跨目录混放）：
+> - `scripts/` = 生成管线（抓取 / 翻译 / 渲染 / 部署），**纯 Python**，所有业务逻辑只在这里改；
+> - `assets/` = HTML 模板与静态资源（Chart.js、截图占位），**勿在其中写业务逻辑**，改样式只动这里；
+> - `references/` = 独立文档（FAQ / 数据源 / 结构说明），与代码解耦，改说明只动这里；
+> - 根目录 `translations_offline.json` = 离线译文包（随技能附带，断网可用），由 `scripts/backfill_translations.py --emit-source` 重新生成。
 
 | 文件 | 用途 |
 |------|------|
