@@ -494,30 +494,36 @@ def generate(api_data: dict, output_path: str = None,
 
 
 def _build_data_status_bar(lb: dict) -> str:
-    """服务端预渲染数据状态条（A4）：N 源实时 / M 源快照(日期)，禁 JS 也可见。"""
+    """服务端预渲染数据状态条（A4，v3.5.1 审计修正）：
+
+    - #1 live 源同样披露抓取日期（原实现丢弃 s["snapshot"]，削弱「数据可信」立项目标）；
+    - #2 cache 缺快照日期明确标「未知日期」，不静默隐藏；
+    - #3 仅在此处转义一次（原实现 name 已 escape 又二次 escape）。
+    """
     comp = (lb or {}).get("comprehensive") or {}
     os_ = (lb or {}).get("open_source") or {}
     slots = [comp.get("lmarena"), comp.get("aa"), os_.get("ls"), os_.get("hf")]
-    live, snap = [], []
+    rows = []  # (name, kind, date)
     for s in slots:
         if not s or not s.get("rows"):
             continue
-        name = html.escape(s.get("display_name") or s.get("source") or "未知榜")
-        if s.get("is_cache"):
-            d = str(s.get("snapshot") or "")[:10]
-            snap.append(f"{name}@{d}" if d else name)
-        else:
-            live.append(name)
-    live_n, snap_n = len(live), len(snap)
-    if live_n == 0 and snap_n == 0:
+        raw_name = s.get("display_name") or s.get("source") or "未知榜"
+        d = str(s.get("snapshot") or "")[:10]
+        kind = "快照" if s.get("is_cache") else "实时"
+        # #2: 缺日期明确标未知，不藏
+        rows.append((raw_name, kind, d or "未知日期"))
+    if not rows:
         return ('<div class="data-status-bar ds-none">'
-                '\U0001f4e1 <b>数据状态</b>：本期无排行榜数据（源不可达且本地无快照）</div>')
-    detail = ""
-    if snap:
-        items = "".join(f"<li>{html.escape(x)}</li>" for x in snap)
-        detail = (f'<details class="ds-detail"><summary>快照明细（{snap_n}）</summary>'
-                  f'<ul>{items}</ul></details>')
-    parts = [f'\U0001f4e1 <b>数据状态</b>：{live_n} 源实时']
-    if snap_n:
-        parts.append(f'{snap_n} 源快照')
-    return '<div class="data-status-bar">' + " · ".join(parts) + detail + '</div>'
+                '📡 <b>数据状态</b>：本期无排行榜数据（源不可达且本地无快照）</div>')
+    live_n = sum(1 for _, k, _ in rows if k == "实时")
+    snap_n = sum(1 for _, k, _ in rows if k == "快照")
+    # #3: 仅在此处转义一次（name 用原始值，日期纯 ASCII 亦统一转义）
+    items = "".join(
+        f"<li>{html.escape(n)} · {html.escape(k)} · 抓于 {html.escape(dt)}</li>"
+        for n, k, dt in rows
+    )
+    detail = (f'<details class="ds-detail"><summary>数据源明细（{live_n} 实时 / {snap_n} 快照）</summary>'
+              f'<ul>{items}</ul></details>')
+    return ('<div class="data-status-bar">'
+            f'📡 <b>数据状态</b>：{live_n} 源实时 · {snap_n} 源快照'
+            + detail + '</div>')
