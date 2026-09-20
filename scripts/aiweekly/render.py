@@ -364,6 +364,8 @@ def generate(api_data: dict, output_path: str = None,
         insights=bool(insights),
     )
     template = template.replace("[CAPABILITY_CARD_PLACEHOLDER]", _cap_html)
+    template = template.replace("[DATA_STATUS_BAR]",
+                                _build_data_status_bar(final_leaderboard))
     if _srcs:
         market_footer = "市场数据来源（国内+国外）：" + "；".join(_srcs)
     else:
@@ -489,3 +491,33 @@ def generate(api_data: dict, output_path: str = None,
         Path(output_path).write_text(template, encoding="utf-8")
 
     return template
+
+
+def _build_data_status_bar(lb: dict) -> str:
+    """服务端预渲染数据状态条（A4）：N 源实时 / M 源快照(日期)，禁 JS 也可见。"""
+    comp = (lb or {}).get("comprehensive") or {}
+    os_ = (lb or {}).get("open_source") or {}
+    slots = [comp.get("lmarena"), comp.get("aa"), os_.get("ls"), os_.get("hf")]
+    live, snap = [], []
+    for s in slots:
+        if not s or not s.get("rows"):
+            continue
+        name = html.escape(s.get("display_name") or s.get("source") or "未知榜")
+        if s.get("is_cache"):
+            d = str(s.get("snapshot") or "")[:10]
+            snap.append(f"{name}@{d}" if d else name)
+        else:
+            live.append(name)
+    live_n, snap_n = len(live), len(snap)
+    if live_n == 0 and snap_n == 0:
+        return ('<div class="data-status-bar ds-none">'
+                '\U0001f4e1 <b>数据状态</b>：本期无排行榜数据（源不可达且本地无快照）</div>')
+    detail = ""
+    if snap:
+        items = "".join(f"<li>{html.escape(x)}</li>" for x in snap)
+        detail = (f'<details class="ds-detail"><summary>快照明细（{snap_n}）</summary>'
+                  f'<ul>{items}</ul></details>')
+    parts = [f'\U0001f4e1 <b>数据状态</b>：{live_n} 源实时']
+    if snap_n:
+        parts.append(f'{snap_n} 源快照')
+    return '<div class="data-status-bar">' + " · ".join(parts) + detail + '</div>'
