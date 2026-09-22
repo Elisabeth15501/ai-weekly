@@ -15,7 +15,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-# Chrome UA：绕过部分站点的反爬默认 UA 限制
+# 使用常规浏览器 UA：部分站点对自报爬虫身份的 UA 会返回 429，改用常规 UA 以正常获取公开 RSS。
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 

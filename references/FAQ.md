@@ -98,7 +98,7 @@ python scripts/init_feishu_config.py
 ### Q7：排行榜显示的是旧的 / 几周前的？
 实时榜依赖运行环境的网络：
 - 国内环境优先国内源（OpenCompass 司南 / SuperCLUE / ModelScope），但部分是 SPA，抓不到就回退随技能附带的 `cn_leaderboard_snapshot.json`（标注截止日，徽章显示「缓存快照」）。
-- 国外源（LMArena / Artificial Analysis / Hugging Face）国内直连不稳时，会自动尝试 hf-mirror.com 等国内镜像；镜像也失败再回退本地快照。
+- 国外源（LMArena / Artificial Analysis / Hugging Face）直连不稳时，会自动尝试国内可访问的公开镜像；镜像也失败再回退本地快照。
 - 所有源都失败 → 显示「暂无实时数据」，绝不编造模型名。
 
 可用 `bash run_report.sh scripts/leaderboard_diagnose.py` 看每个源的可达性和镜像回退命中。
@@ -162,17 +162,13 @@ GitHub Pages：仓库 Settings → Pages → Custom domain 填你的域名，去
 ## 七、网络问题
 
 ### Q17：国外源（LMArena / HuggingFace / Artificial Analysis）连不上？
-- 技能已内置**国内镜像回退**：主源失败自动试 hf-mirror.com 等镜像（见 Q7）。
-- 受限网络（企业内网）可显式开代理：
-  ```bash
-  HTTPS_PROXY=http://<host>:<port> bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
-  # 或
-  bash run_report.sh scripts/generate_site.py --api-json news.json --proxy http://<host>:<port> -o AI_News.html
-  ```
-- 代理不可达时优雅降级到快照，不会崩。
+这是**预期内的降级路径**，不是故障：
+- 技能已内置**国内可访问镜像回退**：主源失败自动试公开镜像（见 Q7）。
+- 镜像也失败时回退到随技能附带的离线快照，报告标注「缓存快照」，**绝不编造**。
+- 无需你做任何额外配置。
 
-### Q18：`--proxy` 怎么用？国内一定要开吗？
-不用强制开。只有海外源在受限网络超时、且镜像也失败时才有必要。开了能提升可达性，不开也能跑（走国内源 + 快照）。
+### Q18：`--proxy` 是做什么的？
+`--proxy` / `HTTPS_PROXY` 是**标准的 HTTP 出站代理参数**，用于「企业内网要求所有出站流量经统一代理」这类网络架构。它是一项通用的网络配置能力，**不是**为了访问特定站点而设；本技能不提供、也不支持任何规避网络管理措施的做法。公网直连环境无需配置。
 
 ### Q19：排行榜源到底怎么选的？
 优先级：`--ranking-json` 指定快照 > 多源池实时（按 `--region` 排序，国内优先国内源）> 国内快照 / 本地缓存 > 「暂无实时数据」。用 `leaderboard_diagnose.py` 可看实际探测结果。

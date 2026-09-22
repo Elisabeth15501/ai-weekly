@@ -54,7 +54,7 @@ bash run_report.sh deploy --html AI_News.html
 > **完整分发一步到位**：`publish.py` 在推送飞书卡片的同时可顺带部署周报——
 > `bash run_report.sh scripts/publish.py --news-json news.json --insights-json insights.json --html AI_News.html --deploy`。
 
-> **统一启动器 `run_report.sh`**：自动探测已安装依赖的 Python（优先复用 `aiweekly` 受管 venv，回退 `python3`/`python`），无需手动激活环境。支持 `--proxy` 代理、`--region` 区域探测、`--translate-en` 本地翻译、`--health-check` 健康检查等全部 CLI 参数透传。
+> **统一启动器 `run_report.sh`**：自动探测已安装依赖的 Python（优先复用 `aiweekly` 受管 venv，回退 `python3`/`python`），无需手动激活环境。支持 `--proxy` 出站代理（企业内网）、`--region` 区域探测、`--translate-en` 本地翻译、`--health-check` 健康检查等全部 CLI 参数透传。
 
 ---
 
@@ -87,7 +87,7 @@ ai-weekly/
 │       ├── market.py             # 市场 / 融资图表数据（全球 + 中国双源）
 │       ├── render.py             # HTML 渲染 + XSS 安全序列化
 │       ├── translate.py          # 英文报道中文总结（本地 Ollama）
-│       ├── utils.py              # HTTP 重试退避 / 代理 / 区域探测 / ISO8601 日期
+│       ├── utils.py              # HTTP 重试退避 / 出站代理 / 区域探测 / ISO8601 日期
 │       ├── model_meta.py         # 模型元数据查找（成本 / 上下文 / 许可证）
 │       └── types.py              # TypedDict 类型定义
 ├── delivery/                    # 飞书推送（周报分发，P0）
@@ -164,7 +164,7 @@ bash run_report.sh deploy --html AI_News.html
 ### 已知限制
 - **中文翻译**：若需公开站点也带中文总结，请在**本地**生成时加 `--translate-en`（依赖本机 Ollama），再 `run_report.sh deploy` 推上去。
 - **数据新鲜度**：周报新闻窗口为「最近 7 天滚动」（RSS 仅保留约 1 周），要保留某周需在该周仍处保留期内至少部署一次。
-- **硬约束**：单次抓取 ≤100 条新闻、每榜排行榜 ≤50 条模型、HTML ≤5 MB（超限自动压缩）、趋势线需 ≥2 周数据。详见 [SKILL.md 第二节.5](SKILL.md#二5硬约束不可绕过的边界)。
+- **硬约束**：单次抓取 ≤100 条新闻、每榜排行榜 ≤50 条模型、HTML ≤5 MB（超限自动压缩）、趋势线需 ≥2 周数据。详见 [SKILL.md 第二节.5](SKILL.md#二5硬约束必须遵守的边界)。
 
 ### 排错：gh-pages 部署 / 推送常见坑
 
@@ -211,7 +211,7 @@ bash run_report.sh deploy --html AI_News.html
 | **框架增强** | 英文报道中文总结 | `generate_site.py --translate-en` | 本机 Ollama（`AIWEEKLY_OLLAMA_URL` + 模型） |
 | **框架增强** | 摘要提取 / 通知文本 | `deploy_report.py` | 无（纯文本拼装，推送由调用方实现） |
 | **框架增强** | 飞书头条卡片推送 | `publish.py` + `delivery/feishu_bot.py`（webhook）/ `delivery/feishu_connector.py`（连接器） | 飞书 webhook URL 或已连接的飞书连接器（lark-cli） |
-| **框架增强** | 代理支持 + 区域探测 | `generate_site.py --proxy / --region` | PySocks（SOCKS 代理时可选） |
+| **框架增强** | 出站代理（企业内网）+ 区域探测 | `generate_site.py --proxy / --region` | PySocks（SOCKS 代理时可选） |
 | **框架增强** | 健康检查 | `generate_site.py --health-check` | 无（聚合所有源可达性 + 退出码） |
 
 > **要点**：核心链路 `fetch_ai_news.py → generate_site.py → validate_report.py` **不依赖任何 Agent SDK**，任何框架直接调用即可。`--translate-en` / `--proxy` / `--health-check` 等增强参数跳过也不影响核心产出。

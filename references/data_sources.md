@@ -151,7 +151,7 @@ NEWSAPI_KEY=
 # Crunchbase API（可选）
 CRUNCHBASE_KEY=
 
-# 代理配置（受限网络下可选，用于提升海外源可达性）
+# 出站代理（仅企业内网等需要统一出网代理的场景）
 HTTP_PROXY=
 HTTPS_PROXY=
 ```
@@ -163,7 +163,7 @@ HTTPS_PROXY=
 1. 环境变量 `HTTPS_PROXY` / `HTTP_PROXY`
 2. `.env` 文件中的 `HTTP_PROXY` / `HTTPS_PROXY` 行
 
-国内环境访问英文 RSS 源（TechCrunch、VentureBeat 等）时建议配置代理。
+仅在「企业内网要求经统一代理出网」这类网络架构下才需要填写。公网直连环境留空即可，技能会自行按国内源优先策略工作。
 
 ### RSS 健康检查
 

@@ -1,6 +1,6 @@
 {
   "name": "ai-weekly",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "displayName": "AI Weekly Report",
   "description": "生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）",
   "entry": "scripts/generate_site.py",
@@ -75,7 +75,7 @@
     "单文件 HTML（CSS/JS/Chart.js 内联，零外部依赖）",
     "RSS 自治抓取（14 精选源，国内 7+ 国外 7）",
     "多源排行榜（LMArena/AA/HF/OpenCompass/SuperCLUE/ModelScope）+ 快照兜底",
-    "国内镜像自动回退（hf-mirror 等）",
+    "国内可访问镜像自动回退（主源不可达时）",
     "多后端部署（GitHub Pages / 腾讯云 COS / Vercel / Netlify / Cloudflare / 本地）",
     "飞书 Webhook + 连接器双模式推送",
     "模型资料卡（26+ 模型，联网核实来源）",

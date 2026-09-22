@@ -5,7 +5,7 @@
 「查看完整周报」按钮能直接打开。支持多种后端，用户无需再折腾 GitHub Pages：
 
   github-pages      (默认) 沿用 deploy_ghpages.py，零破坏
-  tencent-cos       腾讯云 COS 静态网站（国内首选，直连快、无需翻墙）
+  tencent-cos       腾讯云 COS 静态网站（国内首选，直连快、无需境外托管）
   vercel            Vercel（一条命令 `vercel --prod`，国内访问稳定）
   netlify           Netlify（netlify-cli）
   cloudflare-pages  Cloudflare Pages（wrangler）
