@@ -11,6 +11,27 @@
 
 ---
 
+## [3.6.0] — 2026-09-22
+市场图表新增「服务端 SVG 轨」：不再依赖浏览器 JS / Canvas，任何查看环境都能看见。
+
+### Added
+- **市场图双轨渲染（新模块 `aiweekly/charts_svg.py`）**：6 张市场图（全球/中国规模与融资、赛道结构、头部集中度）现由**服务端**直接画成内联 SVG 写进静态 HTML，**不执行任何 JS 也能看见**。现代浏览器下 Chart.js 逐张接管为可交互版；一旦环境拦掉脚本或 Canvas 2D，则保持 SVG 不动——既不留空白图表框，也不阻断页面其余部分
+- 每根柱/每个数据点内含 `<title>`，无 JS 也能悬停看数值；SVG 带 `role="img"` + `aria-label`，并沿用 `currentColor` 自动适配亮/暗主题
+- `validate_checks/market.py`：M3 新增「6 张服务端 SVG 兜底必须就位」校验，防回归
+
+### Fixed
+- **「市场图表不显示」根因**：原 6 张图完全依赖 Chart.js。当查看环境（预览面板 / 内置 WebView / 隐私插件屏蔽 canvas）不执行 JS、或 `getContext('2d')` 返回 null 时，`initCharts()` 只剩「发现 Chart 不存在 → return」，页面上留下 6 个空白 canvas 框。现由服务端 SVG 轨兜住
+- `initCharts()` 增加 Canvas 2D 可用性探测 + 整体 try/catch，建图失败自动回退 SVG
+- `updateChartColors()` 不再无条件假设 `chart.options.scales.x/y` 存在（服务端 SVG 轨下这些变量全为 undefined）
+
+### Changed（内部重构）
+- `market.py` 新增 `resolve_chart_data()`：Chart.js 轨与服务端 SVG 轨共用同一份默认值与序列，消除两轨各写一份默认值的漂移风险
+- 文件体量仍在 P0#4 上限内：`charts_svg.py` 337 行（新）、`market.py` 709 行、`render.py` 546 行
+
+### Gate
+- `validate_report` 全量 **25/25 通过**
+- 三环境验收（正常 JS / JS 关闭 / Canvas 2D 被屏蔽）实测 **6/6 张图均可见**
+
 ## [3.5.3] — 2026-09-22
 三处渲染修复：能力卡归位、市场图表高度塌缩、开源榜 undefined。
 

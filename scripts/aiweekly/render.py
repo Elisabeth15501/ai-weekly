@@ -27,7 +27,10 @@ from aiweekly.market import (
     DEFAULT_CN_MARKET_SOURCE, DEFAULT_CN_FUNDING_SOURCE,
     _extract_market_signals, _compute_weekly_stats, _lb_name_map,
     _render_market_signals_html_with_theme, _render_trend_insights_html,
+    resolve_chart_data,
 )
+# 服务端 SVG 图表轨：与 Chart.js 轨同源数据，保证 JS / Canvas 被拦时市场图仍可见
+from aiweekly.charts_svg import build_svg_charts
 from aiweekly.insights import (
     _DEFAULT_AUDIENCE_SUMMARY, _auto_insights, _auto_lead, _auto_keywords,
     _normalize_keywords, _is_daily_digest,
@@ -315,9 +318,15 @@ def generate(api_data: dict, output_path: str = None,
     # 方向 B：把动态生成的排行榜说明文字并入 meta，供模板表头/注释按真实数据渲染
     final_leaderboard["meta"].update(_build_leaderboard_notes(final_leaderboard))
 
-    # 图表代码
+    # 图表代码（Chart.js 轨：环境允许时把服务端 SVG 接管为可交互版本）
     chart_code = build_charts(market_data, market_labels, funding_data, funding_labels,
                              cn_market_data, cn_market_labels, cn_funding_data, cn_funding_labels)
+
+    # 服务端 SVG 轨：同一份数据在服务端画好写进静态 HTML，
+    # 保证「JS / Canvas 被查看环境拦掉」时 6 张市场图依然可见（默认显示的就是它）。
+    svg_charts = build_svg_charts(resolve_chart_data(
+        market_data, market_labels, funding_data, funding_labels,
+        cn_market_data, cn_market_labels, cn_funding_data, cn_funding_labels))
 
     # M0：市场数据来源默认用真实署名（国内源优先），不再回退到「示例/估算」自损式免责
     market_source = market_source or DEFAULT_MARKET_SOURCE
@@ -342,6 +351,9 @@ def generate(api_data: dict, output_path: str = None,
     template = template.replace("[LEADERBOARD_DATA_PLACEHOLDER]",
                                 _json_script_safe(final_leaderboard))
     template = template.replace("[CHART_DATA_PLACEHOLDER]", chart_code)
+    # 6 张市场图的服务端 SVG（占位名与 canvas id 一一对应）
+    for _cid, _svg in svg_charts.items():
+        template = template.replace(f"[CHART_SVG_{_cid}]", _svg)
 
     if not date_range:
         today = (_parse_date_arg(report_date) if report_date

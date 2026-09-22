@@ -95,6 +95,33 @@ def build_market_routing_note(region: str = "auto") -> str:
     return f'<div class="market-routing"><b>{lead}</b> — {body}</div>'
 
 
+def resolve_chart_data(market_data=None, market_labels=None,
+                       funding_data=None, funding_labels=None,
+                       cn_market_data=None, cn_market_labels=None,
+                       cn_funding_data=None, cn_funding_labels=None,
+                       cn_structure_data=None, cn_structure_labels=None,
+                       cn_concentration_data=None, cn_concentration_labels=None) -> dict:
+    """把 6 张市场图的序列与标签统一解析（None 回退到标注清晰的默认/估算值）。
+
+    单一事实源：Chart.js 轨（`build_charts`）与服务端 SVG 轨（`charts_svg.build_svg_charts`）
+    都从这里取数，避免两轨默认值各写一份、日后漂移不一致。
+    """
+    return {
+        "market": {"labels": market_labels or DEFAULT_MARKET_LABELS,
+                   "values": market_data or DEFAULT_MARKET_DATA},
+        "funding": {"labels": funding_labels or DEFAULT_FUNDING_LABELS,
+                    "values": funding_data or DEFAULT_FUNDING_DATA},
+        "cn_market": {"labels": cn_market_labels or DEFAULT_CN_MARKET_LABELS,
+                      "values": cn_market_data or DEFAULT_CN_MARKET_DATA},
+        "cn_funding": {"labels": cn_funding_labels or DEFAULT_CN_FUNDING_LABELS,
+                       "values": cn_funding_data or DEFAULT_CN_FUNDING_DATA},
+        "cn_structure": {"labels": cn_structure_labels or DEFAULT_CN_STRUCTURE_LABELS,
+                         "values": cn_structure_data or DEFAULT_CN_STRUCTURE_DATA},
+        "cn_concentration": {"labels": cn_concentration_labels or DEFAULT_CN_CONCENTRATION_LABELS,
+                             "values": cn_concentration_data or DEFAULT_CN_CONCENTRATION_DATA},
+    }
+
+
 def build_charts(market_data=None, market_labels=None,
                  funding_data=None, funding_labels=None,
                  cn_market_data=None, cn_market_labels=None,
@@ -104,18 +131,17 @@ def build_charts(market_data=None, market_labels=None,
     """生成 Chart.js 初始化代码。未提供真实数据时回退到标注清晰的估算值。
     支持全球(Global)与中国(CN)双来源：每类含市场规模与融资趋势，各自独立来源。
     M2：中国融资补 2026H1 当期点，并新增「赛道结构」与「头部集中度」两张分析图。"""
-    m_data = market_data or DEFAULT_MARKET_DATA
-    m_labels = market_labels or DEFAULT_MARKET_LABELS
-    f_data = funding_data or DEFAULT_FUNDING_DATA
-    f_labels = funding_labels or DEFAULT_FUNDING_LABELS
-    cm_data = cn_market_data or DEFAULT_CN_MARKET_DATA
-    cm_labels = cn_market_labels or DEFAULT_CN_MARKET_LABELS
-    cf_data = cn_funding_data or DEFAULT_CN_FUNDING_DATA
-    cf_labels = cn_funding_labels or DEFAULT_CN_FUNDING_LABELS
-    cs_data = cn_structure_data or DEFAULT_CN_STRUCTURE_DATA
-    cs_labels = cn_structure_labels or DEFAULT_CN_STRUCTURE_LABELS
-    cc_data = cn_concentration_data or DEFAULT_CN_CONCENTRATION_DATA
-    cc_labels = cn_concentration_labels or DEFAULT_CN_CONCENTRATION_LABELS
+    _d = resolve_chart_data(
+        market_data, market_labels, funding_data, funding_labels,
+        cn_market_data, cn_market_labels, cn_funding_data, cn_funding_labels,
+        cn_structure_data, cn_structure_labels,
+        cn_concentration_data, cn_concentration_labels)
+    m_data, m_labels = _d["market"]["values"], _d["market"]["labels"]
+    f_data, f_labels = _d["funding"]["values"], _d["funding"]["labels"]
+    cm_data, cm_labels = _d["cn_market"]["values"], _d["cn_market"]["labels"]
+    cf_data, cf_labels = _d["cn_funding"]["values"], _d["cn_funding"]["labels"]
+    cs_data, cs_labels = _d["cn_structure"]["values"], _d["cn_structure"]["labels"]
+    cc_data, cc_labels = _d["cn_concentration"]["values"], _d["cn_concentration"]["labels"]
     return f"""
 // Market size chart（M3 #11：实测 vs CAGR 外推 诚实区分）
 const marketCtx = document.getElementById('marketSizeChart').getContext('2d');

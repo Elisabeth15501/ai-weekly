@@ -78,6 +78,7 @@ def check_market_data(html_content: str) -> dict:
     """M3 守护：图表分析厚度与防回归。
 
     - 6 张图 canvas 均存在（结构/趋势/集中度齐全）
+    - 6 张图的服务端 SVG 兜底就位（JS / Canvas 被查看环境拦掉时仍可见）
     - 每图来源署名已填（无 [xxx_SOURCE] 占位残留）
     - 快照日期已显示（[DATA_SNAPSHOT] 已替换）
     - 无「示例/估算」与真实来源并存的矛盾（自损免责已撤）
@@ -86,18 +87,27 @@ def check_market_data(html_content: str) -> dict:
     canvases = ["marketSizeChart", "cnMarketChart", "fundingChart",
                 "cnFundingChart", "cnStructureChart", "cnConcentrationChart"]
     missing_canvas = [c for c in canvases if f'id="{c}"' not in html_content]
+    # 2026-09-22：图表双轨——服务端 SVG 必须就位，否则受限环境只剩空白 canvas
+    svg_n = html_content.count('class="chart-svg"')
+    svg_leftover = "[CHART_SVG_" in html_content
     src_placeholders = [p for p in
                         ("[MARKET_SOURCE]", "[FUNDING_SOURCE]", "[CN_MARKET_SOURCE]", "[CN_FUNDING_SOURCE]")
                         if p in html_content]
     snap_left = "[DATA_SNAPSHOT]" in html_content
     disclaimer = "示例/估算" in html_content
-    ok = (not missing_canvas) and (not src_placeholders) and (not snap_left) and (not disclaimer)
+    ok = ((not missing_canvas) and svg_n == len(canvases) and not svg_leftover
+          and (not src_placeholders) and (not snap_left) and (not disclaimer))
     if ok:
-        msg = "市场图表 6 图齐全、来源署名/快照日期已填、无自损免责残留（M3 厚度达标）"
+        msg = ("市场图表 6 图齐全（含 6 张服务端 SVG 兜底）、来源署名/快照日期已填、"
+               "无自损免责残留（M3 厚度达标）")
     else:
         bits = []
         if missing_canvas:
             bits.append(f"缺图 {missing_canvas}")
+        if svg_leftover:
+            bits.append("服务端 SVG 占位未替换 [CHART_SVG_*]")
+        elif svg_n != len(canvases):
+            bits.append(f"服务端 SVG 兜底 {svg_n}/{len(canvases)} 张（JS/Canvas 被拦时市场图会消失）")
         if src_placeholders:
             bits.append(f"来源占位未替换 {src_placeholders}")
         if snap_left:
