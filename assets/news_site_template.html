@@ -386,9 +386,12 @@ a:hover { text-decoration: underline; }
 /* 图表双轨：默认走服务端 SVG（零 JS / 零 Canvas 依赖，受限环境也能看见）；
    Chart.js 逐张建图成功后由 JS 给 .charts-grid 加 .charts-live，再翻转为可交互 canvas */
 .chart-card canvas { display: none; }
+.chart-card .chart-canvas-wrap { display: none; position: relative; }
 .chart-card .chart-svg-fallback { display: block; color: var(--text-secondary); }
 .chart-card .chart-svg-fallback svg { display: block; width: 100%; height: auto; }
-.charts-live .chart-card canvas { display: block; width: 100% !important; height: 320px !important; }
+/* 定高包裹层：Chart.js 按父元素量尺寸，320px 才能保证位图与显示一致（不压扁） */
+.charts-live .chart-card .chart-canvas-wrap { display: block; height: 320px; }
+.charts-live .chart-card canvas { display: block; width: 100% !important; height: 100% !important; }
 .charts-live .chart-card .chart-svg-fallback { display: none; }
 .chart-card .chart-note { font-size: 11px; color: var(--text-tertiary); margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--border); text-align: right; }
 .chart-forecast-hint { font-size: 11px; color: var(--text-tertiary); }
@@ -887,7 +890,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-global">🌍 全球</span>
       <h3>AI 市场规模（十亿美元）</h3>
-      <canvas id="marketSizeChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="marketSizeChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_marketSizeChart]</div>
       <p class="chart-takeaway">📈 年复合增速 <b>30.6%</b>（Grand View Research）：约每 2.5 年翻一番，高速扩张期 = 持续增量机会。<br><span class="chart-forecast-hint">▨ 浅色柱 = CAGR 外推（2027F/2028F，非实测），深蓝 = 实测/机构估算。</span></p>
       <div class="chart-note">来源：[MARKET_SOURCE] · 快照 [DATA_SNAPSHOT] · <span title="海外机构数据，国内网络通常无法一手核实，仅作趋势对照">🌍 海外机构静态快照 · 作对照</span></div>
@@ -895,7 +898,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>AI 核心产业规模（亿元）</h3>
-      <canvas id="cnMarketChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="cnMarketChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_cnMarketChart]</div>
       <p class="chart-takeaway">🇨🇳 2025 突破 <b>1.2 万亿</b>（中国信通院），2026E 达 1.7 万亿——<b>同比增速 +41.7%</b>（2025 为 +30.6%，绿线），加速扩张。<br>本土基本盘最贴近开发者与创业者。</p>
       <div class="chart-note">来源：[CN_MARKET_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
@@ -903,7 +906,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-global">🌍 全球</span>
       <h3>AI 融资趋势（十亿美元）</h3>
-      <canvas id="fundingChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="fundingChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_fundingChart]</div>
       <p class="chart-takeaway">💰 2026 上半年融资已 <b>$510B</b>（Crunchbase），超 2025 全年；资本向头部模型公司集中。</p>
       <div class="chart-note">来源：[FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · <span title="海外机构数据，国内网络通常无法一手核实，仅作趋势对照">🌍 海外机构静态快照 · 作对照</span></div>
@@ -912,7 +915,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>AI 融资趋势（亿元）</h3>
-      <canvas id="cnFundingChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="cnFundingChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_cnFundingChart]</div>
       <p class="chart-takeaway">💡 2025 披露融资 <b>656 亿元</b>（同比 +67%）；2026 上半年更飙至 <b>3076 亿</b>（IT桔子），结构剧变见下方洞察。</p>
       <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
@@ -920,7 +923,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>2026H1 融资赛道结构（亿元）</h3>
-      <canvas id="cnStructureChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="cnStructureChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_cnStructureChart]</div>
       <p class="chart-takeaway">🧩 大模型 <b>1598 亿</b>、具身智能 <b>906 亿</b>、AIGC 应用 <b>596 亿</b>、基础层 <b>725 亿</b>——钱正从「通用大模型」外溢到场景层。</p>
       <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
@@ -928,7 +931,7 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div class="chart-card">
       <span class="region-tag region-cn">🇨🇳 中国</span>
       <h3>融资头部集中度（亿元）</h3>
-      <canvas id="cnConcentrationChart"></canvas>
+      <div class="chart-canvas-wrap"><canvas id="cnConcentrationChart"></canvas></div>
       <div class="chart-svg-fallback">[CHART_SVG_cnConcentrationChart]</div>
       <p class="chart-takeaway">🏛️ TOP3 大模型独揽 <b>930 亿（30%）</b>，TOP4–30 名约 770 亿，其余赛道约 1376 亿——钱极度向头部集中。</p>
       <div class="chart-note">来源：[CN_FUNDING_SOURCE] · 快照 [DATA_SNAPSHOT] · ✅ 国内公开数据，可自行核对</div>
@@ -2257,13 +2260,14 @@ function initCharts() {
     console.info('Chart.js 或 Canvas 2D 不可用，市场图继续使用服务端 SVG 版本');
     return;
   }
+  // 必须先切到 canvas 轨：包裹层得先有真实高度，Chart.js 才能量到 320px
+  if (grid) grid.classList.add('charts-live');
   try {
     // [CHART_DATA_PLACEHOLDER]
     // Charts are initialized with placeholder data;
     // the agent replaces CHART_DATA_PLACEHOLDER below with real init code.
-    // 全部建图成功后才切到 canvas；中途任一图失败则整体退回 SVG
-    if (grid) grid.classList.add('charts-live');
   } catch (e) {
+    // 中途任一图失败 → 整体退回 SVG（canvas 重新隐藏，不出现半空白状态）
     if (grid) grid.classList.remove('charts-live');
     console.warn('Chart.js 建图失败，市场图已回退服务端 SVG 版本：', e);
   }
