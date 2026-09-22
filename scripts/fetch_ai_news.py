@@ -374,16 +374,17 @@ def check_feeds() -> dict:
     print(f"📊 汇总：{ok}/{len(results)} 个源正常 "
           f"（国内 {cn_ok}/{len(cn)} · 国外 {gl_ok}/{len(gl)}）")
     if cn_ok == 0:
-        print("  ⚠️ 国内源全部不可用：报告会只剩英文条目，中文地板失效，建议检查网络或代理")
+        print("  ⚠️ 国内源全部不可用：报告会只剩英文条目，中文地板失效，建议检查本机网络连通性")
     elif gl_ok == 0:
-        print("  ⚠️ 国外源全部不可用：不影响出报告（国内源兜底），但会缺英文一手信源；"
-              "需要的话加 --proxy 或设 HTTPS_PROXY")
+        print("  ⚠️ 国外源全部不可用：**这是预期内的降级路径，不影响出报告**（国内源兜底），"
+              "仅会缺英文一手信源")
     for r in results:
         if r["status"] != "ok":
             tip = ("国内源，检查网络是否能访问该站；多为临时故障，稍后重试即可"
                    if r["region"] == "cn" else
-                   "国外源，国内网络可能不可达：可加 --proxy / HTTPS_PROXY，"
-                   "或忽略（其余源会兜底，不会出空报告）")
+                   "国外源不可达属预期内的降级：其余源会兜底，不会出空报告。"
+                   "若本机网络架构要求全部出站流量经统一代理（如企业内网），"
+                   "可通过标准环境变量 HTTPS_PROXY 提供")
             print(f"  💡 {r['name']}（{r['region']}）不可用 → {tip}")
     return {"feeds": results, "summary": {"total": len(results), "ok": ok,
             "cn_ok": cn_ok, "cn_total": len(cn), "global_ok": gl_ok, "global_total": len(gl),

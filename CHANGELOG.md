@@ -21,6 +21,7 @@
 - **新增 §9.0《网络访问合规声明》**：不提供、不指导、不支持任何规避网络管理措施的能力；不使用非公开接口、不破解访问控制、不伪造身份绕过鉴权；海外源不可达时以「降级到国内源 + 离线快照」为既定行为并如实标注。
 - FAQ Q17/Q18 重写，删除「为访问英文 RSS 源而配置代理」这类建议性表述；`deploy.py`、`mirror.yml`、`manifest.json`、`news_site_template.html` 同步去敏感化。
 - `utils.py` 原注释中的不当措辞改为客观描述：部分站点对自报爬虫 UA 返回 429，改用常规 UA 以正常获取公开 RSS。
+- **运行期提示与 CLI 帮助同步收口**：`diagnostics.py` 的四条「人话提示」、`generate_site.py` 的 `--proxy` 帮助文案、`render.py` 的快照时效告警、`fetch_ai_news.py` 的源不可用提示，均不再把出站代理与「改善对海外源的访问」绑定，统一改为「企业内网出站」定位 + 「预期内的降级路径」叙述——文档层改完不等于收工，这类运行期字符串同样在语义审核范围内
 - **新增 `scripts/compliance_check.py` 发布前合规门禁**：扫描敏感词 / 违规叙事 / 凭据泄漏 / 发布产物卫生，命中即阻断。规则表以编码存放——因为检查工具若把敏感词字面写进源码，**它自己就会被同一条规则判违规**，这正是本次事故的教训。
 
 ### Unchanged
@@ -38,6 +39,7 @@
 - **「市场图表不显示」根因**：原 6 张图完全依赖 Chart.js。当查看环境（预览面板 / 内置 WebView / 隐私插件屏蔽 canvas）不执行 JS、或 `getContext('2d')` 返回 null 时，`initCharts()` 只剩「发现 Chart 不存在 → return」，页面上留下 6 个空白 canvas 框。现由服务端 SVG 轨兜住
 - `initCharts()` 增加 Canvas 2D 可用性探测 + 整体 try/catch，建图失败自动回退 SVG
 - `updateChartColors()` 不再无条件假设 `chart.options.scales.x/y` 存在（服务端 SVG 轨下这些变量全为 undefined）
+- **canvas 轨纵向压扁 1.69×（3.5.3 定高方案的副作用）**：Chart.js 按**父元素**量画布尺寸，而 3.5.3 加的 `height:320px !important` 只压显示、不改父级高度——位图 520×541 vs 显示 320，图被纵向压扁。现每张 canvas 外包一层定高 `.chart-canvas-wrap`（320px），让 Chart.js 直接量到 320；`initCharts()` 里 `.charts-live` 类的切换提前到建图**之前**，否则包裹层处于隐藏态（0 高）会被量到而塌缩。**结论：3.5.3 的「高度塌缩」诊断并非根因，本版的 SVG 轨才是**
 
 ### Changed（内部重构）
 - `market.py` 新增 `resolve_chart_data()`：Chart.js 轨与服务端 SVG 轨共用同一份默认值与序列，消除两轨各写一份默认值的漂移风险

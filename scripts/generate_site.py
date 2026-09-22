@@ -178,7 +178,8 @@ def main():
                         choices=["auto", "cn", "global"],
                         help="网络环境：auto=探测(默认) / cn=优先国内源 / global=优先国外源")
     parser.add_argument("--proxy", default=None,
-                        help="显式指定出站代理（如 http://127.0.0.1:7890），让国外源在受限网络下可达")
+                        help="显式指定出站代理（如 http://127.0.0.1:7890）。仅用于企业内网等"
+                         "要求全部出站流量经统一代理的网络架构")
     parser.add_argument("--data-snapshot", default=None,
                         help="市场数据快照日期 YYYY-MM-DD（展示在图表注释，标注为静态快照；默认取 --date 或当天）")
     # 图表数据（由 Agent 从 WebSearch 获取真实值后注入；不提供则标注为估算）
