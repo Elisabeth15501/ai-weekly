@@ -144,7 +144,7 @@ def _js_str(s: str) -> str:
 
 def _build_capability_card(translate_en: bool, audience_summary: bool,
                             cn_market_data: bool, leaderboard_data: bool,
-                            insights: bool) -> str:
+                            insights: bool, feishu_push: bool = False) -> str:
     """生成「能力自检卡」HTML（服务端预渲染，禁 JS 也可见）。
 
     E1（v3.4.7）：让用户在报告顶部一眼看到本期启用了哪些能力、哪些没启用以及
@@ -167,12 +167,15 @@ def _build_capability_card(translate_en: bool, audience_summary: bool,
         off.append(("国内口径市场数据", "--cn-market-data"))
     if insights:
         on.append("本周看点编辑洞察")
-    if audience_summary:
-        on.append("受众分角色摘要")
+    # 受众分角色摘要：render 在 audience_summary 为 None 时回退 _DEFAULT_AUDIENCE_SUMMARY，
+    # 始终渲染（开发者/产品/自媒体三视角）。如实标注「已启用」，不依赖显式传入。
+    on.append("受众分角色摘要（开发者/产品/自媒体）")
+    # 飞书推送：生成阶段由 --feishu-push 声明本报告会走飞书分发。
+    # 仅标注「是否启用 + 推送身份类型」，绝不暴露 user_id / token / 群名（开发者隐私）。
+    if feishu_push:
+        on.append("飞书推送（每周一·应用机器人）")
     else:
-        off.append(("受众分角色摘要", "--audience-summary"))
-    # 飞书推送是部署后的分发步骤，恒列「未启用」并给开启提示
-    off.append(("飞书推送", "--feishu（部署阶段）"))
+        off.append(("飞书推送", "--feishu-push（自动化开启）"))
 
     def tag(text, cls):
         return f'<span class="cap-tag {cls}">{html.escape(text)}</span>'
@@ -222,6 +225,7 @@ def generate(api_data: dict, output_path: str = None,
              translate_title: bool = True,
              translate_cache: str = None,
              translations_url: str = None,
+             feishu_push: bool = False,
              region: str = "auto") -> str:
     """生成完整的新闻网站 HTML。
 
@@ -362,6 +366,7 @@ def generate(api_data: dict, output_path: str = None,
         cn_market_data=bool(cn_market_data),
         leaderboard_data=bool(leaderboard_data),
         insights=bool(insights),
+        feishu_push=feishu_push,
     )
     template = template.replace("[CAPABILITY_CARD_PLACEHOLDER]", _cap_html)
     template = template.replace("[DATA_STATUS_BAR]",

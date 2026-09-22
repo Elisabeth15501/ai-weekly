@@ -271,6 +271,8 @@ def main():
     # 面向目标用户群的「本周看点」优化（Plan A-F）
     parser.add_argument("--audience-summary",
                         help="面向受众的一句话结论，JSON 格式 {开发者:..., PM:..., 媒体:...}；渲染在关键词区上方")
+    parser.add_argument("--feishu-push", action="store_true",
+                        help="声明本报告会走飞书分发（每周一·应用机器人推送）；仅用于能力卡如实标注，不暴露任何 token/user_id")
     parser.add_argument("--keyword-search-sources",
                         default='{"baidu":"https://www.baidu.com/s?wd=","google":"https://www.google.com/search?q=","arxiv":"https://arxiv.org/search/?query="}',
                         help="可切换的搜索源 JSON {name:url}；默认百度/谷歌/ arXiv")
@@ -461,6 +463,7 @@ def main():
         translate_retries=args.translate_retries,
         translate_num_predict=args.translate_num_predict,
         translate_title=args.translate_title,
+        feishu_push=args.feishu_push,
         translations_url=None if args.no_remote_translations else args.translations_url,
         translate_cache=args.translate_cache or (
             os.path.join(os.path.dirname(os.path.abspath(args.api_json)), ".translate_cache.json")
