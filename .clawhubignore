@@ -1,0 +1,23 @@
+# ClawHub 发布排除规则
+# ---------------------------------------------------------------------------
+# ClawHub CLI 会读取本文件；同时 .gitignore 也被一并遵循。
+# CLI 另有内置强制排除，无需在此重复：.git/ 、node_modules/ 、
+# 以及**任何含「点号起始路径段」的路径**（因此 .github/ 、.github_token 、
+# .workbuddy/ 、.pytest_cache/ 、.gitignore 本身都会被自动跳过）。
+#
+# 本文件是隐藏文件，自身不会被发布。
+
+# ClawHub 全站强制 MIT-0：任何已发布技能均以 MIT-0 授权，署名非必需，
+# 且平台不支持按技能覆盖许可证。本仓 LICENSE 为 MIT（含署名要求），
+# 与平台条款相冲突，故不上传。
+# 许可证以主仓库为准：https://github.com/Elisabeth15501/ai-weekly
+LICENSE
+
+# Python 字节码（.gitignore 已覆盖；此处显式声明，防止 .gitignore 被改动后漏网）
+__pycache__/
+*.pyc
+*.pyo
+
+# 本地打包产物（.gitignore 已覆盖，显式声明同样是为冗余防护）
+openclaw-edition/
+*.skill
