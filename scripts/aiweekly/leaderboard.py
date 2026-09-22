@@ -33,6 +33,7 @@ from aiweekly.leaderboard_sources import (
 )
 from aiweekly.leaderboard_fetch import (
     LB_CRITERIA, SOURCES, _collect_source_results, _record_health,
+    inject_open_source_ranks,
 )
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
@@ -550,6 +551,8 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     comp["aa"]["rows"] = aa
     os_board["ls"]["rows"] = ls
     os_board["hf"]["rows"] = hf
+    # L3#21：开源榜实时抓取行可能缺 rank，按当前顺序补 1..n（避免前端 undefined）
+    inject_open_source_ranks(os_board)
 
     # L0#2: 写当前时序快照 + 构建历史序列（供 WoW 徽章 / sparkline）
     _seed_bootstrap(cache)

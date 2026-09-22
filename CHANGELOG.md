@@ -11,6 +11,14 @@
 
 ---
 
+## [3.5.3] — 2026-09-22
+三处渲染修复：能力卡归位、市场图表高度塌缩、开源榜 undefined。
+
+### Fixed
+- **能力卡移出顶部、置于报告末尾**：原能力卡在 header 正下方，读起来像「未完成的半成品」；现移到底部（FOOTER 之上），报告阅读顺序更自然
+- **市场图表不显示（Chart.js v4 高度塌缩）**：原 canvas 仅 `max-height:300px` 且无显式高度，`maintainAspectRatio:true` 在父容器无定高时塌缩为 0px 不可见。现 canvas 固定 `height:320px !important` + 6 张图 `maintainAspectRatio:false`，图表正常渲染
+- **开源模型排行榜 undefined**：实时抓取的开源榜（LLM-Stats / HuggingFace）行缺 `rank` 字段，模板 `${r.rank}` 渲染出 undefined。双保险兜底——Python 端 `inject_open_source_ranks()`（leaderboard_fetch）按当前顺序补 1..n；JS 端 `renderLbBoards()` 渲染前对 `rank==null` 补 `i+1`，两层均生效
+
 ## [3.5.2] — 2026-09-22
 能力卡如实反映分发状态 + 自动化默认启用国内数据。
 

@@ -136,7 +136,7 @@ marketChart = new Chart(marketCtx, {{
     }}]
   }},
   options: {{
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }},
       tooltip: {{ callbacks: {{ label: c => {{
         const f = marketIsForecast[c.dataIndex];
@@ -165,7 +165,7 @@ fundingChart = new Chart(fundCtx, {{
     }}]
   }},
   options: {{
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }} }},
     scales: {{
       x: {{ grid: {{ color: 'rgba(0,0,0,0.06)' }}, ticks: {{ color: '#64748b' }} }},
@@ -206,7 +206,7 @@ cnMarketChart = new Chart(cnMarketCtx, {{
     ]
   }},
   options: {{
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: true, labels: {{ color: '#64748b', boxWidth: 12, font: {{ size: 11 }} }} }},
       tooltip: {{ callbacks: {{ label: c => {{
         if (c.dataset.yAxisID === 'y2') {{
@@ -238,7 +238,7 @@ cnFundingChart = new Chart(cnFundCtx, {{
     }}]
   }},
   options: {{
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }} }},
     scales: {{
       x: {{ grid: {{ color: 'rgba(0,0,0,0.06)' }}, ticks: {{ color: '#64748b' }} }},
@@ -262,7 +262,7 @@ cnStructureChart = new Chart(cnStructCtx, {{
   }},
   options: {{
     indexAxis: 'y',
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }},
       tooltip: {{ callbacks: {{ label: c => c.parsed.x + ' 亿（RMB）' }} }} }},
     scales: {{
@@ -287,7 +287,7 @@ cnConcentrationChart = new Chart(cnConcCtx, {{
   }},
   options: {{
     indexAxis: 'y',
-    responsive: true, maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }},
       tooltip: {{ callbacks: {{ label: c => c.parsed.x + ' 亿（占 3076 亿的 ' + (c.parsed.x/3076.82*100).toFixed(1) + '%）' }} }} }},
     scales: {{

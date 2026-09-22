@@ -191,7 +191,16 @@ def _record_health(results: dict, detected: str):
         logger.warning("健康记录写入失败: %s", e)
 
 
+def inject_open_source_ranks(os_board: dict):
+    """L3#21 兜底：实时抓取的开源榜(ls/hf)行可能缺 rank 字段，
+    按当前顺序补 1..n，避免前端渲染出 undefined。"""
+    for _slot in ("ls", "hf"):
+        for _i, _r in enumerate(os_board.get(_slot, {}).get("rows") or [], start=1):
+            if _r.get("rank") is None:
+                _r["rank"] = _i
+
+
 __all__ = [
     "HEALTH_PATH", "LB_CRITERIA", "SOURCES",
-    "_collect_source_results", "_record_health",
+    "_collect_source_results", "_record_health", "inject_open_source_ranks",
 ]

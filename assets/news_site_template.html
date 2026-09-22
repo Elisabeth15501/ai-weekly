@@ -383,7 +383,7 @@ a:hover { text-decoration: underline; }
   transition: background var(--transition), border var(--transition);
 }
 .chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
-.chart-card canvas { max-height: 300px; }
+.chart-card canvas { width: 100% !important; height: 320px !important; }
 .chart-card .chart-note { font-size: 11px; color: var(--text-tertiary); margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--border); text-align: right; }
 .chart-forecast-hint { font-size: 11px; color: var(--text-tertiary); }
 .chart-ref { font-size: 11px; color: #b45309; background: rgba(217,119,6,0.08); border-left: 3px solid #d97706; border-radius: 3px; padding: 6px 9px; margin-top: 6px; line-height: 1.5; }
@@ -800,8 +800,6 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
   </div>
 </header>
 
-<!-- ========== CAPABILITY CARD (能力自检，服务端预渲染，禁 JS 也可见) ========== -->
-<div class="cap-card" id="capCard">[CAPABILITY_CARD_PLACEHOLDER]</div>
   <div class="data-status-bar-wrap">[DATA_STATUS_BAR]</div>
 
 <!-- ========== SEARCH ========== -->
@@ -1084,6 +1082,9 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
     <div id="lbModalBody"></div>
   </div>
 </div>
+
+<!-- ========== CAPABILITY CARD (能力自检，服务端预渲染，禁 JS 也可见) ========== -->
+<div class="cap-card" id="capCard">[CAPABILITY_CARD_PLACEHOLDER]</div>
 
 <!-- ========== FOOTER ========== -->
 <footer class="footer">
@@ -1607,6 +1608,8 @@ function orgOf(r){
 function renderLbBoards(){
   if(!_lbData) return;
   const {lm, aa, hf, ls} = _lbData;
+  // 兜底：开源榜(ls/hf)等实时抓取行可能缺 rank 字段，按当前顺序补 1..n，避免渲染 undefined
+  [lm, aa, ls, hf].forEach(s => (s.rows || []).forEach((r, i) => { if (r.rank == null) r.rank = i + 1; }));
   // L3#18：自定义权重排序——启用时对各榜行按加权总分重排（不影响原始数据）
   const lmRows = _weightSort ? _sortByWeight(lm.rows) : lm.rows;
   const aaRows = _weightSort ? _sortByWeight(aa.rows) : aa.rows;

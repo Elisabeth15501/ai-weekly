@@ -3,11 +3,15 @@
 从 leaderboard.py 拆出，避免主编排模块膨胀（P0#4 模块体量守护：单文件 ≤ 800 行）。
 校验逻辑为纯函数，无榜源依赖，可独立单测；canon_key 延迟导入以避开循环依赖。
 """
-# 排行行允许字段白名单（L0#5）：fetcher 漏出的非标字段（如旧 cost_in/cost_out）会被标红
+# 排行行允许字段白名单（L0#5）：fetcher 漏出的非标字段（如旧 cost_in/cost_out）会被标红。
+# 注意：likes（社区点赞数）/ params（参数量）是 HF、LLM-Stats、ModelScope 等开源榜
+# fetcher 有意附加的真实元数据字段（见 leaderboard_sources.py），属标准开放字段而非脏数据，
+# 故纳入白名单，避免每周开源榜命中时误报 24/25。
 LB_ROW_FIELDS = {
     "model", "rank", "score", "org", "developer", "license", "context",
     "price_in", "price_out", "delta", "spark", "cn_access", "open_source",
     "multimodal", "best_for", "commercial", "currency",
+    "likes", "params",
 }
 
 
