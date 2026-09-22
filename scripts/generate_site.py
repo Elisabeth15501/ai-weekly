@@ -107,45 +107,8 @@ import aiweekly.insights as INS
 from aiweekly.render import generate  # P1#1 Phase 3：渲染层已抽出
 from aiweekly.diagnostics import print_user_hints  # 告警「人话翻译」展示层
 from aiweekly import const as _ac  # P0(v3.4.7)：译文源默认地址
-
-
-class _CountingWriter:
-    """P1#12：统计 ⚠️/❌ 并收集告警原文，供末尾 print_user_hints() 翻译成人话。"""
-
-    def __init__(self, stream):
-        self._stream = stream
-        self.warns = 0
-        self.errors = 0
-        self.messages: list[str] = []
-
-    def write(self, s: str) -> int:
-        if "⚠️" in s:
-            self.warns += s.count("⚠️")
-            self.messages.append(s.strip())
-        if "❌" in s:
-            self.errors += s.count("❌")
-            self.messages.append(s.strip())
-        return self._stream.write(s)
-
-    def flush(self):
-        return self._stream.flush()
-
-
-
-def _parse_csv_arg(s: str):
-    """CLI 逗号字符串 -> 列表；空串返回 None。"""
-    return [x.strip() for x in s.split(",")] if s else None
-
-
-def _parse_num_arg(s: str):
-    """CLI 逗号字符串 -> float 列表；含非数字告警并回退 None。"""
-    if not s:
-        return None
-    try:
-        return [float(x) for x in s.split(",")]
-    except ValueError:
-        print(f"  ⚠️ 图表数据解析失败(含非数字): {s} — 将回退估算值")
-        return None
+# P0#4：CLI/IO 适配层下沉至 aiweekly.cli_utils，守住主入口 ≤500 行
+from aiweekly.cli_utils import _CountingWriter, _parse_csv_arg, _parse_num_arg
 
 
 def _run_health_check(args):

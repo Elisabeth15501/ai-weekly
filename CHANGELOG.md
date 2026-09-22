@@ -19,6 +19,13 @@
 - **市场图表不显示（Chart.js v4 高度塌缩）**：原 canvas 仅 `max-height:300px` 且无显式高度，`maintainAspectRatio:true` 在父容器无定高时塌缩为 0px 不可见。现 canvas 固定 `height:320px !important` + 6 张图 `maintainAspectRatio:false`，图表正常渲染
 - **开源模型排行榜 undefined**：实时抓取的开源榜（LLM-Stats / HuggingFace）行缺 `rank` 字段，模板 `${r.rank}` 渲染出 undefined。双保险兜底——Python 端 `inject_open_source_ranks()`（leaderboard_fetch）按当前顺序补 1..n；JS 端 `renderLbBoards()` 渲染前对 `rank==null` 补 `i+1`，两层均生效
 
+### Changed（内部重构，行为等价）
+- **CLI/IO 适配层下沉**：`generate_site.py` 的 `_CountingWriter` / `_parse_csv_arg` / `_parse_num_arg` 迁至新模块 `aiweekly/cli_utils.py`，主入口 502 → 464 行，回到 P0#4「主入口 ≤500 行」硬守护之内（此前该守护已亮红）
+- **`leaderboard.py` 拆模块收口**：开源榜 rank 兜底逻辑 `inject_open_source_ranks()` 落在 `leaderboard_fetch.py`，`leaderboard.py` 797 → 800 行，未越 800 上限
+
+### Gate
+- `validate_report` 全量 **25/25 通过**（含模块体量、XSS、排行榜 schema、图表厚度）
+
 ## [3.5.2] — 2026-09-22
 能力卡如实反映分发状态 + 自动化默认启用国内数据。
 
