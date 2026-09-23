@@ -8,12 +8,11 @@
 """
 import html
 import json
-import re
-from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from aiweekly.utils import _parse_date_arg, _parse_snapshot_date
+from aiweekly import const as _c
+from aiweekly.utils import _parse_date_arg
 from aiweekly.news import (
     MUSTREAD_TOP_N, format_news_items, _score_news, LEADERBOARD_STALE_DAYS,
 )
@@ -32,11 +31,10 @@ from aiweekly.market import (
 # 服务端 SVG 图表轨：与 Chart.js 轨同源数据，保证 JS / Canvas 被拦时市场图仍可见
 from aiweekly.charts_svg import build_svg_charts
 from aiweekly.insights import (
-    _DEFAULT_AUDIENCE_SUMMARY, _auto_insights, _auto_lead, _auto_keywords,
+    DEFAULT_AUDIENCE_SUMMARY, _auto_insights, _auto_lead, _auto_keywords,
     _normalize_keywords, _is_daily_digest,
     _render_audience_chips_html, _render_keyword_chips_html,
     _render_insight_cards_html,
-    DEFAULT_ACTIVE_AUDIENCE, DEFAULT_SEARCH_ENGINE,
 )
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
@@ -220,11 +218,11 @@ def generate(api_data: dict, output_path: str = None,
              data_snapshot: str = None,
              pin_terms: list = None,
              translate_en: bool = False,
-             translate_model: str = "qwen2.5:7b",
-             translate_workers: int = 3,
-             translate_timeout: int = 45,
-             translate_retries: int = 2,
-             translate_num_predict: int = 600,
+             translate_model: str = _c.TRANSLATE_MODEL_DEFAULT,
+             translate_workers: int = _c.TRANSLATE_WORKERS_DEFAULT,
+             translate_timeout: int = _c.TRANSLATE_TIMEOUT_DEFAULT,
+             translate_retries: int = _c.TRANSLATE_RETRIES_DEFAULT,
+             translate_num_predict: int = _c.TRANSLATE_NUM_PREDICT_DEFAULT,
              translate_title: bool = True,
              translate_cache: str = None,
              translations_url: str = None,
@@ -459,15 +457,15 @@ def generate(api_data: dict, output_path: str = None,
     template = template.replace("[LEAD]", html.escape(_lead or ""))
     # 受众结论：未传入则回退内置默认三段（开发者/PM/自媒体），确保「给本周的你」始终出现
     template = template.replace("AUDIENCE_SUMMARY_PLACEHOLDER",
-                                _json_script_safe(audience_summary or _DEFAULT_AUDIENCE_SUMMARY))
+                                _json_script_safe(audience_summary or DEFAULT_AUDIENCE_SUMMARY))
     template = template.replace("KEYWORD_SEARCH_SOURCES_PLACEHOLDER",
-                                keyword_search_sources or '{"baidu":"https://www.baidu.com/s?wd=","google":"https://www.google.com/search?q=","arxiv":"https://arxiv.org/search/?query="}')
+                                keyword_search_sources or _c.DEFAULT_SEARCH_SOURCES_JSON)
     # 关键词网页搜索基址（默认百度；搜索词 = 「词语 AI 行业」）
     template = template.replace("[KEYWORD_SEARCH_BASE]", _js_str(keyword_search_base))
 
     # 服务端静态预渲染：把「给本周的你」受众卡 + 关键词（含分类标签）直接写进 HTML，
     # 即使客户端 JS 不执行/出错，这两块也一定出现在页面里（不再依赖 renderInsights）。
-    _aud = audience_summary or _DEFAULT_AUDIENCE_SUMMARY
+    _aud = audience_summary or DEFAULT_AUDIENCE_SUMMARY
     _aud_html = _render_audience_chips_html(_aud)
     _kw_html = _render_keyword_chips_html(_kw, search_sources=json.loads(keyword_search_sources) if keyword_search_sources else None, search_base=keyword_search_base)
     template = template.replace(

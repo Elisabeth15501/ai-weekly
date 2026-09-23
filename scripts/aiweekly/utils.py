@@ -1,7 +1,7 @@
 """底层工具：日期解析、网络 IO、区域/代理探测。
 
 所有函数无业务依赖，供其它子模块引用。
-外部使用仍可通过 `from generate_site import _http_get`（兼容垫层）。
+外部使用请直接 `from aiweekly.utils import ...`；`aiweekly/__init__.py` 亦做了导出。
 """
 import json
 import os
@@ -19,9 +19,9 @@ from pathlib import Path
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
-# 代理：允许通过 HTTPS_PROXY / HTTP_PROXY 环境变量或 --proxy 参数显式指定，
-# 让「国外源」在受限网络（如企业内网）下也能抓取。
-_PROXY_OVERRIDE = None  # 由 CLI 通过 --proxy 设置
+# 出站代理：适用于「所有出站流量必须经统一代理」的网络架构（如企业内网）。
+# 来源优先级为 --proxy 参数 / HTTPS_PROXY 等环境变量 / 系统代理设置；默认直连。
+_PROXY_OVERRIDE = None  # 由 configure_proxy() 写入
 
 _SOCKS_ACTIVE = False  # 由 _configure_proxy() 在启用 SOCKS 时置位
 
@@ -29,10 +29,10 @@ _SOCKS_ACTIVE = False  # 由 _configure_proxy() 在启用 SOCKS 时置位
 def resolve_proxy() -> str:
     """探测可用的出站代理，优先级：CLI --proxy > 环境变量 > 系统代理。
 
-    - CLI --proxy：由 generate_site.py 写入 ``_PROXY_OVERRIDE``；
+    - CLI --proxy：由 ``configure_proxy()`` 写入 ``_PROXY_OVERRIDE``；
     - 环境变量：``HTTPS_PROXY`` / ``https_proxy`` / ``HTTP_PROXY`` / ``http_proxy``；
     - 系统代理：Windows 注册表 Internet Settings、macOS ``scutil --proxy``、
-      Linux ``gsettings``（无需用户手动 ``export`` 环境变量，受限网络下也能自动走代理）；
+      Linux ``gsettings``（无需用户手动 ``export`` 环境变量即可自动沿用系统设置）；
     全无则返回 ``""``（直连）。任何探测异常均静默降级为直连，绝不阻断抓取。
 
     示例：
@@ -239,6 +239,25 @@ def _configure_proxy():
             print(f"  ⚠️ SOCKS 代理配置失败：{e}")
 
 
+def configure_proxy(proxy: str | None = None) -> str:
+    """设置本次运行的出站代理并立即生效（CLI ``--proxy`` 的唯一入口）。
+
+    输入：proxy — 代理 URL（``http://host:port`` / ``socks5://…``）；
+          为 ``None`` 时只沿用现有来源（环境变量 / 系统代理）重配一次。
+    输出：本次实际生效的代理串（``""`` 表示直连）。
+    异常：不抛——SOCKS 缺 PySocks 等情况由 ``_configure_proxy`` 内部告警降级。
+
+    为什么要有这个函数：此前 CLI 直接赋值 ``utils._PROXY_OVERRIDE``，
+    属于「跨模块改写别人的私有全局」，且代理生效与否取决于调用顺序。
+    统一走本入口后，设置与生效是一步，调用方无需知道内部全局叫什么。
+    """
+    global _PROXY_OVERRIDE
+    if proxy is not None:
+        _PROXY_OVERRIDE = proxy
+    _configure_proxy()
+    return resolve_proxy()
+
+
 def _build_opener():
     """构造带代理 + 不校验证书的 opener（与历史行为一致，仅叠加代理能力）。"""
     handlers = []
@@ -426,7 +445,7 @@ def save_json(path, obj, indent: int = 2) -> None:
 
 __all__ = [
     "_UA", "_PROXY_OVERRIDE", "_SOCKS_ACTIVE",
-    "resolve_proxy", "_resolved_proxy", "_configure_proxy", "_build_opener",
+    "resolve_proxy", "configure_proxy", "_resolved_proxy", "_configure_proxy", "_build_opener",
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_iso_datetime", "_parse_date_arg", "_parse_snapshot_date",
     "load_json", "save_json",

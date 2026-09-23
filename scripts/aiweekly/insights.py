@@ -21,6 +21,8 @@ __all__ = [
     "DEFAULT_ACTIVE_AUDIENCE", "DEFAULT_SEARCH_ENGINE", "GENERIC_AUDIENCE_LABEL", "_pick_preferred_key",
     "_render_audience_chips_html", "_kw_tag_html", "_kw_tier_html", "_kw_note_html",
     "_kw_search_url", "_render_keyword_chips_html",
+    # 供其它子模块使用的公共入口（下划线版保留以兼容既有调用点）
+    "validate_insights", "DEFAULT_AUDIENCE_SUMMARY",
 ]
 
 
@@ -354,6 +356,11 @@ _DEFAULT_AUDIENCE_SUMMARY = {
     "PM": "需求在「AI+传统行业」（制造/医疗/金融），用低成本模型快速验证 PMF；国产模型替代叙事持续。",
     "自媒体": "具身智能 + 应用层爆发是 2026 最强叙事；开源 VS 闭源、国产登顶都是高传播选题。",
 }
+
+# 公共 API 别名：其它子模块（generate_site / render / publish）应使用无下划线名，
+# 以免「私有符号被跨模块穿透」——被引用方就不敢改内部实现了。
+validate_insights = _validate_insights
+DEFAULT_AUDIENCE_SUMMARY = _DEFAULT_AUDIENCE_SUMMARY
 
 # ── 关键词自动派生 + 分类标签 ───────────────────────────────────────
 # 跟踪词 -> 分类标签（复用渲染器的 tag 色板：模型/资本/产品/安全/基建/监管）

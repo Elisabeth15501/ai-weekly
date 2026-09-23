@@ -11,6 +11,35 @@
 
 ---
 
+## [Unreleased] — 2026-09-23
+Clean Code 审计（`clean_code_audit_generate_site.md`）落地：主入口职责收窄、错误处理统一、默认值收敛为单一来源。**功能与产物零变更**。
+
+### Changed（可读性）
+- **主入口 466 → 444 行，但承担的事更少**：选项表抽成 `build_arg_parser()`，日期校验抽成 `_validate_date_args()`，新闻 JSON 形态归一抽成 `_as_news_payload()`，榜单取值抽成 `_leaderboard_rows()`，受众键检查抽成 `_warn_audience_key_mismatch()`
+- 删除 20 余项死导入与死常量（`html` / `re` / `ssl` / `time` / `urllib.*` / `timedelta` / `defaultdict`、`TEMPLATE_PATH` 等），`SKILL_DIR` 随之移除；`render.py` 同步清 5 项死导入（`re` / `Counter` / `_parse_snapshot_date` / `DEFAULT_ACTIVE_AUDIENCE` / `DEFAULT_SEARCH_ENGINE`）——全仓「导入了但未使用」清零
+- 顶部四段互相重叠的「迁移说明」合并为一段「本文件只负责三件事 + 逻辑归属速查表」；正文的工单号注释（`P0#4` / `P1#13` / `Phase 3` …）改为白话「为什么 + 何时可删」
+- 修正一处**撒谎的注释**：原注释称「数据解析/文件读取处的异常已收窄为具体类型」，实际三处读 JSON 完全没有异常处理——本次补齐后该描述才成立
+
+### Fixed（错误处理与健壮性）
+- **三处核心输入裸崩溃**：`--api-json` / `--external-news-json` / `--insights-json` 读文件或 JSON 语法出错时原为裸 traceback，现统一友好退出（exit 2），并指出是哪个文件、什么原因
+- **新闻 JSON 裸列表格式**：docstring 承诺 `[ {...} ]` 也合法，实际走 `.get()` 会 AttributeError；现两种形态都接受，畸形输入按空列表处理并告警
+- `--dry-run` 对缺字段条目不再 KeyError（改 `.get` 兜底）
+- `<output>.run.log` 写盘失败不再掩盖「HTML 已生成」这一事实
+- 数值参数加范围校验（`--ranking-top` 1–50 / `--translate-workers` 1–32 / `--translate-timeout` 5–600 / `--translate-retries` 0–10 / `--translate-num-predict` 64–8192）——负数 workers 不再等到线程池报错才暴露
+- `--keyword-search-sources` 无论传文件路径还是内联串，都在参数层当场校验 JSON 合法性与 `{name: url}` 结构（此前错误被推迟到渲染中途）
+- 榜单结果缺行数据时给出「上游结构可能已变更」告警，异常消息带上异常类型，不再只剩一句「暂无实时数据」
+- **`--proxy` 在部分路径被静默忽略**：原只在「自动抓榜」分支里改 `utils` 的私有全局，走 `--no-live-ranking` / `--ranking-json` 时代理不生效——现改为流程开头一次配置，所有路径一致
+
+### Added（模块与入口）
+- 新增 `aiweekly/health.py`：`--health-check` 的探针清单与执行逻辑移出主入口，**探测并发化**（7 个目标 × 6s 超时，串行最坏 42 秒 → 实测 3.5 秒）
+- `aiweekly/cli_utils.py` 新增 `load_json_strict` / `load_json_soft` / `bounded_int` / `resolve_search_sources` / `write_run_log`：6 处重复的 `json.loads(Path(...).read_text())` 样板与可写日志逻辑从主入口下沉
+- `aiweekly/utils.py` 新增 `configure_proxy()`：出站代理的显式公共入口，取代「跨模块改写 `utils._PROXY_OVERRIDE` 私有全局 + 依赖调用顺序」
+- `aiweekly/insights.py` 新增公共名 `validate_insights` / `DEFAULT_AUDIENCE_SUMMARY`（下划线原名保留兼容），消除跨模块穿透私有符号
+- `aiweekly/const.py` 新增翻译链路默认值与搜索源默认 JSON：原先在 `generate_site.py` 的 argparse 与 `render.py` 的形参默认值里**各写一遍**，改一处必漏另一处
+
+### Unchanged
+- CLI 参数集合、HTML 结构与产物格式、抓取与降级链路、翻译三级取值均未改动；`validate_report.py` **25/25 全过**（含模块体量守护：36 文件 / 主入口上限 500）
+
 ## [3.6.1] — 2026-09-22
 合规措辞整改：清除全部可能被判定为「规避网络管理」的表述，功能零变更。
 
