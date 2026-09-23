@@ -102,7 +102,12 @@ def list_targets(args):
 
 
 def scan_text(text):
-    """返回该文件命中的 (level, why, line_no, line_text) 列表。"""
+    """返回该文件命中的 (level, why, line_no, snippet) 列表。
+
+    ``snippet`` 为行内容摘要（≤140 字符），便于人工定位；**唯独密钥类命中例外**，
+    固定回显脱敏占位（见下方 SECRET_PATTERNS 循环），避免本工具自己把密钥写进
+    日志或 CI 输出 —— 那正是它要检出的问题。
+    """
     hits = []
     lines = text.split("\n")
     for term in BLOCKER_CJK:
@@ -122,6 +127,7 @@ def scan_text(text):
         for i, line in enumerate(lines, 1):
             m = re.search(pat, line)
             if m:
+                # 不回显命中原文：靠「文件 + 行号」已足够定位，回显等于二次泄漏。
                 hits.append(("BLOCKER", f"疑似{why}泄漏", i, "[REDACTED_SECRET]"))
     for i, line in enumerate(lines, 1):
         if INFO_PATTERN.search(line):
