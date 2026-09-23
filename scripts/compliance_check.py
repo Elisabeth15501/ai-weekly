@@ -122,7 +122,7 @@ def scan_text(text):
         for i, line in enumerate(lines, 1):
             m = re.search(pat, line)
             if m:
-                hits.append(("BLOCKER", f"疑似{why}泄漏", i, m.group(0)[:20] + "…"))
+                hits.append(("BLOCKER", f"疑似{why}泄漏", i, "[REDACTED_SECRET]"))
     for i, line in enumerate(lines, 1):
         if INFO_PATTERN.search(line):
             hits.append(("INFO", "出站代理提及 —— 请确认定位为「企业内网出站」场景", i, line.strip()[:140]))
