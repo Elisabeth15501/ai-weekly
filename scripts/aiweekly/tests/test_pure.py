@@ -5,6 +5,7 @@
   - leaderboard._leaderboard_freshness     （快照时效判定）
   - leaderboard._build_selection_notes     （三受众选型结论算法）
   - model_meta._apply_profile_as_truth     （资料卡权威覆盖 / 归一键匹配）
+  - 输出转义不变量                          （外部可控字段进 HTML 前必须按上下文转义）
 """
 import os
 import sys
@@ -253,3 +254,109 @@ def test_collect_source_results_bounded_deadline(monkeypatch):
     assert res["slow"]["status"] == "timeout", res["slow"]
     # 单源失败隔离：慢源超时不应污染快源结果
     assert res["fast"]["status"] == "ok"
+
+
+# ========== 输出转义（XSS 防护 · 回归守护）==========
+# 守护的不变量：**来自 RSS / CLI 的外部可控字段，进入 HTML 前必须按上下文转义。**
+# 背景（均为真实历史缺陷）：
+#   - market.py 三处 href/title 直接插值（字段来自 RSS）
+#   - render.py 的 KEYWORD_SEARCH_SOURCES 曾是 <script> 内的裸 JSON 注入点
+#   - insights.py 的 onclick 曾只用 html.escape 处理「属性内的 JS 字符串」（无效）
+from aiweekly import market as MKT  # noqa: E402
+from aiweekly.utils import js_str_in_attr, safe_href, safe_url  # noqa: E402
+
+PAYLOAD_TAG = "<img src=x onerror=alert(1)>"
+PAYLOAD_JS = "javascript:alert(1)"
+
+
+def test_safe_url_scheme_whitelist():
+    assert safe_url("https://a.example/x") == "https://a.example/x"
+    assert safe_url("http://a.example") == "http://a.example"
+    assert safe_url("mailto:a@b.com") == "mailto:a@b.com"
+    for bad in (PAYLOAD_JS, "JavaScript:alert(1)", " javascript:alert(1)",
+                "data:text/html,x", "vbscript:msgbox(1)", "//evil.example", "", None):
+        assert safe_url(bad) == "#", bad
+
+
+def test_safe_href_escapes_attribute_context():
+    assert safe_href("https://ok.example/a?x=1&y=2") == "https://ok.example/a?x=1&amp;y=2"
+    assert '"' not in safe_href('https://ok.example/a?q="x"')
+
+
+def test_js_str_in_attr_two_layer_escaping():
+    out = js_str_in_attr("x');alert(1);//")
+    assert "');alert" not in out, out        # 裸 ' 不得残留，否则闭合 JS 字符串
+    assert "\\&#x27;" in out, out            # JS 层 \  +  HTML 层 &#x27;，两层都在
+    assert '"' not in js_str_in_attr('a"b')
+    assert js_str_in_attr("") == ""
+
+
+def _signal(**over):
+    s = {"title": PAYLOAD_TAG, "url": PAYLOAD_JS, "types": ["融资"], "amount": "$1B",
+         "bridge_region": "全球", "bridge_label": "中国", "source": "S",
+         "lang": "en", "cn_summary": PAYLOAD_TAG, "keys": []}
+    s.update(over)
+    return s
+
+
+def test_market_signals_html_escapes_text_and_href():
+    html = MKT._render_market_signals_html([_signal()], {})
+    assert "<img src=x" not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html
+    assert 'href="#"' in html
+    assert PAYLOAD_JS not in html
+
+
+def test_market_signals_with_theme_escapes_cn_summary_and_href():
+    html = MKT._render_market_signals_html_with_theme([_signal()], {})
+    assert "<img src=x" not in html and "&lt;img" in html
+    assert 'href="#"' in html
+
+
+def test_market_trend_insights_evidence_escaped():
+    # 主题词须出现在标题里，_match_insight_evidence 才会抽出「本周印证」行
+    html = MKT._render_trend_insights_html([_signal(title="融资 " + PAYLOAD_TAG)], [])
+    assert 'class="insight-evidence"' in html     # 非空断言：确保真的走到拼接分支
+    assert "<img src=x" not in html
+    assert 'href="#"' in html
+
+
+def test_market_e_handles_none_without_crashing():
+    assert MKT._e(None) == ""
+    assert MKT._e(None, quote=True) == ""
+    assert '"' not in MKT._e('a"b', quote=True)
+
+
+def test_market_static_body_keeps_intentional_markup():
+    # TREND_INSIGHTS.body 是开发者静态常量且含故意的 <b>，不得被过度转义
+    html = MKT._render_trend_insights_html([], [])
+    assert "&lt;b&gt;" not in html
+    assert "<b>" in html
+
+
+def test_insights_keyword_chips_rejects_javascript_base():
+    html = INS._render_keyword_chips_html([{"term": "测试词"}],
+                                          search_sources={"baidu": PAYLOAD_JS})
+    import re as _re
+    assert _re.findall(r'class="kw-chip" href="([^"]*)"', html) == ["#"]
+
+
+def test_insights_keyword_chips_keeps_legit_base():
+    html = INS._render_keyword_chips_html(
+        [{"term": "测试词"}], search_sources={"baidu": "https://www.baidu.com/s?wd="})
+    assert 'href="https://www.baidu.com/s?wd=' in html
+
+
+def test_insights_audience_chip_onclick_two_layer():
+    html = INS._render_audience_chips_html({"开发者": {}, "x');alert(1);//": {}})
+    assert "');alert(1)" not in html
+    assert "\\&#x27;" in html
+
+
+def test_json_text_script_safe_blocks_breakout_and_keeps_format():
+    from aiweekly.render import _json_text_script_safe
+    out = _json_text_script_safe('{"a": "</script><img src=x>"}')
+    assert "</script>" not in out
+    assert "\\u003c/script\\u003e" in out
+    # 格式保留：已是 JSON 文本时不得重排（紧凑分隔符须原样保留）
+    assert _json_text_script_safe('{"a":"b"}') == '{"a":"b"}'

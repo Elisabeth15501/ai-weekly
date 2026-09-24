@@ -119,6 +119,21 @@ def _build_leaderboard_notes(lb: dict) -> dict:
 __all__ = ["generate", "TEMPLATE_PATH", "SKILL_DIR"]
 
 
+def _json_text_script_safe(s: str) -> str:
+    """把**已是 JSON 文本**的字符串转义到可安全嵌入 ``<script>`` 的程度。
+
+    与 :func:`_json_script_safe` 的分工：本函数**不做序列化**，因此完整保留调用方
+    原有的 JSON 格式（含紧凑分隔符），适用于调用方已持有 JSON 文本的场景。
+    对合法 JSON 而言 ``<`` ``>`` ``&`` 只可能出现在字符串字面量内部，
+    故逐字符替换是安全的。
+    """
+    if not s:
+        return ""
+    return (s.replace("<", "\\u003c")
+             .replace(">", "\\u003e")
+             .replace("&", "\\u0026"))
+
+
 def _json_script_safe(obj) -> str:
     """把对象序列化为可安全嵌入 <script> 的 JSON 字符串。
 
@@ -128,10 +143,7 @@ def _json_script_safe(obj) -> str:
     Unicode 形式（\\u003c 等），既阻止 ``</script>`` 突破，又保证之后经
     innerHTML + escapeHtml 渲染时按纯文本显示。
     """
-    return (json.dumps(obj, ensure_ascii=False)
-            .replace("<", "\\u003c")
-            .replace(">", "\\u003e")
-            .replace("&", "\\u0026"))
+    return _json_text_script_safe(json.dumps(obj, ensure_ascii=False))
 
 
 def _js_str(s: str) -> str:
@@ -350,14 +362,19 @@ def generate(api_data: dict, output_path: str = None,
         date_range = f"{week_ago.year}/{week_ago.month}/{week_ago.day}–{today.month}/{today.day}"
     template = template.replace("[DATE_RANGE]", date_range)
     # 图表来源：提供真实来源则用之，否则标注为估算（全球 + 中国双来源）
-    template = template.replace("[MARKET_SOURCE]", market_source)
-    template = template.replace("[FUNDING_SOURCE]", funding_source)
-    template = template.replace("[CN_MARKET_SOURCE]", cn_market_source)
-    template = template.replace("[CN_FUNDING_SOURCE]", cn_funding_source)
+    # 四个值均来自 CLI（--market-source / --funding-source / --cn-market-source /
+    # --cn-funding-source），属不可信输入。模板中这 6 个占位符**全部落在 HTML 文本
+    # 节点内**（:888/:896/:904/:912/:921/:929/:1106 的 <p>/<div> 文本），
+    # 无一处位于 <script>，故 html.escape 即为对症解。
+    template = template.replace("[MARKET_SOURCE]", html.escape(market_source))
+    template = template.replace("[FUNDING_SOURCE]", html.escape(funding_source))
+    template = template.replace("[CN_MARKET_SOURCE]", html.escape(cn_market_source))
+    template = template.replace("[CN_FUNDING_SOURCE]", html.escape(cn_funding_source))
 
     # 市场数据来源汇总（章节标题下 + 页脚）：国内 + 国外双来源并列
     _srcs = [s for s in [market_source, funding_source, cn_market_source, cn_funding_source] if s]
-    market_summary = "；".join(_srcs) if _srcs else "数据快照（静态，非实时）"
+    _srcs_e = [html.escape(s) for s in _srcs]
+    market_summary = "；".join(_srcs_e) if _srcs_e else "数据快照（静态，非实时）"
     template = template.replace("[MARKET_SOURCE_SUMMARY]", market_summary)
     # E1（v3.4.7）：能力自检卡——服务端预渲染，禁 JS 也可见
     _cap_html = _build_capability_card(
@@ -371,8 +388,8 @@ def generate(api_data: dict, output_path: str = None,
     template = template.replace("[CAPABILITY_CARD_PLACEHOLDER]", _cap_html)
     template = template.replace("[DATA_STATUS_BAR]",
                                 _build_data_status_bar(final_leaderboard))
-    if _srcs:
-        market_footer = "市场数据来源（国内+国外）：" + "；".join(_srcs)
+    if _srcs_e:
+        market_footer = "市场数据来源（国内+国外）：" + "；".join(_srcs_e)
     else:
         market_footer = "市场数据来源（静态快照，非实时）"
     template = template.replace("[MARKET_SOURCE_FOOTER]", market_footer)
@@ -448,8 +465,15 @@ def generate(api_data: dict, output_path: str = None,
     # 受众结论：未传入则回退内置默认三段（开发者/PM/自媒体），确保「给本周的你」始终出现
     template = template.replace("AUDIENCE_SUMMARY_PLACEHOLDER",
                                 _json_script_safe(audience_summary or DEFAULT_AUDIENCE_SUMMARY))
-    template = template.replace("KEYWORD_SEARCH_SOURCES_PLACEHOLDER",
-                                keyword_search_sources or _c.DEFAULT_SEARCH_SOURCES_JSON)
+    # <script> 上下文（模板 :1127 `const KEYWORD_SEARCH_SOURCES = <裸JSON>;`）：
+    # 值来自 --keyword-search-sources，属不可信输入，**必须**转义——否则内容里的
+    # </script> 会被 HTML 解析器当作脚本块结束，突破后执行任意 JS。
+    # 用 _json_text_script_safe 而非 _json_script_safe：调用方持有的是 JSON **文本**，
+    # 不重新序列化才能完整保留原格式（重序列化会改写分隔符，造成无谓的历史输出差异）。
+    # 该文本的合法性有两层保障：参数层 resolve_search_sources 当场校验，渲染期 json.loads 再兜底。
+    template = template.replace(
+        "KEYWORD_SEARCH_SOURCES_PLACEHOLDER",
+        _json_text_script_safe(keyword_search_sources or _c.DEFAULT_SEARCH_SOURCES_JSON))
     # 关键词网页搜索基址（默认百度；搜索词 = 「词语 AI 行业」）
     template = template.replace("[KEYWORD_SEARCH_BASE]", _js_str(keyword_search_base))
 

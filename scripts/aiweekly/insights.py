@@ -11,7 +11,7 @@ import urllib.parse
 from collections import Counter, defaultdict
 
 from aiweekly.news import format_news_items
-from aiweekly.utils import safe_url
+from aiweekly.utils import js_str_in_attr, safe_href, safe_url
 
 __all__ = [
     "_validate_insights", "_AUTO_KICKERS", "_AUTO_SIGNALS", "_DAILY_DIGEST_MARKERS",
@@ -603,10 +603,14 @@ def _render_audience_chips_html(audience_summary, active=DEFAULT_ACTIVE_AUDIENCE
     parts = []
     for key in audience_summary:
         cls = "audience-chip active" if key == active else "audience-chip"
+        # data-audience 与文本节点属 HTML 上下文 → html.escape 足够；
+        # 但 onclick 内嵌的是 **JS 字符串字面量**，必须走 js_str_in_attr 做两层转义
+        # （仅 html.escape 会被浏览器先做实体解码后失效）。
+        key_attr = html.escape(key, quote=True)
         parts.append(
-            f'<span class="{cls}" data-audience="{html.escape(key, quote=True)}" '
-            f'onclick="switchAudience(\'{html.escape(key, quote=True)}\', this)">'
-            f"{html.escape(key, quote=True)}</span>"
+            f'<span class="{cls}" data-audience="{key_attr}" '
+            f'onclick="switchAudience(\'{js_str_in_attr(key)}\', this)">'
+            f"{key_attr}</span>"
         )
     return "\n".join(parts)
 
@@ -670,7 +674,7 @@ def _render_keyword_chips_html(keywords, active=DEFAULT_ACTIVE_AUDIENCE,
             continue
         parts.append(
             f'<div class="kw-item" style="margin-bottom:12px;">\n'
-            f'  <a class="kw-chip" href="{html.escape(_kw_search_url(k, active, base), quote=True)}" '
+            f'  <a class="kw-chip" href="{safe_href(_kw_search_url(k, active, base))}" '
             f'target="_blank" rel="noopener" '
             f'title="在网页中搜索「{html.escape(term, quote=True)} AI」" '
             f'style="display:flex;align-items:center;gap:8px;">\n'

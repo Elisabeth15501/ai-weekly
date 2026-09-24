@@ -478,10 +478,30 @@ def safe_href(u: str) -> str:
     return html.escape(safe_url(u), quote=True)
 
 
+def js_str_in_attr(s: str) -> str:
+    """把字符串安全放进「HTML 属性里的 JS 单引号字符串字面量」。
+
+    典型上下文：``onclick="switchAudience('X', this)"``。
+
+    两层转义缺一不可：
+      1. **JS 层**——先转义 ``\\`` / ``'`` / 换行，否则可闭合 JS 字符串；
+      2. **HTML 层**——再做 ``html.escape(quote=True)``，否则 ``"`` 可闭合属性。
+
+    注意**只做 html.escape 是不够的**：浏览器会先对属性值做实体解码，再把结果
+    交给 JS 解析，因此 ``&#x27;`` 解码回 ``'`` 后照样能闭合字符串——这正是
+    ``insights.py`` 受众 chip 历史上的写法。
+    """
+    if not s:
+        return ""
+    js = (s.replace("\\", "\\\\").replace("'", "\\'")
+          .replace("\n", "\\n").replace("\r", "\\r"))
+    return html.escape(js, quote=True)
+
+
 __all__ = [
     "_UA", "_PROXY_OVERRIDE", "_SOCKS_ACTIVE",
     "resolve_proxy", "configure_proxy", "_resolved_proxy", "_configure_proxy", "_build_opener",
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_iso_datetime", "_parse_date_arg", "_parse_snapshot_date",
-    "load_json", "save_json", "safe_url", "safe_href",
+    "load_json", "save_json", "safe_url", "safe_href", "js_str_in_attr",
 ]

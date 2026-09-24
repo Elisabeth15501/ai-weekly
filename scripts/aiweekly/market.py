@@ -13,15 +13,18 @@ from aiweekly.leaderboard import _collect_leaderboard_models
 from aiweekly.utils import safe_href
 
 
-def _e(v) -> str:
+def _e(v, quote: bool = False) -> str:
     """转义**外部可控**字段后拼进 HTML。
 
     与裸 ``html.escape`` 的区别：``None`` 归一为空串。
     信号字段（amount / bridge_* / source 等）来自 RSS 解析，缺字段时为 ``None``，
     裸转义会抛 ``AttributeError`` 把整期报告打挂；原实现直接插值只是渲染出 "None"。
     安全修复不应引入新的崩溃路径，故统一走这里。
+
+    ``quote=True`` 用于**属性值**上下文（如 ``class="ms-type t-{...}"``），
+    额外转义引号，避免值里含 ``"`` 时提前闭合属性。
     """
-    return html.escape("" if v is None else str(v))
+    return html.escape("" if v is None else str(v), quote=quote)
 
 
 def _js_json(obj) -> str:
@@ -499,7 +502,7 @@ def _render_market_signals_html(signals, lb_map):
     cards = []
     for s in signals:
         types_html = " ".join(
-            f'<span class="ms-type t-{_e(t)}">{_e(t)}</span>' for t in s["types"])
+            f'<span class="ms-type t-{_e(t, quote=True)}">{_e(t)}</span>' for t in s["types"])
         amt = f'<span class="ms-amount">{_e(s["amount"])}</span>' if s["amount"] else ""
         # 资本↔能力：检测标题是否含上榜模型/机构名
         title_low = s["title"].lower()
@@ -687,7 +690,7 @@ def _render_market_signals_html_with_theme(signals, lb_map):
     cards = []
     for s in signals:
         types_html = " ".join(
-            f'<span class="ms-type t-{_e(t)}">{_e(t)}</span>' for t in s["types"])
+            f'<span class="ms-type t-{_e(t, quote=True)}">{_e(t)}</span>' for t in s["types"])
         amt = f'<span class="ms-amount">{_e(s["amount"])}</span>' if s["amount"] else ""
         theme = _signal_theme(s)
         theme_html = (f'<span class="ms-theme">印证趋势：{_e(theme)}</span>'

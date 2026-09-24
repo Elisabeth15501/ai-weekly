@@ -235,13 +235,15 @@ bash run_report.sh deploy --html AI_News.html
 
 ## 安全
 
-本技能经过对抗式代码审查，并修复了部分 RSS 不可信内容导致的注入类缺陷（审查记录为发布者本地文档，不随包分发）：
+本技能经过对抗式代码审查，并修复了 RSS / CLI 不可信内容导致的注入类缺陷（审查记录为发布者本地文档，不随包分发）：
 
-- **H1 存储型 XSS（`<script>` 上下文 JSON 注入）**：`render.py` 改用 `_json_script_safe()`，序列化后把 `<` `>` `&` 转义为 `\u003c`/`\u003e`/`\u0026`，阻止 `</script>` 突破脚本块。所有 JSON 占位符（`NEWS_DATA` / `LEADERBOARD_DATA` / `INSIGHTS_DATA` 等）均已覆盖
-- **H2 URL 属性突破 + 危险协议**：模板新增 `safeUrl()`，仅放行 `http(s):` / `mailto:`，`javascript:` / `data:` 回退 `#`；新闻卡与外链 `href` 均经 `escapeHtml(safeUrl(...))`
-- **M1–M2 外部源 / LEAD / 关键词转义**：CLI 可控文本统一走 `html.escape` 与 `_js_str()`
+- **H1 存储型 XSS（`<script>` 上下文 JSON 注入）**：`render.py` 用 `_json_script_safe()` 把序列化结果中的 `<` `>` `&` 转义为 `\u003c`/`\u003e`/`\u0026`，阻止 `</script>` 突破脚本块。**已覆盖的 JSON 占位符**：`NEWS_DATA` / `LEADERBOARD_DATA` / `INSIGHTS_DATA` / `AUDIENCE_SUMMARY` / `KEYWORD_SEARCH_SOURCES`
+- **H2 URL 属性突破 + 危险协议**：仅放行 `http(s):` / `mailto:`，`javascript:` / `data:` 回退 `#`。服务端渲染的 `href` 统一经 `utils.safe_href()`（协议白名单 + `html.escape(quote=True)`）；浏览器侧另有模板 `safeUrl()`
+- **H3 HTML 属性内的 JS 字符串**：`onclick="switchAudience('…')"` 这类上下文需**两层**转义（JS 层转义 `\` / `'` / 换行，再加 HTML 层 `quote=True`）——仅 `html.escape` 无效，因为浏览器会先做实体解码再把结果交给 JS 解析。统一走 `utils.js_str_in_attr()`
+- **M1–M2 CLI 可控文本转义**：`--market-source` 系列（`[MARKET_SOURCE]` / `[FUNDING_SOURCE]` / `[CN_*_SOURCE]` 及其汇总与页脚）、外部源、`LEAD`、关键词均经 `html.escape`；JS 字符串上下文走 `_js_str()`
+- **M3 TLS 证书校验**：`utils._build_opener()` 校验证书链与主机名。企业 TLS 拦截场景的正确做法是把代理根证书装入系统信任库（或指向 `SSL_CERT_FILE`），而非关闭校验
 
-> 所有修复均通过恶意 payload（`</script><img onerror=...>`、`javascript:alert(1)`）注入回归测试验证。
+> 上述修复通过恶意 payload（`</script><img onerror=...>`、`javascript:alert(1)`、`'` 闭合 JS 字符串、`"` 闭合属性）注入回归测试验证，并做了改动前后整页渲染等价性比对。
 
 ---
 

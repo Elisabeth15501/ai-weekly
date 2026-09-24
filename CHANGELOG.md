@@ -45,6 +45,39 @@ Clean Code 审计（`clean_code_audit_generate_site.md`）落地：主入口职�
   该规则的 taint source **不看内容、只看名字**（`shared/concepts/.../SensitiveDataHeuristics.qll` 的 `maybeSecret()` = `(?is).*((?<!is|is_)secret|…)`）。规则表元素会随 `findings` 写进 `--json` 产物，于是「名字像密钥的列表 → 落盘」被判定为明文存储敏感数据。
   **逻辑与输出零变更**：本地 CodeQL 2.27.1 实测本文件由「命中 1 处」变为「0 处」，仓库整体同样为 0 处。曾试过的两条替代解释（规则表 base64 解码、扫描到的文件原文）均经实验**证伪**——去掉 base64 或去掉原文片段后告警依旧。
 
+### Fixed（安全 · 注入面与传输层）
+
+**一、修复 3 处服务端 HTML 注入（`market.py`，字段来自 RSS，属存储型 XSS）**
+- `_render_market_signals_html`：`href="{url}"` 与 `{title}` 双双裸奔——`url` 未做协议白名单（`javascript:` 可执行），`title` 未转义
+- `_render_trend_insights_html`：本周印证行的 `href` 与 `title` 同样未处理
+- `_render_market_signals_html_with_theme`：此前的修复只转义了 `title`，**漏掉了 `url`**
+- 新增私有 `_e()`（`None` 归一为空串、可选 `quote`）：安全修复不应引入新的崩溃路径——原实现插值 `None` 只渲染出 "None"，裸 `html.escape(None)` 却会抛 `AttributeError` 打挂整期报告
+
+**二、修复 4 处同类漏网（对抗式复核抓出，均为「自称已覆盖、实际未覆盖」）**
+- **`</script>` 突破**：`KEYWORD_SEARCH_SOURCES_PLACEHOLDER` 原为裸 JSON 文本注入模板 `:1127` 的 `<script>` 内，无引号包裹、无转义——`--keyword-search-sources` 含 `</script>` 即可突破并执行任意 JS。现走新增的 `_json_text_script_safe()`（**不重序列化**，以保留原 JSON 格式）
+- **HTML 属性内的 JS 字符串**：`insights.py` 受众 chip 的 `onclick="switchAudience('…')"` 仅用 `html.escape`，**在 JS 字符串上下文里无效**——浏览器先做实体解码再把结果交给 JS 解析，`&#x27;` 解码回 `'` 后照样闭合。新增 `utils.js_str_in_attr()` 做「JS 层 + HTML 层」两层转义
+- **`href` 缺协议白名单**：`insights.py` 关键词 chip 的 `href` 只做了 `html.escape`，`--keyword-search-sources` 传 `javascript:` 基址即可执行。改走 `utils.safe_href()`
+- **CLI 文本裸插值**：`[MARKET_SOURCE]` / `[FUNDING_SOURCE]` / `[CN_*_SOURCE]` 及其汇总、页脚共 6 处占位符直接插值。这 6 处**全在 HTML 文本节点内**（无一位于 `<script>`），故统一 `html.escape`
+
+**三、恢复 TLS 证书校验（传输层）**
+- `utils._build_opener()` 原为 `verify_mode=CERT_NONE` + `check_hostname=False`，使任何持有任意自签证书的中间人都能冒充上游站点，而抓取到的 RSS 正文会原样进入本期报告
+- 现改为 `ssl.create_default_context()` 默认行为（校验证书链与主机名）。企业 TLS 拦截场景的正确做法是把代理根证书装入系统信任库（或指向 `SSL_CERT_FILE`），而非关闭校验
+
+**四、消除重复实现**
+- `safe_url` 原有 3 处独立拷贝。其中 `render._safe_url` 与 `insights._safe_insight_url` 规则完全相同（注释自称"同规则"），已下沉为 `utils.safe_url()` 单一实现——选 `utils` 是因为 `render.py` 反向依赖 `market.py`，只有下沉到 `utils` 才不成环
+- `delivery/feishu_bot._safe_url` **刻意保留不合并**：虽同名但契约不同——用正则判定、违规时返回**空串**而非 `'#'`、服务于飞书卡片链接语法而非 HTML `href`
+- `render.py` 局部变量 `safe_url` 更名 `ext_url_safe`：原名与 `import` 同名会触发 `UnboundLocalError`
+
+### Security（文档与声明面）
+- `README.md`「安全」段原有两处**不成立的声明**，本次修正：① "所有 JSON 占位符（`NEWS_DATA` / `LEADERBOARD_DATA` / `INSIGHTS_DATA` 等）均已覆盖"——`KEYWORD_SEARCH_SOURCES` 实际未覆盖，现改为**逐一列出**已覆盖的 5 个占位符；② "CLI 可控文本统一走 `html.escape` 与 `_js_str()`"——`[MARKET_SOURCE]` 系列实际未走，现已补齐并如实描述
+- 新增 H3（属性内 JS 字符串）、M3（TLS 校验）两条，并写明 H3「两层转义缺一不可」的原因，避免后人再退回单层写法
+
+### Verified（安全修复的验证口径）
+- **自动化守护**：新增 12 项转义回归测试，套件由 21 项增至 33 项；覆盖协议白名单、属性闭合、两层转义、格式保留、`None` 容错、静态 `body` 的 `<b>` 不被过度转义（`tests/` 不随发布包分发，故声明面不变）
+- **端到端**：以恶意 CLI 参数实跑生成器——`--market-source '<img src=x onerror=alert(1)>'`、`--keyword-search-sources '{"baidu":"https://ok/?a=</script><img src=x>"}'`、`javascript:` 基址——产物 HTML 中 payload 均未原样落地，`</script>` 已呈 `\u003c/script\u003e`
+- **输出等价性**：改动前后整页渲染 **2608 行逐字节等价**；唯一差异为 URL 中裸 `&` → `&amp;`（即修复本身，且仅出现在含 `&` 的 URL 上）
+- **TLS 影响实测**：33 个数据源在「开启校验 / 关闭校验」下结果集**完全一致**，SSL 失败 0 例、真回归 0 例（Gartner 403 与 VentureBeat 429 属 HTTP 层，关闭校验时同样失败）
+
 ## [3.6.1] — 2026-09-22
 合规措辞整改：清除全部可能被判定为「规避网络管理」的表述，功能零变更。
 
