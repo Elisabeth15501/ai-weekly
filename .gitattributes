@@ -17,6 +17,10 @@ scripts/compliance_check.py export-ignore
 # 单元测试与离线 fixture（CI / 本地 pytest 用）
 scripts/conftest.py export-ignore
 scripts/aiweekly/tests/** export-ignore
+# 发布前合规门禁的单测（含负面样例，不进发布包）
+scripts/test_p1_guards.py export-ignore
+# 门禁回灌记录（发布者自用）
+scripts/gate_feedback.json export-ignore
 
 # 平台封禁的文件类型：这些点文件在 SkillHub 会被「不允许的文件类型」拦下。
 # 原先靠发布后手工 rm，现在自动剔除，省掉一步且不会漏。

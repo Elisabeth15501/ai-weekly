@@ -28,5 +28,9 @@ openclaw-edition/
 # 单元测试与离线 fixture（仅供 CI / 本地 pytest，运行期不需要）
 scripts/conftest.py
 scripts/aiweekly/tests/
+# 发布前合规门禁的单测（含负面样例「翻墙教程内容」等，绝不能进发布包）
+scripts/test_p1_guards.py
+# 门禁回灌记录（发布者自用，含用户新增规则，不随包分发）
+scripts/gate_feedback.json
 # 发布前合规门禁（发布者自用；规则表为明文词表，本就不宜随包分发）
 scripts/compliance_check.py

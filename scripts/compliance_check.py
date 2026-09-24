@@ -102,6 +102,19 @@ CREDENTIAL_PATTERNS = [
 
 SELF_NAME = Path(__file__).name
 
+# 门禁只扫「随发布包分发的产物」。下列路径是 dev-only（单测 / CI / 门禁自身 / 回灌记录），
+# 已被 .gitattributes(export-ignore) 与 .clawhubignore 排除出发布包，不会进入用户可见的技能包；
+# 且测试文件里故意写有负面样例（如「翻墙教程内容」「解决了访问不了」）会触发自检命中，
+# 必须把这类路径从扫描范围剔除，否则门禁会把自家测例当真违规而阻断发布。
+# 注意 scan_text() 本身不变 —— 单测仍直接调用它验证检测能力，只是文件扫描跳过这些路径。
+_SCAN_EXCLUDE_RELS = {
+    "scripts/compliance_check.py",
+    "scripts/test_p1_guards.py",
+    "scripts/conftest.py",
+    "scripts/gate_feedback.json",
+}
+_SCAN_EXCLUDE_PREFIXES = ("scripts/aiweekly/tests/",)
+
 
 # ---------------------------------------------------------------------------
 # 回灌闭环：gate_feedback.json（git 跟踪，随技能走；不进发布包）
@@ -282,11 +295,13 @@ def main():
     for p in targets:
         if p.name == SELF_NAME or p.suffix.lower() not in TEXT_EXT:
             continue
+        rel = str(p.relative_to(root)).replace("\\", "/")
+        if rel in _SCAN_EXCLUDE_RELS or rel.startswith(_SCAN_EXCLUDE_PREFIXES):
+            continue
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        rel = str(p.relative_to(root)).replace("\\", "/")
         for level, why, line_no, line_text in scan_text(text, whitelist_res):
             findings[level].append({"file": rel, "why": why, "line": line_no, "text": line_text})
 
