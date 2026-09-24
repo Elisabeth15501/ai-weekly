@@ -16,7 +16,8 @@ generate_site.py
   健康检查（--health-check）-> aiweekly.health
 `from generate_site import generate` 仍然可用（转出口自 aiweekly.render，属兼容垫层）。
 
-本技能**不内置任何第三方商业 API 依赖**；新闻默认全部来自 RSS 聚合。
+本技能**默认不调用任何付费/商业 API**；新闻默认全部来自公开 RSS 聚合。
+唯一例外是可选的 NewsAPI 接入（`--news-api` + 自备 `NEWSAPI_KEY`，默认关闭，见 fetch_ai_news.py）。
 可选外部增强：如希望用 AI HOT、或任何「AI 行业知识类」外部 API 增强报告可信度，
 请自行从其官方渠道获取数据并导出为 JSON（schema 见下），再用 --external-news-json
 注入。是否启用完全由你决定，风险自担（需遵守该 API 的服务条款）。

@@ -3,7 +3,7 @@ name: ai-weekly
 slug: ai-weekly
 version: 3.6.1
 displayName: AI Weekly Report
-summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（RSS 自治，零第三方 API 依赖）
+summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（公开 RSS 取数，无付费 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
 homepage: https://github.com/Elisabeth15501/ai-weekly
 license: MIT
@@ -11,7 +11,7 @@ compatibility: Claude Code, OpenAI Codex, OpenCode, OpenClaw, Coze, WorkBuddy
 description: >
   AI 行业新闻网站生成工具。生成一个可搜索、可筛选、支持暗色模式的 AI 新闻网站（单文件 HTML）。
   **直接说人话就能触发，不需要记命令**（例：「这周 AI 有什么大事」「给我看个 AI 简报」）。
-  新闻默认全部来自 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，自治无单点依赖）；技能**不内置任何第三方商业 API**。
+  新闻默认全部来自公开 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，无单点依赖）；**默认不调用任何付费/商业 API**。另提供一个**可选**的 NewsAPI 接入（`--news-api` + 自备 `NEWSAPI_KEY`，**默认关闭**），是否启用完全由用户决定。
   如需用 AI HOT 或其他「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以
   --external-news-json 注入，是否启用完全由用户决定。每条新闻含原始来源链接。
   市场/融资图表数据由 WebSearch 获取后注入，未提供时明确标注「示例/估算」。
@@ -125,7 +125,7 @@ Agent：没有隐藏图表区块的开关，硬删会破坏报告完整性。三
 Agent：→ 轻量模式，对话内直接输出分组列表
 ```
 
-**③ 抓取异常：先诊断，别交一份空报告**
+**③ 抓取异常：先排查，别交一份空报告**
 
 ```
 用户：跑一下这周周报
@@ -171,7 +171,7 @@ Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translat
 
 ## 二、核心设计理念
 
-- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`scripts/fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），不内置任何第三方商业 API；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担
+- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`scripts/fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），**默认不调用任何付费/商业 API**（唯一例外是可选的 NewsAPI 接入，见 frontmatter 说明，默认关闭）；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担
 - **单文件交付**：所有 CSS/JS 内联，Chart.js 也内联进 HTML，无需任何外部文件
 - **高可信度**：每条新闻必须附带原始报道 URL
 - **零脑补**：市场/融资图表数据必须由 Agent 从 WebSearch 获取真实值后注入；未提供时明确标注「示例/估算数据」，绝不编造模型榜单
@@ -422,7 +422,7 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 | prompt | 见下方自动化 Prompt 模板 |
 
 ```
-你是 AI 行业新闻编辑。请生成一个 AI 新闻网站（默认 RSS 自治，不内置任何第三方商业 API）：
+你是 AI 行业新闻编辑。请生成一个 AI 新闻网站（默认公开 RSS 取数，不调用任何付费/商业 API）：
 
 1. 运行 RSS 抓取获取近 7 天新闻：
    bash run_report.sh scripts/fetch_ai_news.py --output news.json
@@ -680,7 +680,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 
 ## 九、发布与第三方依赖说明（合规）
 
-本技能**默认零第三方商业 API 依赖**，可安全开源发布（GitHub / Gitee）：
+本技能**默认不调用任何付费/商业 API**——全部默认数据源都是公开 RSS 订阅接口与公开榜单页面，可安全开源发布（GitHub / Gitee）：
 
 ### 9.0 网络访问合规声明（重要）
 
@@ -691,11 +691,19 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 
 - 新闻默认全部来自 14 个公开 RSS 源（国内 7 + 国外 7）；市场/融资图表由运行方通过 WebSearch 注入；排行榜从公开网页（LMArena / Artificial Analysis / Hugging Face / OpenCompass / SuperCLUE / ModelScope 等）自适应抓取，国内兜底快照随技能附带。
 - **不内置、不打包任何 AI HOT / 卡兹克的内容**。页脚仅保留基础参考来源链接（LMArena / Artificial Analysis / Hugging Face / OpenCompass / Gartner / IDC / Statista / Crunchbase / Stanford HAI）。
-- **外部 API 增强是用户 opt-in 的**：技能不主动调用 AI HOT 等任何外部商业 API；只有当用户自备 JSON 并以 `--external-news-json` 注入时才会参与，且页脚自动署名该来源。是否启用、遵守其服务条款均由用户自行决定。
+- **外部 API 增强是用户 opt-in 的**：技能**默认不调用任何外部商业 API**。两条可选增强路径——① `--news-api` 走 NewsAPI（需自备 `NEWSAPI_KEY`，默认关闭）；② 用户自备 JSON 以 `--external-news-json` 注入 AI HOT 等来源（页脚自动署名）。两条路径都需用户显式开启，是否启用、是否遵守其服务条款均由用户自行决定。
 - **发布建议**：① 附带 `LICENSE` 文件（如 MIT / Apache-2.0）；② 如需大范围传播，建议提示用户使用外部 API 前先取得授权。
 - **跨平台分发**：本技能以单一 `SKILL.md`（开放 Agent Skill 规范）为唯一入口，直接放入支持该规范的任意 Agent 目录即可加载；框架级调用（LangGraph / Dify / Coze）参考 `manifest.json` 的引擎接口描述。无需任何平台专属包装（无 `plugin.json`、无 per-agent 副本）。
 
+### 9.1 内容标识与免责声明（合规）
+
+- **AIGC 标识（必留）**：生成的 HTML 报告**页脚固定展示「本报告由 AI 辅助编制」标识与免责声明**。这是按《生成式人工智能服务管理暂行办法》第十二条对生成内容标识的要求设置的，**转载或二次分发时请保留，不要移除**。
+- **不构成投资建议**：报告中的**市场规模、融资额度、公司估值、模型成本**等数据，均为公开来源的**静态快照或折算估算**，仅供信息参考，**不构成任何投资建议**；据此作出决策的风险由使用者自行承担。
+- **数据准确性**：每条新闻均附原始报道链接，请以原始来源为准；模型榜单为实时抓取或**标注日期的快照**，不冒充实时；成本栏的外币折算值仅供参考。
+- **内容来源**：本技能不生产、不编辑新闻内容，仅对公开 RSS 订阅接口与公开榜单页面做聚合与结构化呈现。
+
 ## 十、文件清单
+
 
 > **目录职责边界**（改东西前先看这里，避免跨目录混放）：
 > - `scripts/` = 生成管线（抓取 / 翻译 / 渲染 / 部署），**纯 Python**，所有业务逻辑只在这里改；
@@ -709,7 +717,6 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `manifest.json` | 通用引擎接口描述（框架级调用参考） |
 | `assets/news_site_template.html` | v3.0 新闻网站 HTML 模板 |
 | `assets/report_template.html` | v2.0 周报模板（保留兼容） |
-| `assets/sample_chart_data.json` | Chart.js 示例数据 |
 | `scripts/generate_site.py` | **v3.0** 一键从 API 生成新闻站 |
 | `scripts/validate_report.py` | v3.0 质量检查（含 XSS 守护，自动识别 v2/v3 格式） |
 | `scripts/fetch_ai_news.py` | 离线 RSS 抓取（备用） |
@@ -717,7 +724,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `scripts/deploy_ghpages.py` | **部署到 GitHub Pages**：git worktree 操作 `gh-pages` 分支，累加根 `index.html` 存档页并推送（底层被 `deploy.py` 调用） |
 | `scripts/deploy.py` | **统一部署入口（P0-1）**：按 `--deploy-to` 选后端（github-pages/tencent-cos/vercel/netlify/cloudflare-pages/local），非 GitHub 后端无需配置 GitHub |
 | `scripts/validate_models.py` | **模型档案守护（P0-2）**：`--check` 扫描 `model_profiles.json` 有无未核实条目；`--fix` 将无来源推测条目移入 `model_profiles_unverified.json` |
-| `scripts/leaderboard_diagnose.py` | **排行榜源诊断（P0-3）**：逐个源探测可达性 + 统计国内镜像回退命中 |
+| `scripts/leaderboard_diagnose.py` | **排行榜源探活（P0-3）**：逐个源探测可达性 + 统计国内镜像回退命中 |
 | `scripts/install_scheduler.py` | **R4 系统级调度兜底**：注册每日 09:00 刷新任务（Windows 任务计划 / Linux cron），会话不在线也能刷新 |
 | `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy`/`--deploy-to` 顺带部署） |
 | `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
@@ -725,19 +732,75 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `scripts/init_feishu_config.py` | **飞书配置向导（P1-3）**：交互式生成 `feishu_config.json`（Webhook）或 `feishu_target.json`（连接器），免去手动建文件 |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
 | `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，逐条 `verified=true` + 真实来源），每次生成自动加载、新模型研究后合并写回 |
-| `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（检测为空自动删除；运行方据此联网补档） |
+| `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（**运行期生成、不随包分发**；检测为空自动删除；运行方据此联网补档） |
 | `model_profiles_unverified.json` | **隔离存放（P0-2）**：被 `validate_models.py` 移出的无来源推测条目，不参与排行榜，待联网核实后回填 |
-| `cn_leaderboard_snapshot.json` | 国内排行榜快照（实时不可达时回退） |
-| `delivery/deploy_config.example.json` | 部署配置示例（COS/Vercel 等后端参数） |
-| `delivery/feishu_config.example.json` | 飞书 Webhook 配置示例（`feishu_config.json` 模板） |
-| `references/data_sources.md` | 备用数据源参考 |
-| `references/report_structure.md` | v2.0 报告结构参考 |
-| `references/FAQ.md` | **常见问题集中解答（P1-2）**：安装配置 / 首次使用 / 飞书推送 / GitHub Pages / 网络 / 模型数据 |
-| `data/history.csv` | 历史指标数据 |
+| `cn_leaderboard_snapshot.json` | 国内排行榜**本地兜底快照**（由 `refresh_snapshot.py` 生成；**不入库、不随包分发**，缺失时降级到 `leaderboard_cache.json`） |
+
+### 10.1 完整模块清单（随包分发的全部文件）
+
+> 上表是**面向使用者**的关键文件说明；下表是**随包分发的完整清单**，用于让「声明的能力范围」与「实际分发的内容」一一对应——避免出现「代码里有、文档里没声明」的模块（这既影响可审计性，也会让自动审核把正常子模块误判为"描述与代码不符"）。
+>
+> 本清单按 `git archive HEAD --worktree-attributes` 的**实际导出结果**核对（2026-09-24，共 91 个文件），非人工记忆。**不随包分发**的文件见 §10.2。
+
+| 路径 | 用途 |
+|---|---|
+| `SKILL.md` · `README.md` · `CHANGELOG.md` · `LICENSE` | 入口文档 · 使用说明 · 变更日志 · 许可证（MIT） |
+| `manifest.json` | 通用引擎接口描述（框架级调用参考） |
+| `requirements.txt` | 运行期依赖（**已钉版本**：feedparser / requests / beautifulsoup4） |
+| `run_report.sh` | 一键跑周报的 shell 入口 |
+| `translations_offline.json` | 离线译文包（随技能附带，断网可用；由 `backfill_translations.py --emit-source` 重新生成） |
+| `model_profiles.json` · `model_profiles_unverified.json` · `model_aliases.json` · `models_cost.json` | 模型资料档案（canonical，逐条带来源）· 无来源推测条目的隔离区 · 别名表 · 成本表 |
+| `assets/news_site_template.html` · `assets/report_template.html` · `assets/chart.umd.min.js` | v3.0 新闻站模板 · v2.0 周报模板（保留兼容）· 内联图表库 |
+| `scripts/aiweekly/` | **核心引擎包（19 模块）**：`news`（RSS 抓取/解析/分类/去重）· `leaderboard` + `leaderboard_sources` + `leaderboard_fetch` + `leaderboard_checks`（榜单多源抓取/合并/质量校验/资料卡权威覆盖）· `insights`（本周看点聚类 + 受众摘要）· `market`（市场与融资数据）· `render`（HTML 渲染 + XSS 安全序列化）· `translate`（英文报道中文翻译）· `charts_svg`（纯 SVG 图表兜底）· `model_meta`（模型元数据）· `utils`（HTTP 重试退避/出站代理/区域探测/ISO8601）· `const`（硬约束常量）· `types`（TypedDict）· `errors`（错误码体系）· `health`（源健康检查）· `diagnostics`（错误提示渲染）· `cli_utils`（CLI 公共逻辑） |
+| `scripts/validate_checks/` | 产出校验规则包（8 模块，由 `validate_report.py` 导入：结构 / 新闻体量 / 看点 / 市场 / 来源 / 关键词 / 约束） |
+| `scripts/generate_site.py` | v3.0 主入口：从 API 数据生成新闻站 |
+| `scripts/fetch_ai_news.py` | RSS 抓取（备用离线路径；可选 `--news-api` 走 NewsAPI，需自备 key） |
+| `scripts/validate_report.py` | 产出质量校验（含 XSS 守护，自动识别 v2/v3 格式） |
+| `scripts/validate_models.py` | 模型档案守护（`--check` 扫描未核实条目 / `--fix` 移入隔离区） |
+| `scripts/leaderboard_diagnose.py` | 排行榜源探活（逐个源探测可达性 + 统计镜像回退命中） |
+| `scripts/deploy.py` | 统一部署入口（`--deploy-to` 选后端：github-pages/tencent-cos/vercel/netlify/cloudflare-pages/local） |
+| `scripts/deploy_ghpages.py` | GitHub Pages 后端（`gh-pages` worktree 操作，**被 `deploy.py` 导入调用**） |
+| `scripts/deploy_report.py` | 部署摘要文本提取（框架无关通知文本） |
+| `scripts/setup_pages_source.sh` | **GitHub Pages 首次配置脚本**：设置仓库 Pages 源（按 README 指引运行一次；不参与日常生成） |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（webhook / 连接器双路径） |
+| `scripts/init_feishu_config.py` | 飞书配置向导（交互式生成 Webhook 或连接器配置） |
+| `scripts/install_scheduler.py` | R4 系统级调度：注册每日 09:00 刷新任务（**以子进程调用 `refresh_deploy.py`**） |
+| `scripts/refresh_deploy.py` | 每日刷新周报站（**由 `install_scheduler.py` 调用**；会话不在线也生效） |
+| `scripts/refresh_snapshot.py` | 刷新国内榜源兜底快照 `cn_leaderboard_snapshot.json`（**手动运行**，无自动调用方） |
+| `scripts/mirror_build.py` | 镜像站构建（**被 `build_pages_site.py` 引用**） |
+| `scripts/build_pages_site.py` | 在 CI 内生成周报站并产出 Pages artifact（**由 `.github/workflows/mirror.yml` 调用**） |
+| `scripts/backfill_translations.py` | 离线译文包回填（`--emit-source` 重新生成 `translations_offline.json`） |
+| `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
+| `delivery/feishu_bot.py` · `delivery/feishu_connector.py` · `delivery/__init__.py` | 飞书卡片构造 + Webhook 发送 · 连接器直推（lark-cli，密钥不落盘） |
+| `delivery/deploy_config.example.json` · `delivery/feishu_config.example.json` | 部署与飞书配置**示例文件**（用户据此生成真实配置，示例本身不含凭据） |
+| `delivery/sample_report.json` · `delivery/v3.4.6_release_notes.md` | 示例报告 · 历史发布说明 |
+| `references/FAQ.md` · `references/data_sources.md` · `references/report_structure.md` | 常见问题集中解答 / 备用数据源 / v2.0 报告结构 |
+| `releases/` | 19 个历史版本的发布说明（归档用，反映逐版真实改动） |
+| `.github/workflows/ci.yml` · `.github/workflows/mirror.yml` | 单测 + 语法门禁 + 样张生成再校验 · 每日刷新榜源与周报站 |
+
+**运行期生成（不随包分发，首次运行或按需创建）**：`delivery/feishu_config.json` 或 `delivery/feishu_target.json`（配置向导产出，含真实 webhook，永不入库）· `model_profiles.pending.json`（待补档清单，为空自动删除）· `cn_leaderboard_snapshot.json`（本地兜底快照，缺失时降级到 `leaderboard_cache.json`）· `index.html` / `report.json` / `public/`（生成与部署产物）。
+
+### 10.2 不随包分发的文件（发布裁剪，附理由）
+
+> 下列**路径模式**不进入发布包（其中部分为开发者本地预留路径，当前仓库内可能不存在）。单列此节是为了让「声明面」与「分发面」严格互补——避免自动审核把仓库内文件与发布包逐一比对时产生歧义。
+> 裁剪由两条通道实施：`.gitattributes` 的 `export-ignore`（SkillHub 的 `git archive` 通道）与 `.clawhubignore`（ClawHub 通道）。
+
+| 路径 | 理由 |
+|---|---|
+| `scripts/aiweekly/tests/` | 单元测试与离线 fixture，仅供 CI 与本地 `pytest` |
+| `scripts/conftest.py` | pytest 配置，仅测试期需要 |
+| `scripts/compliance_check.py` | **发布者自用的发布前合规门禁**（属"发布流程"而非"用户能力"；规则表为明文词表，不随包分发） |
+| `.gitignore` · `.clawhubignore` · `.gitattributes` | 仓库与发布工具配置；SkillHub 亦将其判为不允许的文件类型 |
+| `data/` · `docs/` | 开发者本地数据与参考文档；**按路径模式排除，当前仓库内可能为空或不存在（预留）** |
+| `clean_code_audit_generate_site.md` | 发布者本地的一次性代码审计记录（`.gitignore:8`） |
+| `__pycache__/` · `*.pyc` · `*.pyo` | Python 字节码 |
+| `openclaw-edition/` · `*.skill` | 本地打包产物 |
+| `delivery/feishu_config.json` · `delivery/feishu_target.json` · `delivery/dingtalk_config.json` · `.github_token` | **含真实凭据，绝不入库**（`.gitignore` 已覆盖） |
 
 ## 参考资料
 
 - **[references/data_sources.md](references/data_sources.md)** — 备用 / 候选数据源清单
 - **[references/report_structure.md](references/report_structure.md)** — v2.0 报告结构参考
 - **[manifest.json](manifest.json)** — 通用引擎接口（框架级调用）
-- **[docs/agent-skill-format-landscape.md](docs/agent-skill-format-landscape.md)** — Agent 技能格式格局调研（为何采用单一开放 `SKILL.md`）
+
+> 说明：发布者本地曾有一份 Agent 技能格式格局调研（`docs/`），因**不随包分发**（见 §10.2），此处不再提供链接，避免发行包内出现死链。

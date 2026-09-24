@@ -11,7 +11,7 @@
 
 ## 特性
 
-- **自治优先**：新闻默认全部来自 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内优先），不内置任何第三方商业 API
+- **自治优先**：新闻默认全部来自公开 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内优先），**默认不调用任何付费/商业 API**（可选 NewsAPI 接入需自备 `NEWSAPI_KEY`，默认关闭）
 - **单文件交付**：所有 CSS/JS 内联，Chart.js 也内联进 HTML，无外部文件依赖，可直接托管或分享
 - **高可信度**：每条新闻附带原始报道 URL；市场 / 融资数据由 WebSearch 获取真实值后注入，未提供时明确标注「示例 / 估算」
 - **排行榜自适应**：多源池（LMArena / Hugging Face / OpenCompass 司南 / SuperCLUE / ModelScope），实时失败自动回退快照 / 缓存，绝不空白
@@ -21,7 +21,7 @@
 - **可定时**：支持每周自动生成最新版网站
 - **安全加固**：RSS 不可信内容经 `<script>` 上下文 JSON 注入与 URL 属性突破均已防御
 - **多后端部署**：`deploy.py` 统一入口支持 GitHub Pages / 腾讯云 COS / Vercel / Netlify / Cloudflare Pages / 本地 6 种托管，飞书卡片 `view_url` 与部署解耦，非 GitHub 后端完全不碰 GitHub
-- **国内镜像自动回退**：LMArena / HuggingFace / Artificial Analysis 主源不可达时自动切换 hf-mirror 等国内镜像，再失败才回退快照（诊断见 `scripts/leaderboard_diagnose.py`）
+- **国内镜像自动回退**：LMArena / HuggingFace / Artificial Analysis 主源不可达时自动切换 hf-mirror 等国内镜像，再失败才回退快照（探活见 `scripts/leaderboard_diagnose.py`）
 - **交互式飞书配置**：`scripts/init_feishu_config.py` 交互式生成 `feishu_config.json`（webhook / 连接器双模式 + 格式校验），首次配置不再手写出错
 - **错误提示人性化**：`ERR-*` 错误码体系 + `UserFacingError`，部署 / 推送失败给出含解决步骤的友好提示，不再丢裸 RuntimeError
 - **硬约束集中声明**：单次抓取 ≤100 条新闻、每榜排行榜 ≤50 条模型、HTML ≤5 MB（`scripts/aiweekly/const.py` 统一常量 + `validate_checks/constraints.py` 事后审计）
@@ -33,7 +33,7 @@
 ## 快速开始
 
 ```bash
-# 1. 安装依赖（仅 3 个纯标准库：feedparser / requests / beautifulsoup4）
+# 1. 安装依赖（3 个运行依赖 feedparser / requests / beautifulsoup4 + pytest，版本均已钉）
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
 
 # 2. 抓取本周 AI 新闻（RSS）
@@ -48,7 +48,7 @@ bash run_report.sh scripts/validate_report.py --html AI_News.html
 # 5. 部署到 GitHub Pages（gh-pages 分支；飞书/钉钉卡片的 view_url 即此地址）
 bash run_report.sh deploy --html AI_News.html
 #   离线仅本地提交：加 --no-push
-#   部署后顺手把 Pages 源切到 gh-pages：加 --switch-pages（需 GITHUB_TOKEN）
+#   部署后顺手把 Pages 源切到 gh-pages：加 --switch-pages（需 gh 凭据，见下文）
 ```
 
 > **完整分发一步到位**：`publish.py` 在推送飞书卡片的同时可顺带部署周报——
@@ -67,7 +67,7 @@ ai-weekly/
 ├── SKILL.md                      # 单一跨平台入口（开放 Agent Skill 规范；Claude Code / Codex / OpenCode / OpenClaw / Coze / WorkBuddy 通用）
 ├── manifest.json                 # 通用框架接口描述（LangGraph / Dify / Coze 等）
 ├── run_report.sh                 # 统一启动器（自动探测 Python + venv，CLI 参数透传）
-├── requirements.txt              # Python 依赖（仅 3 个：feedparser / requests / beautifulsoup4）
+├── requirements.txt              # 运行依赖 3 个（feedparser / requests / beautifulsoup4）+ pytest（开发/CI）；均已钉版本
 ├── README.md
 ├── LICENSE
 ├── .gitignore
@@ -138,7 +138,7 @@ gh-pages 分支（Pages 源 = Deploy from a branch: gh-pages / /root）
 ```bash
 bash run_report.sh deploy --html AI_News.html
 #   --no-push        仅本地提交，不推送（离线可跑，待网络恢复后 git push origin gh-pages）
-#   --switch-pages   部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 GITHUB_TOKEN）
+#   --switch-pages   部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 gh 凭据）
 #   --dry-run        只做 worktree+复制+index 预览，不提交不推送
 ```
 
@@ -146,17 +146,13 @@ bash run_report.sh deploy --html AI_News.html
 1. 把 `gh-pages` 分支推送到远端：`git push origin gh-pages`（已推过可跳过）。
 2. 把 GitHub Pages **源**切到 `gh-pages / /root`（二选一）：
    - **手动**：仓库 **Settings → Pages → Source** 选 **Deploy from a branch → `gh-pages` / `/root`** → Save。
-   - **自动（方案 B，推荐）**：建一个 **Classic PAT**（Fine-grained 不被 Pages API 支持，会 403），再跑脚本：
-     1. GitHub → 头像 → **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token**。
-     2. 勾选 **`repo`**（含 `public_repo`）与 **`pages:write`**；设较长过期（如 1 年）。
-     3. 生成后复制 token（只显示一次），在本机设环境变量并跑：
-        ```bash
-        export GITHUB_TOKEN=ghp_xxx   # Classic PAT，仅当前 shell 会话有效，不落盘
-        bash scripts/setup_pages_source.sh
-        ```
-        脚本只读环境变量、不回显、不写文件，切源成功后链接约 1 分钟生效。
-     > 之后每周自动化带这个 token 跑 `run_report.sh deploy --switch-pages` 即全自动（首次切源后该步骤幂等，可重复跑不影响）。
-     > **注意**：`setup_pages_source.sh` 切源走 GitHub REST API，只认 Classic PAT；而 `deploy_ghpages.py` 部署推送走 git smart HTTP，用 `.github_token` 文件（Classic PAT）经 `url.insteadOf` 免交互推送。两处都用 Classic PAT 即可，不要混用 Fine-grained。
+   - **自动（可选，需凭据）**：跑 `bash scripts/setup_pages_source.sh`。该脚本走 GitHub REST API，需要一个**能修改该仓库 Pages 设置**的凭据——优先复用 `gh` CLI 已登录的凭据（凭据由 gh 自己保管，**不落项目文件**）：
+     ```bash
+     gh auth login          # 首次登录；已登录可跳过
+     bash scripts/setup_pages_source.sh
+     ```
+     > 若确实需要用 PAT：请使用**仅限该仓库、仅含必需权限、尽量短的有效期**的令牌，通过环境变量传入，**不要落盘**。
+     > **不要**再把长期 PAT 写进仓库目录下的 `.github_token`（旧版本曾这样建议，**已废弃**）：长期、宽权限的令牌落在工作目录里，一旦目录被同步、备份或打包，就等于把仓库写权限一起带走。
 3. 等待约 1 分钟，访问 `https://<owner>.github.io/<repo>/AI_News_<date>.html` 验证不再 404。
 
 > **为什么是 gh-pages 分支而非 CI artifact？** 飞书卡片的 `view_url` 直接指向分支根目录的 `AI_News_*.html`，与「Deploy from a branch」模型天然契合；GitHub Pages 只允许单一来源，故原先的 `.github/workflows/mirror.yml`（Actions artifact 部署）已停用（`if: false`），以免两种来源互斥导致部署失败。
@@ -172,8 +168,10 @@ bash run_report.sh deploy --html AI_News.html
 - **`git push` 报 `invalid credentials` / 卡死超时**：这是**认证方式**问题，**不等于 token 无效**（可用 `curl -H "Authorization: Bearer <token>" https://api.github.com/user` 验证 token 本身有效）。
   - ❌ 不要走 `http.extraheader=AUTHORIZATION: Bearer <token>`：`Bearer` 只对 GitHub **REST API** 有效；git 推送走 **git smart HTTP** 协议，只认 **Basic** 认证，会被拒。
   - ❌ 不要依赖 Windows `wincred` 凭据助手：无交互 tty 的环境（CI / 沙箱 / 定时自动化）会卡在用户名提示导致超时。
-  - ✅ 正确做法（已内置）：把 **Classic PAT** 写入本地 `ai-weekly/.github_token`（已 gitignore，不入库），`deploy_ghpages.py` 会用 `url.insteadOf` 把 token 嵌进远端 URL + 清空 `credential.helper`，自动走 Basic 认证完成免交互推送。也可通过环境变量 `GITHUB_TOKEN` / `GH_TOKEN` 传入。
-- **`setup_pages_source.sh` 切源报 403 / 404**：Pages 源切换的 GitHub API **不支持 Fine-grained PAT**（常 403）。改用 **Classic PAT**（`repo` + `pages:write`）即可。
+  - ✅ **首选（零凭据文件）**：用 `gh` 的 git 凭据助手——`gh auth login`（已登录可跳过）后执行 `gh auth setup-git`，让 git 走 gh 托管的凭据。**项目目录里不再需要任何 token 文件**。
+  - ✅ 次选（自动化/CI 场景）：通过环境变量 `GITHUB_TOKEN` / `GH_TOKEN` 一次性传入**短期**令牌，`deploy_ghpages.py` 会注入 `Authorization` 头（仅内存，不落盘）。
+  - ⚠️ **已废弃**：把 PAT 写入仓库目录下的 `.github_token`。长期凭据落在工作目录里，目录一旦被同步/备份/打包，即连同仓库写权限一起泄露。
+- **`setup_pages_source.sh` 切源报 403 / 404**：多为令牌类型或权限范围不匹配。**最省事的规避方式是直接手动切源**（Settings → Pages → Source，一次性操作、零凭据）；若必须走 API，请确认所用凭据对该仓库具备修改 Pages 设置的权限，并以 GitHub 官方文档为准。
 
 ---
 
@@ -198,7 +196,7 @@ bash run_report.sh deploy --html AI_News.html
   ```bash
   grep -rn "import workbuddy\|from workbuddy\|skill_executor" scripts/ || echo "零耦合 ✅"
   ```
-- **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行
+- **依赖白名单**：`requirements.txt` 仅 3 个纯标准第三方库——`feedparser` / `requests` / `beautifulsoup4`（另含 `pytest`，仅供开发与 CI 测试，不影响运行）；无闭源 SDK、无云端强依赖，任何框架可 `pip install` 后直接运行；**所有版本均已钉死**，避免上游静默升级引入回归
 - **产物框架无关**：`generate_site.py` 输出**单文件 HTML**（CSS/JS/Chart.js 全部内联），不依赖任何 Agent 运行时，可被任意 Agent 返回给用户或托管到静态站点
 
 ### 能力分级：核心（全框架通用）vs 框架增强（依赖具体环境）
@@ -237,7 +235,7 @@ bash run_report.sh deploy --html AI_News.html
 
 ## 安全
 
-本技能经过对抗式代码审查（[AI_Weekly_Adversarial_Review.md](./AI_Weekly_Adversarial_Review.md)），修复了 RSS 不可信内容导致的安全缺陷：
+本技能经过对抗式代码审查，并修复了部分 RSS 不可信内容导致的注入类缺陷（审查记录为发布者本地文档，不随包分发）：
 
 - **H1 存储型 XSS（`<script>` 上下文 JSON 注入）**：`render.py` 改用 `_json_script_safe()`，序列化后把 `<` `>` `&` 转义为 `\u003c`/`\u003e`/`\u0026`，阻止 `</script>` 突破脚本块。所有 JSON 占位符（`NEWS_DATA` / `LEADERBOARD_DATA` / `INSIGHTS_DATA` 等）均已覆盖
 - **H2 URL 属性突破 + 危险协议**：模板新增 `safeUrl()`，仅放行 `http(s):` / `mailto:`，`javascript:` / `data:` 回退 `#`；新闻卡与外链 `href` 均经 `escapeHtml(safeUrl(...))`
@@ -249,7 +247,7 @@ bash run_report.sh deploy --html AI_News.html
 
 ## 可选外部增强（合规说明）
 
-本技能**默认完全自治**，不调用任何第三方商业 API。
+本技能**默认完全自治**，不调用任何付费/商业 API（可选 NewsAPI 接入需自备 `NEWSAPI_KEY`，且默认关闭）。
 
 若希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，请**自行**获取数据并导出 JSON，以 `--external-news-json` 注入；页脚会自动署名。是否启用完全由你决定，并须遵守对应服务条款、自行承担合规风险。使用任何第三方 API 时请保留其署名与授权。
 
@@ -299,8 +297,20 @@ python delivery/feishu_connector.py --report report.json --user-id ou_xxxx --as 
 
 ## 相关文档
 
-- [对抗式代码审查报告](./AI_Weekly_Adversarial_Review.md) — 安全缺陷修复详情与 payload 验证
-- [优化方案文档](./AI_Weekly_Optimization_Plan.md)（如有）— 工程债清单与北极星规划
+- [SKILL.md](SKILL.md) — 完整技能说明（含文件清单 §10.1 / §10.2）
+- [references/FAQ.md](references/FAQ.md) — 常见问题集中解答（安装配置 / 飞书推送 / GitHub Pages / 网络）
+- [references/data_sources.md](references/data_sources.md) — 备用与候选数据源清单
+- [references/report_structure.md](references/report_structure.md) — 报告结构参考
+
+> 发布者本地另有对抗式审查记录与优化方案文档，因**不随包分发**（见 `SKILL.md` §10.2），此处不再链接，避免发行包内出现死链。
+
+---
+
+## 内容标识与免责
+
+- **AIGC 标识**：生成的 HTML 报告**页脚固定展示「本报告由 AI 辅助编制」标识**（依据《生成式人工智能服务管理暂行办法》第十二条对生成内容标识的要求）。**转载或二次分发时请保留该标识，不要移除**。
+- **不构成投资建议**：报告中的市场规模、融资额度、公司估值、模型成本等均为公开来源的**静态快照或折算估算**，仅供参考，**不构成任何投资建议**；投资决策请以官方公告为准。
+- **数据准确性**：每条新闻均附原始报道链接，请以原始来源为准；榜单为实时抓取或**标注日期的快照**，不冒充实时。
 
 ---
 

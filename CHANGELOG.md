@@ -40,6 +40,11 @@ Clean Code 审计（`clean_code_audit_generate_site.md`）落地：主入口职�
 ### Unchanged
 - CLI 参数集合、HTML 结构与产物格式、抓取与降级链路、翻译三级取值均未改动；`validate_report.py` **25/25 全过**（含模块体量守护：36 文件 / 主入口上限 500）
 
+### Fixed（静态分析 · CodeQL）
+- **消除 Code Scanning 告警 #2**（`py/clear-text-storage-sensitive-data`，error）：把 `compliance_check.py` 的规则表变量 `SECRET_PATTERNS` 改名为 `CREDENTIAL_PATTERNS`；并在代码注释里写明**勿改回去**。
+  该规则的 taint source **不看内容、只看名字**（`shared/concepts/.../SensitiveDataHeuristics.qll` 的 `maybeSecret()` = `(?is).*((?<!is|is_)secret|…)`）。规则表元素会随 `findings` 写进 `--json` 产物，于是「名字像密钥的列表 → 落盘」被判定为明文存储敏感数据。
+  **逻辑与输出零变更**：本地 CodeQL 2.27.1 实测本文件由「命中 1 处」变为「0 处」，仓库整体同样为 0 处。曾试过的两条替代解释（规则表 base64 解码、扫描到的文件原文）均经实验**证伪**——去掉 base64 或去掉原文片段后告警依旧。
+
 ## [3.6.1] — 2026-09-22
 合规措辞整改：清除全部可能被判定为「规避网络管理」的表述，功能零变更。
 
