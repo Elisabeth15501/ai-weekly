@@ -11,10 +11,36 @@
 
 ---
 
-## [Unreleased] — 2026-09-23
-Clean Code 审计（`clean_code_audit_generate_site.md`）落地：主入口职责收窄、错误处理统一、默认值收敛为单一来源。**功能与产物零变更**。
+## [Unreleased]
+
+## [4.0.0] — 2026-09-25
+
+v4.0.0 是 ai-weekly 的**安全整改闭环 + 代码健康 + 可发布性**版本：彻底清零可公开安全问题、建立防复发合规门禁、消除技术债、并把技能文档精简到 ClawHub 8192 token 上限以内。
+
+### Security（已清零，可公开发布）
+- P0-1 客户端模板注入面、P0-2 服务端 `market.py` 三处 URL/标题裸插值、P0-3 TLS 证书校验全局关闭，均修复并实测复现清零。
+- P0-4 `deploy_ghpages.py` 部署凭据由 argv（`-c url...insteadOf`）改为 `GIT_CONFIG_*` 环境变量注入，令牌不进 `ps`；新增 `_resolve_git_token()` 统一解析。
+- P0-5 删除 `.github_token` classic PAT 回落分支，凭据来源改为 `gh auth token`（不落盘）> `$GITHUB_TOKEN`/`$GH_TOKEN`；用户已撤销令牌并删文件。
+
+### Compliance（防复发）
+- P1-1 私有预检门禁 `ai-weekly-publish-gate` 上线（编码下架教训词族 / 「解决访问限制」叙事 / `--proxy` 写成"恢复访问"等坑；publish 后 `--learn` 回灌闭环）。
+- P1-4 `validate_checks/keywords.py` 的 `check_xss_safe()` 加固（查裸 `<script` 与 `on*` 属性逃逸）。
+- P1-3 页脚来源名单与 `DEFAULT_*_SOURCE` 对齐；AIGC/免责标识齐备。
+
+### Changed（代码健康 P2）
+- P2-1 下沉 `canon_key` 到无依赖叶子模块 `canon.py`，消除 `leaderboard↔model_meta↔leaderboard_checks` 循环依赖。
+- P2-2 `leaderboard_snapshot.py` 的 best-effort 读取改用 `cli_utils.load_json_soft` 降级。
+- P2-3 清理死代码：删除零引用 `types.py` 与 `errors.py` 中 4 个零引用工厂及对应 `ERR_*` 常量。
+- P2-4 抽出快照/缓存子系统到 `leaderboard_snapshot.py`，`leaderboard.py` 725→592 行（re-export 保兼容）。
+- P2-5 陈旧阈值统一收敛到 `const.py`（=3），模板经 `meta.snapshot_stale_threshold` 同源引用。
+- P2-6 `leaderboard_fetch.py` 注释与值对齐（维持 `OVERALL_FETCH_CAP_S = 180`）。
+- P2-7 `refresh_snapshot.py` 硬编码个人路径改为 `AIWEEKLY_WS_SNAPSHOT` 环境变量。
+
+### Docs（P3-1）
+- `SKILL.md` 由 ~16k tokens 精简为 ~2.6k tokens（ClawHub 8192 上限内）；完整内容迁至 `references/SKILL_full.md`，第十节声明面对齐未丢失。
 
 ### Changed（可读性）
+- 主入口职责收窄、错误处理统一、默认值收敛为单一来源。**功能与产物零变更**。
 - **主入口 466 → 444 行，但承担的事更少**：选项表抽成 `build_arg_parser()`，日期校验抽成 `_validate_date_args()`，新闻 JSON 形态归一抽成 `_as_news_payload()`，榜单取值抽成 `_leaderboard_rows()`，受众键检查抽成 `_warn_audience_key_mismatch()`
 - 删除 20 余项死导入与死常量（`html` / `re` / `ssl` / `time` / `urllib.*` / `timedelta` / `defaultdict`、`TEMPLATE_PATH` 等），`SKILL_DIR` 随之移除；`render.py` 同步清 5 项死导入（`re` / `Counter` / `_parse_snapshot_date` / `DEFAULT_ACTIVE_AUDIENCE` / `DEFAULT_SEARCH_ENGINE`）——全仓「导入了但未使用」清零
 - 顶部四段互相重叠的「迁移说明」合并为一段「本文件只负责三件事 + 逻辑归属速查表」；正文的工单号注释（`P0#4` / `P1#13` / `Phase 3` …）改为白话「为什么 + 何时可删」
