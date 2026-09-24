@@ -690,7 +690,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 - **不做的事**：不内置任何代理服务、不提供代理节点、不指导任何形式的网络访问规避；不使用非公开接口、不破解任何访问控制、不伪造身份绕过鉴权。
 
 - 新闻默认全部来自 14 个公开 RSS 源（国内 7 + 国外 7）；市场/融资图表由运行方通过 WebSearch 注入；排行榜从公开网页（LMArena / Artificial Analysis / Hugging Face / OpenCompass / SuperCLUE / ModelScope 等）自适应抓取，国内兜底快照随技能附带。
-- **不内置、不打包任何 AI HOT / 卡兹克的内容**。页脚仅保留基础参考来源链接（LMArena / Artificial Analysis / Hugging Face / OpenCompass / Gartner / IDC / Statista / Crunchbase / Stanford HAI）。
+- **不内置、不打包任何 AI HOT / 卡兹克的内容**。页脚仅保留基础参考来源链接（Grand View Research / Crunchbase / CB Insights / 中国信通院 / IT桔子 / 新浪创投Plus / Stanford HAI / LMMarketCap），与报告实际引用的 `DEFAULT_*_SOURCE` 保持一致。
 - **外部 API 增强是用户 opt-in 的**：技能**默认不调用任何外部商业 API**。两条可选增强路径——① `--news-api` 走 NewsAPI（需自备 `NEWSAPI_KEY`，默认关闭）；② 用户自备 JSON 以 `--external-news-json` 注入 AI HOT 等来源（页脚自动署名）。两条路径都需用户显式开启，是否启用、是否遵守其服务条款均由用户自行决定。
 - **发布建议**：① 附带 `LICENSE` 文件（如 MIT / Apache-2.0）；② 如需大范围传播，建议提示用户使用外部 API 前先取得授权。
 - **跨平台分发**：本技能以单一 `SKILL.md`（开放 Agent Skill 规范）为唯一入口，直接放入支持该规范的任意 Agent 目录即可加载；框架级调用（LangGraph / Dify / Coze）参考 `manifest.json` 的引擎接口描述。无需任何平台专属包装（无 `plugin.json`、无 per-agent 副本）。

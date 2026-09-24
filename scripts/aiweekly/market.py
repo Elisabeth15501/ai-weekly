@@ -339,14 +339,19 @@ cnConcentrationChart = new Chart(cnConcCtx, {{
 }});
 """
 
-# 页脚「数据来源」基础列表（不含任何内置第三方商业 API；用户自备的外部 API 才会动态追加）
+# 页脚「数据来源」基础列表 —— 必须与下方 DEFAULT_*_SOURCE 实际引用的机构保持一致
+# （诚实性优先：不得列出未实际使用的机构名，见 P1-3 #8 整改）。不含任何内置第三方商业
+# API；用户自备的外部 API 才会动态追加。改这里时务必同步核对 market_source / funding_source
+# 等 DEFAULT_*_SOURCE 的取值，避免「两套来源名单不一致」复发。
 BASE_SOURCES = [
-    ("LMMarketCap", "https://lmmarketcap.com"),
-    ("Gartner", "https://gartner.com"),
-    ("IDC", "https://idc.com"),
-    ("Statista", "https://statista.com"),
+    ("Grand View Research", "https://www.grandviewresearch.com"),
     ("Crunchbase", "https://crunchbase.com"),
+    ("CB Insights", "https://www.cbinsights.com"),
+    ("中国信通院", "https://www.caict.ac.cn"),
+    ("IT桔子", "https://www.itjuzi.com"),
+    ("新浪创投Plus", "https://venture.sina.com.cn"),
     ("Stanford HAI", "https://hai.stanford.edu"),
+    ("LMMarketCap", "https://lmmarketcap.com"),
 ]
 
 

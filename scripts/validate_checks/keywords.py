@@ -160,30 +160,40 @@ _XSS_JSON_VARS = [
 def check_xss_safe(html_content: str) -> dict:
     """P2-XSS 守护（H1/H2 防回归）：确保生成 HTML 不含存储型 XSS 突破。
 
-    1) 嵌入的 JSON 变量（NEWS_DATA 等）**原始文本**不得含裸 `</script`（脚本块突破）；
-       安全序列化产物为 ``\\u003c/script\\u003e``，raw 切片中不会出现裸 `<`，故不会误报。
-    2) 全文不得含危险协议链接 `href="javascript:` / `href='data:`（H2 向量）。
-       （`safeUrl()` 已将其转 `#`，若回归移除则此处捕获。）
+    仅查嵌入 JSON 变量的 **raw 文本**（安全序列化产物为 ``\\u003c/script\\u003e``，
+    raw 切片不会出现裸 `<`，故不会误报；只抓到真正的裸 `<` 注入才算突破）：
+
+    1) 裸 `</script` 或 `<script` —— 脚本块突破（正文裸标签 + 闭合标签都算）；
+    2) 事件处理器 `on<event>=` —— 属性逃逸：数据里混进 `onclick=` 等，
+       一旦被当属性回写即执行（对应 P0 修复里 `jsStrInAttr` / `escapeHtml` 的回归面）；
+    3) 危险协议 `href="javascript:` / `href='data:`（H2 向量，safeUrl 已转 `#`）。
     """
     import re
-    # 1) JSON 变量裸 </script 突破（仅查 raw 文本，避免 json.loads 把 \u003c 解码回 < 误判）
-    raw_breakout = []
+    raw_breakout = []          # 裸 <script / </script
+    raw_event_handler = []     # on<event>= 属性逃逸
     for name in _XSS_JSON_VARS:
         raw = _extract_js_var(name, html_content)
-        if raw and re.search(r'</script', raw, re.IGNORECASE):
+        if not raw:
+            continue
+        if re.search(r'<script', raw, re.IGNORECASE):
             raw_breakout.append(name)
+        if re.search(r'\bon[a-z]+\s*=', raw, re.IGNORECASE):
+            raw_event_handler.append(name)
 
-    # 2) 危险协议 href（大小写不敏感）
+    # 3) 危险协议 href（大小写不敏感）
     danger_href = re.findall(r'href\s*=\s*["\']\s*(?:javascript:|data:)',
                               html_content, re.IGNORECASE)
 
-    ok = (not raw_breakout) and (not danger_href)
+    ok = (not raw_breakout) and (not raw_event_handler) and (not danger_href)
     bits = []
     if raw_breakout:
-        bits.append(f"JSON 变量含裸</script突破：{', '.join(raw_breakout)}")
+        bits.append(f"JSON 变量含裸<script突破：{', '.join(raw_breakout)}")
+    if raw_event_handler:
+        bits.append(f"JSON 变量含事件处理器属性逃逸(on*=)：{', '.join(raw_event_handler)}")
     if danger_href:
         bits.append(f"危险协议 href：{sorted(set(h.lower() for h in danger_href))}")
-    msg = ("XSS 守护通过（无脚本突破 / 无危险协议 href）✅"
+    msg = ("XSS 守护通过（无脚本突破 / 无属性逃逸 / 无危险协议 href）✅"
            if ok else "；".join(bits))
     return {"ok": ok, "warn": False,
-            "raw_breakout": raw_breakout, "danger_href": danger_href, "msg": msg}
+            "raw_breakout": raw_breakout, "raw_event_handler": raw_event_handler,
+            "danger_href": danger_href, "msg": msg}
