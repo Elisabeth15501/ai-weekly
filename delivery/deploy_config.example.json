@@ -1,7 +1,7 @@
 {
   "_comment": "部署后端配置示例（P0-1：飞书推送去 GitHub 化）。复制为对应文件名并填入真实值，或改用同名环境变量。所有文件均被 .gitignore 忽略，不入库。",
   "github-pages": {
-    "_how": "默认后端，零配置。需 GitHub PAT（GITHUB_TOKEN / .github_token）+ 仓库已开 Pages 源=gh-pages。",
+    "_how": "默认后端，零配置。凭据优先级：`gh auth token`（已登录 gh 即可，不落盘）> 环境变量 GITHUB_TOKEN / GH_TOKEN（短期令牌）。无需再把 PAT 写入仓库目录下的 .github_token（已废弃）。仓库需已开 Pages 源=gh-pages。",
     "view_base": "自动从 git remote 推导：https://<owner>.github.io/<repo>/"
   },
   "tencent-cos": {

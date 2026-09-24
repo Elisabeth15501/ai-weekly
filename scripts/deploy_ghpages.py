@@ -12,6 +12,9 @@
   * 默认推送 origin gh-pages；--no-push 仅本地提交（离线可跑）。
   * --switch-pages 通过 GitHub API 一次性把 Pages 源切到 gh-pages(/root)。
   * MSYS 路径转换坑：所有 git 子进程注入 MSYS_NO_PATHCONV=1，路径用正斜杠。
+  * 免交互推送凭据：优先 `gh auth token`（OAuth，gh 托管、不落盘），
+    其次 $GITHUB_TOKEN/$GH_TOKEN 环境变量（短期令牌）；凭据经 GIT_CONFIG_*
+    注入、不进 argv、不读磁盘 .github_token（P0-4/P0-5 修复）。
 
 用法：
   python deploy_ghpages.py --html AI_News_2026-08-17.html
@@ -38,31 +41,50 @@ PAGES_BRANCH = "gh-pages"
 # ---------------------------------------------------------------------------
 # git 封装（统一处理 MSYS 路径转换）
 # ---------------------------------------------------------------------------
+def _resolve_git_token() -> str | None:
+    """解析用于免交互 push 的短期 GitHub 凭据（不落盘、不进 argv）。
+
+    优先级：
+      1) $GITHUB_TOKEN / $GH_TOKEN —— CI/托管环境注入的细粒度或 classic PAT（短生命周期）。
+      2) `gh auth token` —— 复用已登录 gh 的 OAuth 设备流凭据（gh 托管、
+         按会话刷新、40 字符，不落盘）。
+      3) 不再回落读取磁盘 `.github_token`（长期 classic PAT 落盘，P0-5 已断根）。
+
+    返回 token 明文（不含 scheme），或无法解析时返回 None。
+    """
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if tok:
+        return tok
+    # 尝试 gh CLI（OAuth 设备流凭据，gh 托管，不落盘）
+    try:
+        res = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if res.returncode == 0:
+            t = res.stdout.strip()
+            if t:
+                return t
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def _git(args, cwd=None, check=True):
     env = dict(os.environ)
     env["MSYS_NO_PATHCONV"] = "1"
     cmd = ["git"] + list(args)
-    # 免交互推送：当存在 GITHUB_TOKEN/GH_TOKEN 时，对 push 命令注入
-    # Authorization header（仅内存，不写进 remote URL、不落盘）。
-    # 解决沙箱/无 wincred 凭据环境下 `git push` 卡在交互提示导致超时的问题。
-    token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN")
-    if not token:
-        # 兜底：从本地未跟踪文件读取（不入库、不写在 automation 明文里）
-        _tok_file = REPO_ROOT / ".github_token"
-        if _tok_file.is_file():
-            token = _tok_file.read_text(encoding="utf-8").strip()
+    # 免交互推送：仅当命令为 push 且能解析到 token 时，通过 GIT_CONFIG_* 环境
+    # 变量注入凭据（insteadOf 把 token 嵌进远端 URL，git 自动走 Basic 认证）。
+    # 凭据在环境变量中传递，不进 argv（解决 `ps` 可见明文，P0-4 修复），不落盘。
+    # 同时清空 credential.helper，避免 wincred 等助手干扰/覆盖。
+    token = _resolve_git_token()
     if token and args and args[0] == "push":
-        # 免交互推送：git smart HTTP 端点只认 Basic 认证（Bearer 仅适用于 GitHub
-        # REST API，见 switch_pages_source 的 urllib 调用）。本机 git 环境下
-        # http.extraheader 会被 credential 流程覆盖/忽略而失效，故改用
-        # url.insteadOf 把 token 直接嵌入远端 URL，git 自动走 Basic 认证。
-        # 同时清空 credential.helper，避免 wincred 等助手干扰。
-        cmd = [
-            "git", "-c",
-            f"url.https://x-access-token:{token}@github.com/"
-            ".insteadOf=https://github.com/",
-            "-c", "credential.helper=",
-        ] + list(args)
+        env["GIT_CONFIG_COUNT"] = "2"
+        env["GIT_CONFIG_KEY_0"] = "url.https://github.com/.insteadOf"
+        env["GIT_CONFIG_VALUE_0"] = f"https://x-access-token:{token}@github.com/"
+        env["GIT_CONFIG_KEY_1"] = "credential.helper"
+        env["GIT_CONFIG_VALUE_1"] = ""
     res = subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -205,11 +227,11 @@ def _remote_api_url(repo: Path) -> str | None:
 
 
 def switch_pages_source(repo: Path, branch: str = PAGES_BRANCH) -> bool:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = _resolve_git_token()
     if not token:
-        print("⚠️ 未设置 GITHUB_TOKEN，无法自动切换 Pages 源。请到仓库 "
-              "Settings → Pages → Source 选择 'Deploy from a branch' → "
-              f"{branch} / /root。")
+        print("⚠️ 未设置 GITHUB_TOKEN/GH_TOKEN，且 gh 未登录，无法自动切换 "
+              "Pages 源。请到仓库 Settings → Pages → Source 选择 'Deploy from a "
+              f"branch' → {branch} / /root。")
         return False
     url = _remote_api_url(repo)
     if not url:
