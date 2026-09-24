@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
 # setup_pages_source.sh — 一次性把 GitHub Pages 源切到 gh-pages 分支（/root）。
 #
-# 用法（PowerShell 示例，token 不落盘）：
-#   $env:GITHUB_TOKEN="github_pat_xxx"
-#   & "C:\Program Files\Git\bin\bash.exe" scripts/setup_pages_source.sh
+# 用法（推荐：复用 gh CLI 已登录凭据，无需自建 PAT）：
+#   gh auth login                       # 仅首次；凭据由 gh 自己保管，不落项目文件
+#   bash scripts/setup_pages_source.sh
+#
+# 备选（显式传令牌，仅内存、不落盘；请用最小权限 + 短有效期）：
+#   $env:GITHUB_TOKEN="<fine-grained-token>"    # PowerShell
+#   export GITHUB_TOKEN=<fine-grained-token>    # Git Bash
 #
 # 说明：
 #   - 只读 GITHUB_TOKEN / GH_TOKEN 环境变量，不写任何文件、不回显 token。
 #   - 仅做「切 Pages 源」这一件事；报告部署由 deploy_ghpages.py 负责。
 #   - idempotent：已切对也返回成功，可重复跑。
-#   - 经验：GitHub Pages 更新端点常对 Fine-grained PAT 返回 403；若遇 403，请改用
-#     Classic PAT（范围：repo + pages:write）。
+#   - 若遇 403：多为所用凭据对该仓库缺少修改 Pages 设置的权限。优先改用 gh CLI
+#     凭据（见上），或直接手动切源（仓库 Settings → Pages → Source），一次性且零凭据。
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+# 环境变量都没有时，复用 gh CLI 已登录凭据（凭据由 gh 保管，本脚本不落盘、不回显）
+if [ -z "$TOKEN" ] && command -v gh >/dev/null 2>&1; then
+  TOKEN="$(gh auth token 2>/dev/null || true)"
+fi
 if [ -z "$TOKEN" ]; then
-  echo "❌ 未设置 GITHUB_TOKEN（或 GH_TOKEN）。" >&2
-  echo "   PowerShell 请先：\$env:GITHUB_TOKEN=\"github_pat_xxx\"" >&2
-  echo "   Git Bash 请先：export GITHUB_TOKEN=github_pat_xxx" >&2
-  echo "   需为 ai-weekly 仓库的 Fine-grained PAT（Pages: write）。" >&2
+  echo "❌ 未取得可用凭据。" >&2
+  echo "   推荐（零自建令牌）：先 gh auth login，再重跑本脚本（会自动复用 gh 凭据）。" >&2
+  echo "   兼容做法：export GITHUB_TOKEN=<token>（或 GH_TOKEN）——请用最小权限、短有效期的令牌，且不要落盘。" >&2
+  echo "   最省事的替代：直接在仓库 Settings → Pages → Source 手动切到 gh-pages / /root（一次性操作，无需任何凭据）。" >&2
   exit 1
 fi
 
@@ -82,13 +90,12 @@ else
   echo "❌ 切源失败（HTTP $HTTP）：" >&2
   cat /tmp/_pages_resp.json >&2
   echo "" >&2
-  # 常见原因：Fine-grained PAT 调 Pages 更新端点常被拒（403 Resource not accessible）
+  # 常见原因：所用凭据对该仓库缺少修改 Pages 设置的权限（403 Resource not accessible）
   if [ "$HTTP" = "403" ]; then
     echo "💡 若报错含 'Resource not accessible by personal access token'（403）：" >&2
-    echo "   GitHub 的 Pages 更新 API 对 Fine-grained PAT 经常不支持，即使已勾 Pages: Read and write。" >&2
-    echo "   解法：改用 Classic PAT ——" >&2
-    echo "     GitHub → Settings → Developer settings → PAT → Tokens (classic) → Generate new token (classic)" >&2
-    echo "     勾选范围：repo（全选）+ pages:write，生成后重新：\$env:GITHUB_TOKEN=\"新token\" 重跑本脚本。" >&2
+    echo "   说明当前凭据对该仓库不具备修改 Pages 设置的权限。两个方向——" >&2
+    echo "   ① 最省事：不走 API，直接在仓库 Settings → Pages → Source 手动选 'Deploy from a branch → gh-pages / /root'（一次性，零凭据）。" >&2
+    echo "   ② 仍要自动化：用 gh CLI 凭据（gh auth login 后重跑本脚本），并确认该账号对该仓库有 Pages 管理权限。" >&2
   fi
   if [ "$HTTP" = "404" ]; then
     echo "💡 若报错含 'Not Found'（404）：仓库尚未启用 GitHub Pages。" >&2
