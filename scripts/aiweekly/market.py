@@ -10,6 +10,18 @@ import json
 import re
 
 from aiweekly.leaderboard import _collect_leaderboard_models
+from aiweekly.utils import safe_href
+
+
+def _e(v) -> str:
+    """转义**外部可控**字段后拼进 HTML。
+
+    与裸 ``html.escape`` 的区别：``None`` 归一为空串。
+    信号字段（amount / bridge_* / source 等）来自 RSS 解析，缺字段时为 ``None``，
+    裸转义会抛 ``AttributeError`` 把整期报告打挂；原实现直接插值只是渲染出 "None"。
+    安全修复不应引入新的崩溃路径，故统一走这里。
+    """
+    return html.escape("" if v is None else str(v))
 
 
 def _js_json(obj) -> str:
@@ -486,8 +498,9 @@ def _render_market_signals_html(signals, lb_map):
                 '——市场板块维持宏观背景视角。</p>')
     cards = []
     for s in signals:
-        types_html = " ".join(f'<span class="ms-type t-{t}">{t}</span>' for t in s["types"])
-        amt = f'<span class="ms-amount">{s["amount"]}</span>' if s["amount"] else ""
+        types_html = " ".join(
+            f'<span class="ms-type t-{_e(t)}">{_e(t)}</span>' for t in s["types"])
+        amt = f'<span class="ms-amount">{_e(s["amount"])}</span>' if s["amount"] else ""
         # 资本↔能力：检测标题是否含上榜模型/机构名
         title_low = s["title"].lower()
         on_lb = None
@@ -496,16 +509,15 @@ def _render_market_signals_html(signals, lb_map):
                 on_lb = (rk, src)
                 break
         if on_lb:
-            cap = f'<span class="ms-cap">↔ 能力榜 #{on_lb[0]}（{on_lb[1]}）</span>'
+            cap = f'<span class="ms-cap">↔ 能力榜 #{_e(on_lb[0])}（{_e(on_lb[1])}）</span>'
         else:
             cap = '<span class="ms-cap ms-cap-off">↔ 能力榜：未上榜</span>'
-        url = s["url"] or "#"
         cards.append(
             f'<div class="ms-card">'
             f'<div class="ms-top">{types_html}{amt}</div>'
-            f'<a class="ms-title" href="{url}" target="_blank" rel="noopener">{s["title"]}</a>'
-            f'<div class="ms-meta"><span class="ms-bridge">{s["bridge_region"]} ↔ {s["bridge_label"]}</span>'
-            f'{cap}<span class="ms-src">{s["source"]}</span></div>'
+            f'<a class="ms-title" href="{safe_href(s["url"])}" target="_blank" rel="noopener">{_e(s["title"])}</a>'
+            f'<div class="ms-meta"><span class="ms-bridge">{_e(s["bridge_region"])} ↔ {_e(s["bridge_label"])}</span>'
+            f'{cap}<span class="ms-src">{_e(s["source"])}</span></div>'
             f'</div>')
     head = (f'<p class="ms-head">从本周 <b>{len(signals)}</b> 条资本 / 模型发布信号看，'
             f'钱与能力正往这些方向集中（桥接下方宏观图）：</p>')
@@ -646,12 +658,12 @@ def _render_trend_insights_html(signals, news_items):
         if ev:
             ev_parts = []
             for e in ev:
-                amt = f' <b>{e["amount"]}</b>' if e["amount"] else ""
+                amt = f' <b>{_e(e["amount"])}</b>' if e["amount"] else ""
                 if e["url"]:
                     ev_parts.append(
-                        f'<a href="{e["url"]}" target="_blank" rel="noopener">{e["title"]}</a>{amt}')
+                        f'<a href="{safe_href(e["url"])}" target="_blank" rel="noopener">{_e(e["title"])}</a>{amt}')
                 else:
-                    ev_parts.append(f'{e["title"]}{amt}')
+                    ev_parts.append(f'{_e(e["title"])}{amt}')
             ev_html = (f'<div class="insight-evidence">📌 本周印证：'
                        f'{"；".join(ev_parts)}</div>')
         else:
@@ -674,10 +686,11 @@ def _render_market_signals_html_with_theme(signals, lb_map):
                 '——市场板块维持宏观背景视角。</p>')
     cards = []
     for s in signals:
-        types_html = " ".join(f'<span class="ms-type t-{t}">{t}</span>' for t in s["types"])
-        amt = f'<span class="ms-amount">{s["amount"]}</span>' if s["amount"] else ""
+        types_html = " ".join(
+            f'<span class="ms-type t-{_e(t)}">{_e(t)}</span>' for t in s["types"])
+        amt = f'<span class="ms-amount">{_e(s["amount"])}</span>' if s["amount"] else ""
         theme = _signal_theme(s)
-        theme_html = (f'<span class="ms-theme">印证趋势：{theme}</span>'
+        theme_html = (f'<span class="ms-theme">印证趋势：{_e(theme)}</span>'
                       if theme else '<span class="ms-theme ms-theme-off">印证趋势：—</span>')
         title_low = s["title"].lower()
         on_lb = None
@@ -686,10 +699,9 @@ def _render_market_signals_html_with_theme(signals, lb_map):
                 on_lb = (rk, src)
                 break
         if on_lb:
-            cap = f'<span class="ms-cap">↔ 能力榜 #{on_lb[0]}（{on_lb[1]}）</span>'
+            cap = f'<span class="ms-cap">↔ 能力榜 #{_e(on_lb[0])}（{_e(on_lb[1])}）</span>'
         else:
             cap = '<span class="ms-cap ms-cap-off">↔ 能力榜：未上榜</span>'
-        url = s["url"] or "#"
         # 英文信号卡：补中文注解（与新闻卡一致，方便英文不好的中文读者）
         cn_html = ""
         if s.get("lang") == "en" and s.get("cn_summary"):
@@ -698,10 +710,10 @@ def _render_market_signals_html_with_theme(signals, lb_map):
         cards.append(
             f'<div class="ms-card">'
             f'<div class="ms-top">{types_html}{amt}</div>'
-            f'<a class="ms-title" href="{url}" target="_blank" rel="noopener">{html.escape(s["title"])}</a>'
+            f'<a class="ms-title" href="{safe_href(s["url"])}" target="_blank" rel="noopener">{html.escape(s["title"])}</a>'
             f'{cn_html}'
-            f'<div class="ms-meta"><span class="ms-bridge">{s["bridge_region"]} ↔ {s["bridge_label"]}</span>'
-            f'{cap}{theme_html}<span class="ms-src">{s["source"]}</span></div>'
+            f'<div class="ms-meta"><span class="ms-bridge">{_e(s["bridge_region"])} ↔ {_e(s["bridge_label"])}</span>'
+            f'{cap}{theme_html}<span class="ms-src">{_e(s["source"])}</span></div>'
             f'</div>')
     head = (f'<p class="ms-head">从本周 <b>{len(signals)}</b> 条资本 / 模型发布信号看，'
             f'钱与能力正往这些方向集中（桥接下方宏观图）：</p>')

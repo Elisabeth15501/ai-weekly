@@ -11,6 +11,7 @@ import urllib.parse
 from collections import Counter, defaultdict
 
 from aiweekly.news import format_news_items
+from aiweekly.utils import safe_url
 
 __all__ = [
     "_validate_insights", "_AUTO_KICKERS", "_AUTO_SIGNALS", "_DAILY_DIGEST_MARKERS",
@@ -681,16 +682,6 @@ def _render_keyword_chips_html(keywords, active=DEFAULT_ACTIVE_AUDIENCE,
     return "\n".join(parts)
 
 
-def _safe_insight_url(u: str) -> str:
-    """仅放行 http(s)/mailto 协议的 URL，其余回退 '#'（与 render._safe_url 同规则，
-    独立实现避免 render↔insights 循环 import）。"""
-    try:
-        scheme = urllib.parse.urlparse(u or "").scheme.lower()
-    except ValueError:
-        return "#"
-    return u if scheme in ("http", "https", "mailto") else "#"
-
-
 def _render_insight_cards_html(insights) -> str:
     """把看点列表渲染成静态卡片 HTML，与模板 JS renderInsights 输出结构一致
     （insight-card / 看点 NN / insight-kicker / insight-title / insight-analysis /
@@ -716,7 +707,7 @@ def _render_insight_cards_html(insights) -> str:
         for r in (it.get("related") or []):
             if not isinstance(r, dict) or not r.get("title"):
                 continue
-            url = _safe_insight_url(r.get("url") or "")
+            url = safe_url(r.get("url") or "")
             related_items.append(
                 f'<a href="{html.escape(url, quote=True)}" target="_blank" '
                 f'rel="noopener">{html.escape(r["title"])} →</a>')

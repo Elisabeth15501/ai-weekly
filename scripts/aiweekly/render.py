@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from aiweekly import const as _c
-from aiweekly.utils import _parse_date_arg
+from aiweekly.utils import _parse_date_arg, safe_url
 from aiweekly.news import (
     MUSTREAD_TOP_N, format_news_items, _score_news, LEADERBOARD_STALE_DAYS,
 )
@@ -186,16 +186,6 @@ def _build_capability_card(translate_en: bool, audience_summary: bool,
         f'{tag(t, "cap-off")} <code>{cmd}</code>' for t, cmd in off)
     return (f'<div class="cap-row"><b>本期已启用</b>　{on_html}</div>'
             f'<div class="cap-row"><b>未启用</b>　{off_html}</div>')
-
-
-def _safe_url(u: str) -> str:
-    """仅放行 http(s)/mailto 协议的 URL，其余回退 '#'（防 javascript: 等危险协议）。"""
-    from urllib.parse import urlparse
-    try:
-        scheme = urlparse(u or "").scheme.lower()
-    except ValueError:
-        return "#"
-    return u if scheme in ("http", "https", "mailto") else "#"
 
 
 def generate(api_data: dict, output_path: str = None,
@@ -398,15 +388,15 @@ def generate(api_data: dict, output_path: str = None,
 
     # 页脚数据来源：基础列表 + 用户自备的外部 API（仅当用户显式提供）
     # 外部来源名/URL 由用户 CLI 提供，按不可信输入处理：转义 + 仅放行安全协议
-    sources = [(html.escape(n), _safe_url(u)) for n, u in BASE_SOURCES]
+    sources = [(html.escape(n), safe_url(u)) for n, u in BASE_SOURCES]
     news_extra = ""
     if external_source and external_source[0]:
         ext_name, ext_url = external_source[0], (external_source[1] or "")
-        safe_url = _safe_url(ext_url) if ext_url else ""
+        ext_url_safe = safe_url(ext_url) if ext_url else ""
         ext_name_e = html.escape(ext_name)
-        if safe_url:
-            sources.append((ext_name_e, safe_url))
-            news_extra = f' 与 <a href="{html.escape(safe_url, quote=True)}" target="_blank" rel="noopener">{ext_name_e}</a>'
+        if ext_url_safe:
+            sources.append((ext_name_e, ext_url_safe))
+            news_extra = f' 与 <a href="{html.escape(ext_url_safe, quote=True)}" target="_blank" rel="noopener">{ext_name_e}</a>'
         else:
             news_extra = f' 与 {ext_name_e}'
     all_sources_html = '、'.join(

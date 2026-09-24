@@ -3,6 +3,7 @@
 所有函数无业务依赖，供其它子模块引用。
 外部使用请直接 `from aiweekly.utils import ...`；`aiweekly/__init__.py` 亦做了导出。
 """
+import html
 import json
 import os
 import random
@@ -259,15 +260,21 @@ def configure_proxy(proxy: str | None = None) -> str:
 
 
 def _build_opener():
-    """构造带代理 + 不校验证书的 opener（与历史行为一致，仅叠加代理能力）。"""
+    """构造带代理的 opener，**校验证书链与主机名**。
+
+    历史实现曾显式关闭校验（``check_hostname = False`` + ``verify_mode = CERT_NONE``），
+    其效果是：任何持有任意自签证书的中间人都能冒充上游站点，而抓取到的 RSS 正文会
+    原样进入本期报告。已改为 ``ssl.create_default_context()`` 的默认行为。
+
+    若出站流量须经企业代理做 TLS 拦截，正确做法是把代理根证书装入系统信任库
+    （或指向 ``SSL_CERT_FILE``），而不是退回关闭校验。
+    """
     handlers = []
     proxy = _resolved_proxy()
     if proxy and not _SOCKS_ACTIVE:
         handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    handlers.append(urllib.request.HTTPSHandler(context=ctx))
+    handlers.append(
+        urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     return urllib.request.build_opener(*handlers)
 
 
@@ -443,10 +450,38 @@ def save_json(path, obj, indent: int = 2) -> None:
     tmp.replace(p)
 
 
+def safe_url(u: str) -> str:
+    """仅放行 http(s)/mailto 协议的 URL，其余一律回退 ``'#'``。
+
+    用途：把**外部可控**的 URL（RSS 条目的 link、用户 ``--news-api`` 传入的来源地址）
+    写进 ``href`` 前先过一遍，挡掉 ``javascript:`` / ``data:`` 这类危险协议。
+
+    输入：任意字符串；``None`` 与空串视为不放行。
+    输出：原字符串（协议在白名单内）或 ``'#'``。
+    注意：本函数**不做 HTML 转义**。要写进属性请改用 :func:`safe_href`。
+    """
+    from urllib.parse import urlparse
+    try:
+        scheme = urlparse(u or "").scheme.lower()
+    except ValueError:
+        return "#"
+    return u if scheme in ("http", "https", "mailto") else "#"
+
+
+def safe_href(u: str) -> str:
+    """返回可直接写进 ``href="..."`` 的值：协议白名单 + 属性上下文转义。
+
+    两步缺一不可——:func:`safe_url` 挡危险协议，``html.escape(quote=True)``
+    挡 ``"`` 提前闭合属性（如 ``https://x/a" onmouseover="alert(1)``）。
+    历史上 ``market.py`` 直接拼 ``f'<a href="{u}">'``，两样都没做。
+    """
+    return html.escape(safe_url(u), quote=True)
+
+
 __all__ = [
     "_UA", "_PROXY_OVERRIDE", "_SOCKS_ACTIVE",
     "resolve_proxy", "configure_proxy", "_resolved_proxy", "_configure_proxy", "_build_opener",
     "_http_get", "_probe", "_detect_region", "_retry_fetch",
     "_parse_iso_datetime", "_parse_date_arg", "_parse_snapshot_date",
-    "load_json", "save_json",
+    "load_json", "save_json", "safe_url", "safe_href",
 ]
