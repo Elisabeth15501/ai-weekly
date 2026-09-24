@@ -1,0 +1,26 @@
+# 发布产物裁剪（对 `git archive` 生效）
+# ---------------------------------------------------------------------------
+# SkillHub 的发布流程用 `git archive HEAD | tar -x` 导出干净副本；
+# export-ignore 会让下列路径**不进发布包**（仓库内仍保留，CI 与本地开发照常使用）。
+# 目的：让发布包只包含「运行期真正需要 + SKILL.md §10.1 已声明」的内容。
+#
+# ⚠️ 两条硬要求，缺任一条规则会**静默失效**（2026-09-24 实测踩过）：
+#   1) 语法：每行必须是「<pattern> export-ignore」。
+#      只写路径 = 不设任何属性 = 规则完全不生效。
+#      自检：git check-attr export-ignore -- <path>   须返回 "export-ignore: set"
+#   2) 本文件必须**已被提交**：`git archive HEAD` 只读 HEAD 树里的属性，
+#      untracked 时全是死条文（加 --worktree-attributes 才读工作区）。
+#      自检：git archive HEAD | tar -t | grep <path>   须无输出
+
+# 发布者自用的合规门禁（规则表为明文词表，不宜随包分发）
+scripts/compliance_check.py export-ignore
+# 单元测试与离线 fixture（CI / 本地 pytest 用）
+scripts/conftest.py export-ignore
+scripts/aiweekly/tests/** export-ignore
+
+# 平台封禁的文件类型：这些点文件在 SkillHub 会被「不允许的文件类型」拦下。
+# 原先靠发布后手工 rm，现在自动剔除，省掉一步且不会漏。
+.gitignore export-ignore
+.clawhubignore export-ignore
+# 自剔除：本文件要留在仓库供 `git archive` 读取，但自身不进发布包
+.gitattributes export-ignore

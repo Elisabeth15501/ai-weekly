@@ -21,3 +21,12 @@ __pycache__/
 # 本地打包产物（.gitignore 已覆盖，显式声明同样是为冗余防护）
 openclaw-edition/
 *.skill
+
+# ── 开发者自用工具与开发期产物（不属于用户能力，不随包分发）──────────────────
+# 依据：SKILL.md §10.1 只声明「用户可用能力」；下列文件是发布者自用 / CI 自用，
+# 随包分发既无功能价值，也会让「逐文件比对」型审核把正常子模块误判为与声明不符。
+# 单元测试与离线 fixture（仅供 CI / 本地 pytest，运行期不需要）
+scripts/conftest.py
+scripts/aiweekly/tests/
+# 发布前合规门禁（发布者自用；规则表为明文词表，本就不宜随包分发）
+scripts/compliance_check.py
