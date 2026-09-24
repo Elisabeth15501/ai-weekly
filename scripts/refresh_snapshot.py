@@ -12,13 +12,15 @@
 - 抓不到的源一律标注不可达 + 旧日期，不用其他榜单顶替。
 
 用法：
-    python refresh_snapshot.py                      # 刷新到技能目录 + 同步工作区副本
+    python refresh_snapshot.py                      # 刷新到技能目录（不自动同步工作区副本）
     python refresh_snapshot.py --snapshot PATH      # 只写指定路径
     python refresh_snapshot.py --no-sync            # 不同步工作区副本
     python refresh_snapshot.py --dry-run            # 只打印将要写入的摘要，不落盘
+    # 工作区副本同步目标通过环境变量 AIWEEKLY_WS_SNAPSHOT 指定（不设置则跳过同步）
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -33,7 +35,16 @@ from aiweekly.leaderboard_fetch import LB_CRITERIA  # noqa: E402
 
 SKILL_DIR = SCRIPTS.parent
 DEFAULT_SNAPSHOT = SKILL_DIR / "cn_leaderboard_snapshot.json"
-WS_SNAPSHOT = Path(r"C:/Users/elisa/WorkBuddy/2026-07-30-23-56-35/cn_leaderboard_snapshot.json")
+
+# 工作区副本同步目标（可选）。默认从环境变量 AIWEEKLY_WS_SNAPSHOT 读取，
+# 不写死任何个人绝对路径（此前曾硬编码作者工作区路径并随包分发，已修正）。
+# 未设置该变量时不同步工作区副本，仅刷新技能目录内的快照。
+WS_SNAPSHOT_ENV = "AIWEEKLY_WS_SNAPSHOT"
+
+
+def _ws_snapshot_path() -> Path | None:
+    raw = os.environ.get(WS_SNAPSHOT_ENV)
+    return Path(raw) if raw else None
 
 # 展示槽 -> (名义榜单, 实时源名, 国内回退源名)
 SLOT_META = {
@@ -204,9 +215,14 @@ def main() -> int:
     payload = json.dumps(snap, ensure_ascii=False, indent=1)
     path.write_text(payload, encoding="utf-8")
     print(f"✅ 写入：{path}")
-    if not args.no_sync and WS_SNAPSHOT.parent.exists() and WS_SNAPSHOT != path:
-        shutil.copyfile(path, WS_SNAPSHOT)
-        print(f"✅ 同步：{WS_SNAPSHOT}")
+    if not args.no_sync:
+        ws = _ws_snapshot_path()
+        if ws is not None and ws.parent.exists() and ws != path:
+            shutil.copyfile(path, ws)
+            print(f"✅ 同步：{ws}")
+        elif ws is None:
+            print(f"   ℹ️ 未设置环境变量 {WS_SNAPSHOT_ENV}，跳过工作区副本同步"
+                  f"（如需同步请在环境中设置该变量指向目标快照路径）")
     print("   selection_note:", snap["selection_note"])
     return 0
 

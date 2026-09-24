@@ -8,7 +8,10 @@
 排名与分数来自基准榜，不被资料卡覆盖。
 """
 import json
+import re
 from pathlib import Path
+
+from aiweekly.canon import canon_key as _ck  # P2-1：叶子模块，无循环依赖
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 
@@ -86,13 +89,8 @@ def _apply_profile_as_truth(leaderboard: dict, profiles: dict):
     """
     # 归一键匹配：profile 键（如 "DeepSeek-V4-Pro"）与排行榜模型名（如 "deepseek v4 pro"）
     # 格式不一，必须归一（去大小写/空白/符号）才能匹配上，否则行内描述字段无法回填 → 资料缺失
-    import re
     def _canon(name):
         return re.sub(r'[^a-z0-9]', '', (name or '').strip().lower())
-    try:
-        from aiweekly.leaderboard import canon_key as _ck
-    except Exception:
-        _ck = None
     _MAP = [("cost_in", "price_in"), ("cost_out", "price_out"),
             ("context", "context"), ("license", "license"),
             ("commercial", "commercial"), ("multimodal", "multimodal"),

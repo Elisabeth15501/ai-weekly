@@ -11,7 +11,6 @@
 """
 import json
 import logging
-import re
 import time
 import concurrent.futures
 from datetime import datetime
@@ -29,110 +28,42 @@ from aiweekly.model_meta import (
     _load_cost_table, _COST_TABLE, _match_cost, _enrich_cost, _apply_profile_as_truth,
 )
 from aiweekly.leaderboard_sources import (
-    _norm_model, _split_dl_org,
+    _norm_model,
 )
 from aiweekly.leaderboard_fetch import (
     LB_CRITERIA, SOURCES, _collect_source_results, _record_health,
     inject_open_source_ranks,
 )
+# P2-1：模型名归一原语已下沉到 aiweekly.canon（叶子模块）；榜源 schema 校验在
+# aiweekly.leaderboard_checks（顶部导入即可，循环依赖已消除）。
+from aiweekly.canon import canon_key, canon_display, ALIASES_PATH
+from aiweekly.leaderboard_checks import validate_leaderboard_data, LB_ROW_FIELDS
+
+# P2-4：快照 / 缓存子系统已抽到 aiweekly.leaderboard_snapshot（降体量、收敛 IO 边界）；
+# 本文件经顶部 re-export，对外 API（含 CACHE_PATH 等路径常量）不变。
+from aiweekly.leaderboard_snapshot import (  # noqa: F401
+    CACHE_PATH, CN_SNAPSHOT_PATH, SNAPSHOTS_DIR,
+    _load_snapshots, _save_snapshot, _seed_bootstrap, _build_history,
+    _normalize_snapshot_orgs, _load_cn_snapshot,
+    _load_cache, _save_cache, _fill_from_cache,
+)
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
-
-CACHE_PATH = SKILL_DIR / "leaderboard_cache.json"
-# 国内可直连权威榜快照（OpenCompass 司南，SSR 不可达时的兜底；非实时，标注截止日）
-CN_SNAPSHOT_PATH = SKILL_DIR / "cn_leaderboard_snapshot.json"
-# 时序快照目录（L0#2）：每次生成写一份 snapshots/{date}.json，供 WoW 趋势线 / 跨周 diff
-SNAPSHOTS_DIR = SKILL_DIR / "snapshots"
-# 模型名归一别名表（L0#1）：canonical -> [variants]，取代正则后缀法的跨榜匹配
-ALIASES_PATH = SKILL_DIR / "model_aliases.json"
 
 __all__ = [
     "CACHE_PATH", "CN_SNAPSHOT_PATH", "SNAPSHOTS_DIR", "ALIASES_PATH",
     "_load_cn_snapshot", "_leaderboard_freshness",
     "LB_CRITERIA", "SOURCES", "_load_cache", "_save_cache",
     "_apply_deltas", "fetch_all_leaderboards", "_fill_from_cache", "_collect_leaderboard_models",
-    "sync_model_profiles", "canon_key", "canon_display", "_load_aliases",
+    "sync_model_profiles", "canon_key", "canon_display",
     "_load_snapshots", "_save_snapshot", "_build_history",
     "validate_leaderboard_data", "LB_ROW_FIELDS",
 ]
 
 
-# ---------- L0#1: 模型名归一（别名表取代正则后缀法）----------
-def _load_aliases() -> dict:
-    """加载 model_aliases.json；文件缺失或损坏时返回空表（降级为 _norm_model 兜底）。"""
-    try:
-        if ALIASES_PATH.exists():
-            return json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
-
-
-_ALIASES = _load_aliases()
-# 反向索引：variant(小写) / variant 归一形 -> canonical(小写键)
-_ALIAS_REV: dict = {}
-# canonical(小写) -> canonical 展示名（即 _ALIASES 的键本身）
-_CANON_DISPLAY: dict = {}
-for _c, _vs in _ALIASES.items():
-    _CANON_DISPLAY[_c.lower()] = _c
-    for _v in (list(_vs) if isinstance(_vs, list) else []):
-        if not isinstance(_v, str):
-            continue
-        _ALIAS_REV.setdefault(_v.lower(), _c.lower())
-        _ALIAS_REV.setdefault(_norm_model(_v), _c.lower())
-
-
-# R5：后缀感知归一并发——避免 "Base" 与 "Base-Suffix" 被 _norm_model 剥后缀后撞键
-# （如 GLM-5.3 与 GLM-5.3-Flash、未来 Qwen3 与 Qwen3-Max）。命中已知后缀时，
-# 在归一键上追加 `~<suffix>` 标记，使它们被识别为不同实体而非误合并。
-_SUFFIX_TOKENS = {
-    "flash": "flash", "preview": "preview", "max": "max", "pro": "pro",
-    "ultra": "ultra", "mini": "mini", "lite": "lite", "turbo": "turbo",
-    "air": "air", "sol": "sol", "high": "high", "xhigh": "xhigh",
-    "thinking": "thinking", "withfallback": "withfallback",
-}
-_SUFFIX_TOKEN_RE = re.compile(
-    r"[-_\s.]+(" + "|".join(_SUFFIX_TOKENS) + r")(?:[-_\s.]|$|\()"
-)
-
-
-def _suffix_token(name: str) -> str | None:
-    if not name:
-        return None
-    m = _SUFFIX_TOKEN_RE.search(name.lower())
-    return _SUFFIX_TOKENS[m.group(1)] if m else None
-
-
-def canon_key(name: str) -> str:
-    """返回模型名的跨榜归一键（小写）。先查别名表精确/归一匹配，否则回退 _norm_model。
-
-    归一键用于跨源匹配（LMArena↔AA 回填、跨源差异、性价比象限、WoW 历史），
-    保证同一模型的不同变体 / 大小写 / 日期戳写法被识别为同一实体。
-    R5：归一并发时携带后缀标记（``glm53~flash``），避免 Base/Base-Suffix 撞键。
-    """
-    if not name:
-        return ""
-    low = name.strip().lower()
-    if low in _ALIAS_REV:
-        return _ALIAS_REV[low]
-    norm = _norm_model(name)
-    if norm in _ALIAS_REV:
-        return _ALIAS_REV[norm]
-    tok = _suffix_token(name)
-    return f"{norm}~{tok}" if tok else norm
-
-
-def canon_display(name: str) -> str:
-    """返回模型名的规范展示名（优先别名表中的 canonical 写法，否则原样）。"""
-    if not name:
-        return name
-    low = name.strip().lower()
-    if low in _ALIAS_REV:
-        return _CANON_DISPLAY.get(_ALIAS_REV[low], name)
-    norm = _norm_model(name)
-    if norm in _ALIAS_REV:
-        return _CANON_DISPLAY.get(_ALIAS_REV[norm], name)
-    return name
+# L0#1 / R5：模型名归一（canon_key / canon_display / 别名反向索引 / 后缀令牌）已下沉到
+# aiweekly.canon（P2-1：叶子模块，灭 leaderboard↔model_meta↔leaderboard_checks 循环依赖）。
+# 本文件只保留编排逻辑：区域优先级 / 快照兜底 / 周变化 / 选型结论。
 
 
 def _dedupe_by_alias(rows: list) -> list:
@@ -164,108 +95,7 @@ def _dedupe_by_alias(rows: list) -> list:
 
 
 # ---------- L0#2: 时序快照（snapshots/{date}.json）----------
-def _load_snapshots() -> dict:
-    """读取 snapshots/ 下全部 {date}.json，返回 {date: snapshot_dict}（date 升序拼装）。"""
-    out = {}
-    try:
-        if SNAPSHOTS_DIR.exists():
-            for p in sorted(SNAPSHOTS_DIR.glob("*.json")):
-                try:
-                    d = json.loads(p.read_text(encoding="utf-8"))
-                    out[p.stem] = d
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return out
-
-
-def _save_snapshot(date: str, boards: dict):
-    """写入 snapshots/{date}.json（本次完整排行，供后续 WoW / 趋势使用）。"""
-    try:
-        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-        SNAPSHOTS_DIR.joinpath(f"{date}.json").write_text(
-            json.dumps(boards, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
-def _seed_bootstrap(cache: dict):
-    """首次引入时序快照时，用现有 leaderboard_cache.json 作为「上一周」基线播种，
-    使 WoW 趋势线 / 跨周 diff 在首跑即有历史可对比（不伪造数据，仅复用既有缓存）。
-    """
-    if SNAPSHOTS_DIR.exists() and any(SNAPSHOTS_DIR.glob("*.json")):
-        return
-    prev = (cache or {}).get("snapshot")
-    if not prev:
-        return
-    try:
-        from datetime import date as _d, timedelta as _td
-        _pd = _parse_snapshot_date(prev) or _d.today()
-        seed_date = (_pd - _td(days=7)).isoformat()
-        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-        boards = {k: cache[k] for k in ("lmarena", "aa", "ls", "hf") if k in cache}
-        boards["snapshot"] = prev
-        SNAPSHOTS_DIR.joinpath(f"{seed_date}.json").write_text(
-            json.dumps(boards, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
-def _build_history(snapshots: dict) -> dict:
-    """从时序快照构建每个榜的「归一键 -> 历史名次序列」用于 sparkline。
-
-    返回 {board: {canon: [rank, ...]}}（按日期升序，最近在前由模板控制）。
-    仅取 rank 数值序列；缺失 rank 的快照位置留 None。
-    """
-    hist: dict = {"lmarena": {}, "aa": {}, "ls": {}, "hf": {}}
-    for _date in sorted(snapshots.keys()):
-        snap = snapshots[_date] or {}
-        for board in ("lmarena", "aa", "ls", "hf"):
-            m = snap.get(board, {}) or {}
-            for model, val in m.items():
-                ck = canon_key(model)
-                if not ck:
-                    continue
-                rank = val if isinstance(val, int) else None
-                hist[board].setdefault(ck, [])
-                # 同日期多值（变体）取首个有效 rank
-                if rank is not None and (not hist[board][ck] or hist[board][ck][-1] is None):
-                    hist[board][ck].append(rank)
-                elif rank is not None:
-                    hist[board][ck].append(rank)
-                else:
-                    hist[board][ck].append(None)
-    return hist
-
-
-def _normalize_snapshot_orgs(data: dict):
-    """快照行防御清洗：历史组装数据曾把中文机构名拼进 model 尾部
-    （如「Qwen3.8-Max阿里巴巴」且 org 空），统一按 DL_ORG_SPLIT endswith 拆分。"""
-    for board in ("comprehensive", "open_source"):
-        for slot in (data.get(board) or {}).values():
-            if not isinstance(slot, dict):
-                continue
-            for row in slot.get("rows") or []:
-                if not isinstance(row, dict):
-                    continue
-                model = str(row.get("model") or "")
-                if model and not str(row.get("org") or "").strip():
-                    org, m = _split_dl_org(model)
-                    if org and m:
-                        row["org"], row["model"] = org, m
-
-
-def _load_cn_snapshot() -> dict:
-    """读取国内可直连榜快照（OpenCompass 司南，SSR 不可达时的兜底）。"""
-    try:
-        if CN_SNAPSHOT_PATH.exists():
-            data = json.loads(CN_SNAPSHOT_PATH.read_text(encoding="utf-8"))
-            _normalize_snapshot_orgs(data)
-            return data
-    except Exception:
-        pass
-    return {}
+# 以下快照 / 缓存子系统已抽到 aiweekly.leaderboard_snapshot（P2-4），本文件经顶部 re-export。
 
 
 # _parse_snapshot_date 已迁移到 aiweekly.utils（顶部已 re-export）。
@@ -331,22 +161,6 @@ def _leaderboard_freshness(leaderboard: dict, report_date) -> dict:
 
 # LB_CRITERIA / SOURCES 已迁移到 aiweekly.leaderboard_fetch（L2 模块拆分，见该文件）。
 # 本文件仅保留编排逻辑：区域优先级 / 快照兜底 / 周变化 / 选型结论。
-
-
-def _load_cache() -> dict:
-    try:
-        if CACHE_PATH.exists():
-            return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
-
-
-def _save_cache(cache: dict):
-    try:
-        CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
 
 
 def _apply_deltas(rows, cache_rows, score_key=None):
@@ -702,24 +516,6 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     return data
 
 
-def _fill_from_cache(board: dict, cache: dict, snapshot: str):
-    """实时源全失败时，用本地缓存快照填充（标注 is_cache）。board 为 {slot:{rows:[]}}。"""
-    for slot, ckey in (("lmarena", "lmarena"), ("aa", "aa"),
-                       ("ls", "ls"), ("ls", "hf"),
-                       ("hf", "hf"), ("hf", "ls")):
-        if slot in board and not board[slot]["rows"] and cache.get(ckey):
-            cached_rows = [{"model": m, "rank": (v if isinstance(v, int) else None),
-                            "score": (v if not isinstance(v, int) else None),
-                            "org": "", "open_source": None}
-                           for m, v in cache[ckey].items()]
-            board[slot] = {
-                "source": f"本地缓存快照（{cache.get('snapshot', '未知')}）", "url": "",
-                "snapshot": cache.get("snapshot", ""), "criteria": "",
-                "rows": cached_rows, "source_region": "cache", "is_cache": True,
-            }
-            break
-
-
 def _collect_leaderboard_models(leaderboard_data):
     """收集排行榜中出现的所有模型名（去重保序，按归一键去重）。
 
@@ -745,10 +541,6 @@ def _collect_leaderboard_models(leaderboard_data):
             seen.add(ck)
             uniq.append(canon_display(m))
     return uniq
-
-
-# L0#4 / L0#5: 排行榜质量 + 榜源 schema 校验（拆到 leaderboard_checks.py，避免本文件膨胀）
-from aiweekly.leaderboard_checks import validate_leaderboard_data, LB_ROW_FIELDS  # noqa: E402
 
 
 def sync_model_profiles(extra_profiles_path: str, leaderboard_data: dict):

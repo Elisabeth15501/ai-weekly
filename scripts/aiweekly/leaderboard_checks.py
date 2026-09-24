@@ -1,8 +1,11 @@
 """排行榜质量 + 榜源 schema 校验（L0#4 / L0#5）。
 
 从 leaderboard.py 拆出，避免主编排模块膨胀（P0#4 模块体量守护：单文件 ≤ 800 行）。
-校验逻辑为纯函数，无榜源依赖，可独立单测；canon_key 延迟导入以避开循环依赖。
+校验逻辑为纯函数，无榜源依赖，可独立单测；canon_key 来自叶子模块 aiweekly.canon
+（P2-1：循环依赖已消除，改为顶部导入）。
 """
+from aiweekly.canon import canon_key  # P2-1：叶子模块，无循环依赖
+
 # 排行行允许字段白名单（L0#5）：fetcher 漏出的非标字段（如旧 cost_in/cost_out）会被标红。
 # 注意：likes（社区点赞数）/ params（参数量）是 HF、LLM-Stats、ModelScope 等开源榜
 # fetcher 有意附加的真实元数据字段（见 leaderboard_sources.py），属标准开放字段而非脏数据，
@@ -23,7 +26,6 @@ def validate_leaderboard_data(data: dict) -> dict:
     同榜归一键去重、跨榜(lmarena vs aa)同名 rank 差 ≤ 20、selection_notes 三段齐全、
     schema 白名单命中率、delta 字段覆盖率。
     """
-    from aiweekly.leaderboard import canon_key  # 延迟导入，避开循环依赖
     issues = []
     checks = {}
     if not isinstance(data, dict):

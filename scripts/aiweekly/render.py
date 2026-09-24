@@ -309,6 +309,7 @@ def generate(api_data: dict, output_path: str = None,
     final_leaderboard["meta"]["snapshot_stale"] = _lb_fresh["stale"]
     final_leaderboard["meta"]["snapshot_per_source"] = _lb_fresh["per_source"]
     final_leaderboard["meta"]["snapshot_per_source_age"] = _lb_fresh["per_source_age"]
+    final_leaderboard["meta"]["snapshot_stale_threshold"] = LEADERBOARD_STALE_DAYS
     if _lb_fresh["stale"]:
         print(f"  ⚠️ 排行榜快照时效告警：最新快照距本期 {_lb_fresh['worst_age']} 天"
               f"（阈值 {LEADERBOARD_STALE_DAYS} 天），部分榜单为「非本周抓取」——"

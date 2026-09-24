@@ -15,13 +15,13 @@ from aiweekly.utils import _parse_date_arg, _parse_iso_datetime
 SUMMARY_MAX = 120        # 超过此长度触发归一化
 SUMMARY_TARGET = 110     # 归一化后目标长度
 MUSTREAD_TOP_N = 8       # 评分最高的前 N 条标记为必读
-LEADERBOARD_STALE_DAYS = 3  # 排行榜快照距报告日超过此天数即视为「非本周抓取」告警
 
-# 从 aiweekly.const 重新导出，供上游模块按需 import 统一常量（P2-1）
+# 从 aiweekly.const 重新导出，供上游模块按需 import 统一常量（P2-1 / P2-5）
 from aiweekly.const import (  # noqa: F401  # pylint: disable=unused-import
     NEWS_MAX_ITEMS,
     NEWS_SUMMARY_MAX_CHARS,
     LEADERBOARD_MAX_MODELS,
+    LEADERBOARD_STALE_DAYS,
     HTML_MAX_SIZE_BYTES,
     SUMMARY_TARGET_CHARS as SUMMARY_TARGET_CONST,
 )

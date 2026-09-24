@@ -19,7 +19,7 @@ NEWS_SUMMARY_MAX_CHARS: int = 120  # 摘要最大字符数（触发归一化）
 # ---------------------------------------------------------------------------
 LEADERBOARD_TOP_N: int = 50       # 每榜最多显示条数（超过截取 top N）
 LEADERBOARD_MAX_MODELS: int = 50  # 单榜最大模型数（防止 HTML 过大）
-LEADERBOARD_STALE_DAYS: int = 14  # 超过 N 天未更新的模型标注为「旧」
+LEADERBOARD_STALE_DAYS: int = 3   # 排行榜快照距报告日超过此天数即视为「非本周抓取」并告警（周报语义：>3 天即非本周）。P2-5 单一来源：模板端经 meta.snapshot_stale_threshold 同源引用。
 
 # ---------------------------------------------------------------------------
 # 图表数据限制

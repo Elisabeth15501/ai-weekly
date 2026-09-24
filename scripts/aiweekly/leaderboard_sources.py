@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - 依赖缺失时由上层 CLI 统一提
 from aiweekly.utils import _http_get, _retry_fetch
 from aiweekly.news import _is_open_source
 from aiweekly.model_meta import _enrich_cost
+from aiweekly.canon import _norm_model, ORG_PREFIXES, _SUFFIX_RE  # P2-1：归一原语下沉到叶子模块
 
 # ============ 榜源地址 ============
 # 综合榜：LMArena（人类偏好 Elo）+ Artificial Analysis 智能指数
@@ -107,15 +108,6 @@ __all__ = [
 ]
 
 
-# 已知开发方前缀（用于从 LMArena 拼接 slug 中切分机构名）
-ORG_PREFIXES = [
-    "Anthropic", "OpenAI", "Google", "Meta", "Mistral AI", "DeepSeek", "Alibaba",
-    "Qwen", "Moonshot", "xAI", "Zhipu", "Zai", "MiniMax", "NVIDIA", "IBM",
-    "Microsoft", "Cohere", "01.AI", "Ai2", "AllenAI", "Databricks",
-    "NousResearch", "Tencent", "Baidu", "StepFun", "Arcee", "Grok",
-]
-
-
 def _clean_model_slug(slug: str):
     """从 LMArena 的 'Anthropicclaude-fable-5' 这类拼接 slug 切出 (org, model)。"""
     for org in ORG_PREFIXES:
@@ -123,28 +115,6 @@ def _clean_model_slug(slug: str):
             model = slug[len(org):].lstrip("-_ ").replace("-", " ").strip()
             return org, model[:60].title()
     return "", slug.replace("-", " ").strip()[:60].title()
-
-
-# 跨源模型名归一化（用于 LMArena↔AA 智能指数回填匹配）：
-# 小写、去分隔符、去前缀机构、去常见后缀词。注意：后缀词只去掉词本身，
-# 不吞掉前面的数字（否则 "1.1" 会被拆成 "11" 再误删版本位，导致
-# "Muse Spark 1.1 (xhigh)" 与 "Muse Spark 1.1" 匹配失败）。
-# 机构名内嵌的 max（如 MiniMax）已由 ORG_PREFIXES 前缀剥离先行处理，不受影响。
-_SUFFIX_RE = re.compile(r"(max|xhigh|high|thinking|withfallback|preview|pro|flash|sol|ultra)")
-
-
-def _norm_model(name: str) -> str:
-    if not name:
-        return ""
-    s = name.lower()
-    for ch in " ()[]-_./":
-        s = s.replace(ch, "")
-    for p in ORG_PREFIXES:
-        pk = p.lower().replace(" ", "")
-        if s.startswith(pk):
-            s = s[len(pk):]
-            break
-    return _SUFFIX_RE.sub("", s)
 
 
 # 代理与网络 IO 已迁移到 aiweekly.utils（_PROXY_OVERRIDE / _resolved_proxy / _configure_proxy /

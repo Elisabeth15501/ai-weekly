@@ -35,13 +35,9 @@ from typing import Sequence
 # NETWORK = 网络抓取失败
 ERR_GH_MISSING_PAT        = "ERR-GH-PAT-001"
 ERR_GH_PAGES_SCOPE        = "ERR-GH-PAGES-002"
-ERR_COS_MISSING_SDK       = "ERR-COS-SDK-001"
 ERR_COS_MISSING_CONFIG    = "ERR-COS-CONF-001"
-ERR_FEISHU_WEBHOOK_BAD    = "ERR-FS-HOOK-001"
 ERR_FEISHU_CONNECTOR_MISSING = "ERR-FS-CON-001"
 ERR_INPUT_MISSING_FILE    = "ERR-INPUT-FILE-001"
-ERR_INPUT_BAD_BACKEND     = "ERR-INPUT-BACKEND-001"
-ERR_DEPLOY_CMD_FAILED     = "ERR-DEPLOY-CMD-001"
 ERR_NETWORK_TIMEOUT       = "ERR-NET-TIMEOUT-001"
 
 
@@ -97,46 +93,6 @@ def err_missing_file(path: Path) -> UserFacingError:
         [f"请确认路径正确：{path.resolve()}",
          "若刚下载/移动过该文件，重新指定 --html 参数"],
         verbose=f"os.path.exists({path!r}) == False",
-    )
-
-
-def err_bad_backend(backend: str, allowed: Sequence[str]) -> UserFacingError:
-    return UserFacingError(
-        ERR_INPUT_BAD_BACKEND,
-        f"未知部署后端 '{backend}'",
-        [f"可选后端：{', '.join(allowed)}",
-         "用 --deploy-to <后端名> 切换"],
-        verbose=f"argparse choices={allowed!r} did not match {backend!r}",
-    )
-
-
-def err_deploy_cmd_failed(cmd: list[str], exit_code: int, tail: str) -> UserFacingError:
-    return UserFacingError(
-        ERR_DEPLOY_CMD_FAILED,
-        "部署命令执行失败",
-        [f"命令：{' '.join(cmd)}",
-         f"退出码：{exit_code}",
-         "查看上方错误信息定位根因，或重试（可能是临时网络抖动）"],
-        verbose=f"exit={exit_code}\nlast 500 chars:\n{tail}",
-    )
-
-
-def err_feishu_bad_webhook(raw: str) -> UserFacingError:
-    return UserFacingError(
-        ERR_FEISHU_WEBHOOK_BAD,
-        "飞书 Webhook 地址无效",
-        ["检查地址格式：https://open.feishu.cn/open-apis/bot/v2/hook/<真实token>",
-         "到飞书群 → 设置 → 群机器人 → 自定义机器人 → 复制安全设置中的 Webhook 地址"],
-        verbose=f"raw webhook value failed validation: {raw[:60]!r}",
-    )
-
-
-def err_cos_sdk_missing() -> UserFacingError:
-    return UserFacingError(
-        ERR_COS_MISSING_SDK,
-        "缺少腾讯云 SDK",
-        ["在 aiweekly venv 中安装：`pip install cos-python-sdk-v5`",
-         "或切换到其他部署后端（--deploy-to github-pages / vercel）"],
     )
 
 

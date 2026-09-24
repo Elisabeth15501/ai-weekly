@@ -1,8 +1,7 @@
 """aiweekly · AI 周报生成器内部包。
 
 设计原则：
-- 按职责垂直切分（P1#1 已全部落地，11 模块）：
-    types              — TypedDict 数据契约（NewsItem / LeaderboardRow / LeaderboardSlot）
+- 按职责垂直切分（P1#1 已全部落地，10 模块）：
     utils              — 日期解析 / 网络 IO / 代理 / 区域探测 / 重试退避 / JSON 读写
     translate          — 本地 Ollama 英文中译 + 健康探测
     news               — 外部合并 / 信源归一 / 摘要压缩 / 语言判定 / 重要度评分
