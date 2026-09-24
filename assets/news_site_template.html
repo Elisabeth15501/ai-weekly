@@ -1180,7 +1180,7 @@ function renderDashboard() {
     html += '<div class="must-strip">'
       + '<span class="must-strip-label">🔥 必读 Top3</span>'
       + s.must_read.map(m =>
-        '<a class="must-item" href="' + escapeHtml(m.url || '#') + '" target="_blank" rel="noopener">'
+        '<a class="must-item" href="' + escapeHtml(safeUrl(m.url || '#')) + '" target="_blank" rel="noopener">'
         + escapeHtml(m.title) + '</a>'
       ).join('')
       + '</div>';
@@ -1279,8 +1279,8 @@ function renderTabs() {
         : NEWS_DATA.filter(n => n.category === cat.key).length;
     // C2：空分类动态隐藏——只渲染有内容的 tab；'all' 永远保留（不会有 0 条）
     if (count < 1 && cat.key !== 'all') return '';
-    return `<button class="tab${i === 0 ? ' active' : ''}" data-cat="${cat.key}"
-      onclick="switchTab('${cat.key}', this)">
+    return `<button class="tab${i === 0 ? ' active' : ''}" data-cat="${escapeHtml(cat.key)}"
+      onclick="switchTab('${jsStrInAttr(cat.key)}', this)">
       ${cat.icon ? cat.icon + ' ' : ''}${cat.label}<span class="count">${count}</span>
     </button>`;
   }).join('');
@@ -1369,10 +1369,10 @@ function renderCards(items) {
     const enOrigHtml = isEnCn
       ? `<div class="card-summary-en">原文：${escapeHtml(n.summary)}</div>` : "";
     return `
-    <div class="news-card" data-category="${n.category}">
-      <div class="card-thumb thumb-${n.category}">
+    <div class="news-card" data-category="${escapeHtml(n.category)}">
+      <div class="card-thumb thumb-${escapeHtml(n.category)}">
         <span>${getCategoryIcon(n.category)}</span>
-        <span class="cat-label">${getCategoryLabel(n.category)}</span>
+        <span class="cat-label">${escapeHtml(getCategoryLabel(n.category))}</span>
         ${n.lang === 'en' ? '<span class="lang-badge">EN</span>' : ''}
         ${isUnTranslated ? '<span class="untranslated-badge thumb">未翻译</span>' : ''}
         ${n.mustRead ? '<span class="mustread-badge">🔥必读</span>' : ''}
@@ -1411,8 +1411,8 @@ function getCategoryLabel(cat) {
 }
 
 function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // 仅放行 http(s)/mailto 协议，阻断 javascript:/data: 等危险协议（RSS/外部 URL 不可信）
@@ -1421,6 +1421,16 @@ function safeUrl(u) {
   const s = String(u).trim();
   if (/^(https?:|mailto:)/i.test(s)) return s;
   return '#';
+}
+
+// 属性内的 JS 单引号字符串字面量（如 onclick="fn('X')"）：两层转义缺一不可。
+// 只做 escapeHtml 无效 —— 浏览器先对属性值做实体解码，再把结果交给 JS 解析器，
+// 因此 &#x27; 解码回 ' 后照样闭合字符串。等价于服务端 utils.js_str_in_attr。
+function jsStrInAttr(s) {
+  if (s === null || s === undefined || s === '') return '';
+  const js = String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+  return escapeHtml(js);
 }
 
 // ===== Time formatting =====
@@ -1463,7 +1473,7 @@ function updateTabCounts() {
 // ===== Leaderboard (双榜：综合 + 开源) =====
 function setText(id, t){ const e=document.getElementById(id); if(e) e.textContent=t||''; }
 function setHTML(id, h){ const e=document.getElementById(id); if(e) e.innerHTML=h||''; }
-function setHref(id, u){ const e=document.getElementById(id); if(e && u) e.href=u; }
+function setHref(id, u){ const e=document.getElementById(id); if(e && u) e.href=safeUrl(u); }
 function fmtScore(s){
   if(s===null||s===undefined||s==='') return '—';
   return (typeof s==='number') ? s.toFixed(1) : s;
@@ -1638,7 +1648,7 @@ function renderLbBoards(){
     return '';
   }
   renderRows('lmBody', applyLbFilter(lmRows), (r)=>`
-    <td><span class="rank-badge">${r.rank}</span></td>
+    <td><span class="rank-badge">${escapeHtml(r.rank)}</span></td>
     <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
@@ -1647,21 +1657,21 @@ function renderLbBoards(){
     ${deltaCell(r.delta, r.spark)}`);
 
   renderRows('aaBody', applyLbFilter(aaRows), (r)=>`
-    <td><span class="rank-badge">${r.rank}</span></td>
+    <td><span class="rank-badge">${escapeHtml(r.rank)}</span></td>
     <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     ${typeBadge(r)}
     <td>${escapeHtml(orgOf(r)||'—')}</td>
-    <td>${fmtScore(r.score)}</td>
+    <td>${escapeHtml(fmtScore(r.score))}</td>
     ${costCell(r)}
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${deltaCell(r.delta, r.spark)}`);
 
   // 开源榜：LLM-Stats（左）
   renderRows('lsBody', applyLbFilter(lsRows), (r)=>`
-    <td><span class="rank-badge">${r.rank}</span></td>
+    <td><span class="rank-badge">${escapeHtml(r.rank)}</span></td>
     <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(orgOf(r)||'—')}</td>
-    <td>${fmtScore(r.score)}</td>
+    <td>${escapeHtml(fmtScore(r.score))}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${costCell(r)}
@@ -1670,10 +1680,10 @@ function renderLbBoards(){
 
   // 开源榜：Hugging Face（右）
   renderRows('hfBody', applyLbFilter(hfRows), (r)=>`
-    <td><span class="rank-badge">${r.rank}</span></td>
+    <td><span class="rank-badge">${escapeHtml(r.rank)}</span></td>
     <td class="model-name" data-model="${escapeHtml(r.model)}">${escapeHtml(r.model)}${cnBadge(r)}</td>
     <td>${escapeHtml(r.org||'—')}</td>
-    <td>${fmtScore(r.score)}</td>
+    <td>${escapeHtml(fmtScore(r.score))}</td>
     <td class="license">${escapeHtml(r.license||'—')}</td>
     <td class="lb-ctx">${fmtCtx(r.context)}</td>
     ${costCell(r)}
@@ -1817,7 +1827,7 @@ function renderRanking() {
         'open_source.ls': ls.display_name || ls.source || '开源模型榜',
         'open_source.hf': hf.display_name || hf.source || 'HF',
       })[k] || k;
-      return `${label}（${age}天前）`;
+      return `${escapeHtml(label)}（${age}天前）`;
     }).join('、');
     snapTxt += ' ｜ ⚠️ 部分榜单为非本周抓取：' + staleTxt;
     const banner = document.getElementById('lbStaleWarn');
@@ -2038,7 +2048,7 @@ function openLbModal(name){
   const mm  = (p&&p.multimodal) || r.multimodal || '—';
   const uc  = (p&&p.use_case) || r.best_for || '—';
   const delta = (r.delta!==null && r.delta!==undefined) ? (r.delta>0 ? ('↑'+r.delta) : (r.delta<0 ? ('↓'+(-r.delta)) : '—')) : '—';
-  const src = (p&&p.source) ? `<a href="${escapeHtml(p.source)}" target="_blank" rel="noopener">官方 / 评测源 ↗</a>` : '—';
+  const src = (p&&p.source) ? `<a href="${escapeHtml(safeUrl(p.source))}" target="_blank" rel="noopener">官方 / 评测源 ↗</a>` : '—';
 
   const row = (k, v)=>`<tr><td>${k}</td><td>${v===null||v===undefined||v===''?'—':escapeHtml(String(v))}</td></tr>`;
   // 允许预清洗 HTML 的值（如成本双行 <span class="sub">）原样注入，避免被 escapeHtml 转义成可见文本
@@ -2117,7 +2127,7 @@ function renderInsights() {
   if (audienceChips && AUDIENCE_SUMMARY && typeof AUDIENCE_SUMMARY === 'object') {
     audienceChips.innerHTML = Object.entries(AUDIENCE_SUMMARY).map(([key, text]) => {
       const active = key === activeAudience ? ' active' : '';
-      return `<span class="audience-chip${active}" data-audience="${key}" onclick="switchAudience('${key}', this)">${key}</span>`;
+      return `<span class="audience-chip${active}" data-audience="${escapeHtml(key)}" onclick="switchAudience('${jsStrInAttr(key)}', this)">${escapeHtml(key)}</span>`;
     }).join('');
   }
   if (audienceWrap) {
@@ -2128,7 +2138,7 @@ function renderInsights() {
   if (searchSourcesChips && KEYWORD_SEARCH_SOURCES && typeof KEYWORD_SEARCH_SOURCES === 'object') {
     searchSourcesChips.innerHTML = Object.entries(KEYWORD_SEARCH_SOURCES).map(([key, url]) => {
       const active = key === activeSearchSource ? ' active' : '';
-      return `<span class="search-source-chip${active}" data-source="${key}" onclick="switchSearchSource('${key}', this)">${key}</span>`;
+      return `<span class="search-source-chip${active}" data-source="${escapeHtml(key)}" onclick="switchSearchSource('${jsStrInAttr(key)}', this)">${escapeHtml(key)}</span>`;
     }).join('');
   }
   if (searchSourcesWrap) {
@@ -2150,7 +2160,7 @@ function renderInsights() {
           }
         }
         const event = k.event ? `<div class="kw-event" style="font-size:11px;margin-top:4px;color:var(--text-tertiary);">${escapeHtml(k.event)}</div>` : '';
-        const tier = k.tier ? `<span class="kw-tier ${k.tier === '主线' ? 'kw-tier-main' : 'kw-tier-ext'}">${k.tier}</span>` : '';
+        const tier = k.tier ? `<span class="kw-tier ${k.tier === '主线' ? 'kw-tier-main' : 'kw-tier-ext'}">${escapeHtml(k.tier)}</span>` : '';
         const tagColors = {'安全':'#e74c3c','模型':'#3498db','基建':'#f39c12','产品':'#27ae60','资本':'#9b59b6','监管':'#16a085','话题':'#7f8c8d'};
         const tag = k.tag ? `<span class="kw-tag" style="background:${(tagColors[k.tag]||'#888')+'22'};color:${tagColors[k.tag]||'#888'};">${escapeHtml(getTagLabel(k.tag))}</span>` : '';
         
@@ -2176,7 +2186,7 @@ function renderInsights() {
               ${tag}
               ${tier}
             </button>
-            <a class="kw-search" href="${searchUrl}" target="_blank" rel="noopener"
+            <a class="kw-search" href="${escapeHtml(safeUrl(searchUrl))}" target="_blank" rel="noopener"
               title="在网页中搜索「${escapeHtml(term)} AI」">↗</a>
           </div>
           ${noteHtml}

@@ -19,7 +19,7 @@
 - **市场数据双源**：全球 + 中国市场规模 / 融资 4 图 2×2 布局，含趋势洞察 × 本周印证桥接
 - **模型资料卡**：26+ 模型档案（成本 / 上下文 / 许可证 / 币种），以 `model_profiles.json` 为唯一权威源
 - **可定时**：支持每周自动生成最新版网站
-- **安全加固**：RSS 不可信内容经 `<script>` 上下文 JSON 注入与 URL 属性突破均已防御
+- **安全加固**：RSS / CLI 不可信内容的注入面在**服务端 Python**与**客户端模板**两层分别防御——`<script>` 上下文 JSON 注入、URL 属性突破、属性内 JS 字符串、客户端 `${...}` 插值均按上下文转义 / 协议白名单处理
 - **多后端部署**：`deploy.py` 统一入口支持 GitHub Pages / 腾讯云 COS / Vercel / Netlify / Cloudflare Pages / 本地 6 种托管，飞书卡片 `view_url` 与部署解耦，非 GitHub 后端完全不碰 GitHub
 - **国内镜像自动回退**：LMArena / HuggingFace / Artificial Analysis 主源不可达时自动切换 hf-mirror 等国内镜像，再失败才回退快照（探活见 `scripts/leaderboard_diagnose.py`）
 - **交互式飞书配置**：`scripts/init_feishu_config.py` 交互式生成 `feishu_config.json`（webhook / 连接器双模式 + 格式校验），首次配置不再手写出错
@@ -240,10 +240,11 @@ bash run_report.sh deploy --html AI_News.html
 - **H1 存储型 XSS（`<script>` 上下文 JSON 注入）**：`render.py` 用 `_json_script_safe()` 把序列化结果中的 `<` `>` `&` 转义为 `\u003c`/`\u003e`/`\u0026`，阻止 `</script>` 突破脚本块。**已覆盖的 JSON 占位符**：`NEWS_DATA` / `LEADERBOARD_DATA` / `INSIGHTS_DATA` / `AUDIENCE_SUMMARY` / `KEYWORD_SEARCH_SOURCES`
 - **H2 URL 属性突破 + 危险协议**：仅放行 `http(s):` / `mailto:`，`javascript:` / `data:` 回退 `#`。服务端渲染的 `href` 统一经 `utils.safe_href()`（协议白名单 + `html.escape(quote=True)`）；浏览器侧另有模板 `safeUrl()`
 - **H3 HTML 属性内的 JS 字符串**：`onclick="switchAudience('…')"` 这类上下文需**两层**转义（JS 层转义 `\` / `'` / 换行，再加 HTML 层 `quote=True`）——仅 `html.escape` 无效，因为浏览器会先做实体解码再把结果交给 JS 解析。统一走 `utils.js_str_in_attr()`
+- **H4 客户端模板插值面（`assets/news_site_template.html`）**：`renderInsights()` 会在运行时用 `innerHTML` 覆盖服务端预渲染的同一容器，而客户端模板字面量对不可信字段原为**零转义**——这会让服务端修复在启用 JS 的浏览器上被绕过。现客户端全部 `${...}` 插值按上下文补齐：文本 / 属性走 `escapeHtml`、属性内 JS 字符串走 `jsStrInAttr`（等价于服务端 `utils.js_str_in_attr`）、`href` 与 `setHref()` 走模板 `safeUrl()`。该文件是纯客户端 JS、pytest 无法执行其中的逻辑，故其防护由**静态断言闸门**（对模板文本做正则校验）守护
 - **M1–M2 CLI 可控文本转义**：`--market-source` 系列（`[MARKET_SOURCE]` / `[FUNDING_SOURCE]` / `[CN_*_SOURCE]` 及其汇总与页脚）、外部源、`LEAD`、关键词均经 `html.escape`；JS 字符串上下文走 `_js_str()`
 - **M3 TLS 证书校验**：`utils._build_opener()` 校验证书链与主机名。企业 TLS 拦截场景的正确做法是把代理根证书装入系统信任库（或指向 `SSL_CERT_FILE`），而非关闭校验
 
-> 上述修复通过恶意 payload（`</script><img onerror=...>`、`javascript:alert(1)`、`'` 闭合 JS 字符串、`"` 闭合属性）注入回归测试验证，并做了改动前后整页渲染等价性比对。
+> 上述修复通过恶意 payload（`</script><img onerror=...>`、`javascript:alert(1)`、`'` 闭合 JS 字符串、`"` 闭合属性）注入回归测试验证，并做了改动前后整页渲染等价性比对。**服务端 Python 侧为可执行的行为测试；客户端模板侧因 pytest 无法执行其 JS，为静态断言闸门（正则校验模板文本），二者覆盖范围不同、不可互相替代。**
 
 ---
 

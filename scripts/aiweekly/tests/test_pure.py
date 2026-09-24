@@ -360,3 +360,77 @@ def test_json_text_script_safe_blocks_breakout_and_keeps_format():
     assert "\\u003c/script\\u003e" in out
     # 格式保留：已是 JSON 文本时不得重排（紧凑分隔符须原样保留）
     assert _json_text_script_safe('{"a":"b"}') == '{"a":"b"}'
+
+
+# ========== 客户端模板静态转义闸门（assets/news_site_template.html）==========
+# 背景：该文件是纯客户端 JS 模板，pytest 无法执行其中的 JS。服务端 Python 侧已按
+# js_str_in_attr / safe_href 修好静态预渲染，但 renderInsights() 会在运行时用 innerHTML
+# 覆盖服务端预渲染的同一容器，客户端模板字面量若不转义即构成「覆盖式」注入面。
+# 本节的断言是**静态文本/正则闸门**（非行为测试）——只保证坏形态不再出现、
+# 动态插值必须走安全辅助函数，为这份无法被 pytest 执行的模板提供唯一自动化防线。
+import re  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+_TEMPLATE_PATH = Path(__file__).resolve().parents[3] / "assets" / "news_site_template.html"
+
+
+def _template() -> str:
+    return _TEMPLATE_PATH.read_text(encoding="utf-8")
+
+
+def test_template_helpers_exist():
+    t = _template()
+    for sig in ("function escapeHtml(str)", "function safeUrl(u)", "function jsStrInAttr(s)"):
+        assert sig in t, f"模板缺少必需的安全辅助函数：{sig}"
+
+
+def test_template_escapehtml_coerces_non_string():
+    # 防回归：旧实现 `if (!str) return '';` 会把数字 0 误吞成空串，且对数字抛 TypeError
+    assert "String(str).replace(" in _template()
+
+
+def test_template_no_raw_unescaped_interpolation():
+    # 逐条确认已修复的「裸插值」坏形态消失；若任一回归，给出明确失败消息。
+    t = _template()
+    bad_forms = [
+        'data-category="${n.category}"',
+        "thumb-${n.category}",
+        "${getCategoryLabel(n.category)}",
+        'data-audience="${key}"',
+        'data-source="${key}"',
+        "onclick=\"switchAudience('${key}'",
+        "onclick=\"switchSearchSource('${key}'",
+        'href="${searchUrl}"',
+        "' + escapeHtml(m.url",
+        "${fmtScore(r.score)}",
+        "${r.rank}",
+    ]
+    still_present = [b for b in bad_forms if b in t]
+    assert not still_present, f"以下未转义插值形态仍存在：{still_present}"
+
+
+def test_template_onclick_interpolations_use_jsstr():
+    # 通用闸门：任何 onclick/oninput 属性值里出现 ${ 动态插值，必须同时含 jsStrInAttr(
+    # 覆盖未来新增的 onclick（JS-in-attribute 上下文只做 escapeHtml 无效）。
+    t = _template()
+    offenders = []
+    for attr in ("onclick", "oninput"):
+        for m in re.finditer(attr + r'="([^"]*)"', t):
+            val = m.group(1)
+            if "${" in val and "jsStrInAttr(" not in val:
+                offenders.append(f'{attr}="{val}"')
+    assert not offenders, f"onclick/oninput 含未走 jsStrInAttr 的插值：{offenders}"
+
+
+def test_template_href_interpolations_use_safeurl():
+    # 通用闸门：任何 href="${...}" 插值表达式必须走 safeUrl( 协议白名单。
+    t = _template()
+    offenders = []
+    for m in re.finditer(r'href="\$\{([^"]*)\}"', t):
+        if "safeUrl(" not in m.group(1):
+            offenders.append(m.group(0))
+    assert not offenders, f"href 插值未走 safeUrl 协议白名单：{offenders}"
+
+
+def test_setHref_uses_safe_url():
+    assert "e.href=safeUrl(u)" in _template()

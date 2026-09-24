@@ -78,6 +78,36 @@ Clean Code 审计（`clean_code_audit_generate_site.md`）落地：主入口职�
 - **输出等价性**：改动前后整页渲染 **2608 行逐字节等价**；唯一差异为 URL 中裸 `&` → `&amp;`（即修复本身，且仅出现在含 `&` 的 URL 上）
 - **TLS 影响实测**：33 个数据源在「开启校验 / 关闭校验」下结果集**完全一致**，SSL 失败 0 例、真回归 0 例（Gartner 403 与 VentureBeat 429 属 HTTP 层，关闭校验时同样失败）
 
+### Fixed（安全 · 客户端模板插值面）
+
+**背景 / 根因**：此前的服务端修复（`market.py` / `insights.py` / `render.py`）只覆盖了 Python 侧。但 `assets/news_site_template.html` 的 `renderInsights()` 会在 `DOMContentLoaded` 时用 `innerHTML` **覆盖**服务端预渲染的同一容器（受众 / 关键词 / 看点），而客户端模板字面量对不可信字段**零转义**——服务端修复在启用 JS 的浏览器上被完全绕过（「覆盖式」注入面）。本轮对客户端模板做与服务端孪生实现等价的补齐（M1–M14）：
+
+- **加厚 `escapeHtml`（M1）**：原 `if (!str) return '';` 对数字抛 `TypeError`（一旦抛出整个 `renderCards` / `renderRanking` 崩溃），且把数字 `0` 误吞成空串。改为 `String(str).replace(...)`，`null`/`undefined` 归一空串
+- **新增 `jsStrInAttr`（M2）**：等价于服务端 `utils.js_str_in_attr` 的「JS 层 + HTML 层」两层转义，供属性内 JS 字符串使用（**只做 `escapeHtml` 无效**——浏览器先实体解码再交给 JS 解析器）
+- **新闻卡（M5）**：`data-category` / `thumb-*` 属性与 `getCategoryLabel()` 文本节点补 `escapeHtml`（`n.category` 来自 `--api-json` / `--external-news-json`，`format_news_items` 原样透传、无白名单）
+- **受众 / 搜索源 chip（M11/M12）**：`data-audience` / `data-source` 属性 + `onclick="switchAudience('…')"` / `switchSearchSource('…')` 的 JS-in-attr + 文本节点**三处同时**补 `escapeHtml` / `jsStrInAttr`（键来自 `--audience-summary` 与 `--keyword-search-sources`）
+- **关键词 tier（M13）/ 搜索 URL（M14）**：`${k.tier}` 补 `escapeHtml`；`href="${searchUrl}"` 改 `escapeHtml(safeUrl(searchUrl))`
+- **协议白名单（M3/M6/M10）**：必读 `href`、`setHref()`（一次收口 4 处榜单链接）、选型卡 `p.source` 全部改走 `safeUrl()`
+- **榜单派生 sink（M7/M8/M9）**：`${r.rank}`（4 处）、`${fmtScore(r.score)}`（3 处）、陈旧横幅 `${label}` 补 `escapeHtml`
+- **tab（M4）**：`switchTab` 的 `data-cat` / `onclick` 一并收口（今日为静态常量，防未来回归）
+
+**涉及 5 个外部输入通道**：`--api-json`（`n.category`）、`--external-news-json`（同上，合并不重分类）、`--audience-summary`（键）、`--keyword-search-sources`（键与 url 值）、`--profiles-json`（`p.source`）。
+
+**有意保留不动**：`:1284` `cat.icon/label`、`:1374` `getCategoryIcon`（白名单映射 + 固定兜底 emoji）、`:2045` `rowHtml`（唯一调用点传的是本地拼装、已洁净的 `cost`）、`:1385`（已是 `escapeHtml(safeUrl(...))`）。
+
+### Added（客户端模板静态闸门）
+
+`assets/news_site_template.html` 是纯客户端 JS，pytest 无法执行其中的 JS，故新增**静态文本 / 正则闸门**（本文件唯一的自动化防线）：
+
+- `test_template_helpers_exist`：`escapeHtml` / `safeUrl` / `jsStrInAttr` 三个辅助函数必须存在
+- `test_template_escapehtml_coerces_non_string`：防 `!str` 版回归
+- `test_template_no_raw_unescaped_interpolation`：逐条断言 11 种「裸插值」坏形态已消失
+- `test_template_onclick_interpolations_use_jsstr`：**通用**闸门——任何 `onclick` / `oninput` 含 `${` 必须含 `jsStrInAttr(`（覆盖未来新增）
+- `test_template_href_interpolations_use_safeurl`：**通用**闸门——任何 `href="${…}"` 必须含 `safeUrl(`
+- `test_setHref_uses_safe_url`：`setHref` 必须走 `safeUrl`
+
+**闸门有效性已证伪式验证**：对修复前的模板（`git stash` 回退）跑同一批断言，6 项**全部失败**——第 3 条一次性抓出全部 11 种坏形态；第 4/5 条分别抓出 `switchTab/switchAudience/switchSearchSource` 与 `href="${searchUrl}"`、`href="${escapeHtml(p.source)}"`。证明断言非恒真。
+
 ## [3.6.1] — 2026-09-22
 合规措辞整改：清除全部可能被判定为「规避网络管理」的表述，功能零变更。
 
