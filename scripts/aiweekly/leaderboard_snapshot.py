@@ -5,7 +5,7 @@
 - ``_load_snapshots`` / ``_save_snapshot`` / ``_seed_bootstrap`` / ``_build_history``：
   时序快照（L0#2）的读取 / 写入 / 首跑基线播种 / 历史名次序列构建（供 sparkline）。
 - ``_normalize_snapshot_orgs``：历史快照行的机构名防御清洗。
-- ``_load_cn_snapshot``：国内可直连榜兜底快照（SSR 不可达时）。
+- ``_load_cn_snapshot``：国内可直连榜兜底快照（实时抓取不可达时）。
 - ``_load_cache`` / ``_save_cache`` / ``_fill_from_cache``：本地缓存快照读写与回退填充。
 
 这些函数原散落在 leaderboard.py 的编排逻辑中；抽出后 leaderboard.py 只保留「怎么组合、
@@ -29,7 +29,7 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 
 # ---------- 持久化路径（相对技能根）----------
 CACHE_PATH = SKILL_DIR / "leaderboard_cache.json"
-# 国内可直连权威榜快照（OpenCompass 司南，SSR 不可达时的兜底；非实时，标注截止日）
+# 国内可直连权威榜快照（OpenCompass 司南；实时抓取不可达时的兜底；非实时，标注截止日）
 CN_SNAPSHOT_PATH = SKILL_DIR / "cn_leaderboard_snapshot.json"
 # 时序快照目录（L0#2）：每次生成写一份 snapshots/{date}.json，供 WoW 趋势线 / 跨周 diff
 SNAPSHOTS_DIR = SKILL_DIR / "snapshots"
@@ -129,7 +129,7 @@ def _normalize_snapshot_orgs(data: dict):
 
 
 def _load_cn_snapshot() -> dict:
-    """读取国内可直连榜快照（OpenCompass 司南，SSR 不可达时的兜底）。"""
+    """读取国内可直连榜快照（OpenCompass 司南；实时抓取不可达时的兜底）。"""
     data = load_json_soft(CN_SNAPSHOT_PATH, "国内可直连榜快照", default=None)
     if data is None:
         return {}

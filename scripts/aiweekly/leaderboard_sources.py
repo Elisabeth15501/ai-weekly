@@ -35,7 +35,7 @@ HF_LEADERBOARD_URL = "https://huggingface.co/spaces/open-llm-leaderboard/open_ll
 DATALARNER_URL = "https://www.datalearner.com/leaderboards/open-source"
 LLMSTATS_URL = "https://llm-stats.com/leaderboards/open-llm-leaderboard"
 
-# 国内可直连榜源（SSR/可解析站点）。注意：OpenCompass / SuperCLUE / ModelScope 官网
+# 国内可直连榜源（可直接解析站点）。注意：OpenCompass / SuperCLUE / ModelScope 官网
 # 均为 JS 渲染 SPA，其数据 API 无法用简单 HTTP 稳定抓取（返回 SPA 兜底 HTML / 需鉴权），
 # 故这些 live 解析器按「尽力而为」实现——连不上或拿到的不是结构化数据就返回 None，
 # 由多源池优雅降级到国内快照（cn_leaderboard_snapshot.json）或缓存。
