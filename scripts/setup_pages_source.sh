@@ -6,8 +6,7 @@
 #   bash scripts/setup_pages_source.sh
 #
 # 备选（显式传令牌，仅内存、不落盘；请用最小权限 + 短有效期）：
-#   $env:GITHUB_TOKEN="<fine-grained-token>"    # PowerShell
-#   export GITHUB_TOKEN=<fine-grained-token>    # Git Bash
+#   把令牌临时放进环境变量 GITHUB_TOKEN / GH_TOKEN（仅当前 shell 内存，不落盘）。
 #
 # 说明：
 #   - 只读 GITHUB_TOKEN / GH_TOKEN 环境变量，不写任何文件、不回显 token。

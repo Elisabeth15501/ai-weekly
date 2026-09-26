@@ -262,9 +262,9 @@ def configure_proxy(proxy: str | None = None) -> str:
 def _build_opener():
     """构造带代理的 opener，**校验证书链与主机名**。
 
-    历史实现曾显式关闭校验（``check_hostname = False`` + ``verify_mode = CERT_NONE``），
+    历史实现曾显式关闭证书校验（既不校验主机名、也不校验证书链），
     其效果是：任何持有任意自签证书的中间人都能冒充上游站点，而抓取到的 RSS 正文会
-    原样进入本期报告。已改为 ``ssl.create_default_context()`` 的默认行为。
+    原样进入本期报告。已改为 ``ssl.create_default_context()`` 的默认行为（强制校验证书链与主机名）。
 
     若出站流量须经企业代理做 TLS 拦截，正确做法是把代理根证书装入系统信任库
     （或指向 ``SSL_CERT_FILE``），而不是退回关闭校验。
