@@ -17,7 +17,7 @@
 - **排行榜自适应**：多源池（LMArena / Hugging Face / OpenCompass 司南 / SuperCLUE / ModelScope），实时失败自动回退快照 / 缓存，绝不空白
 - **本周看点**：自动从新闻聚类生成洞察（关键词彩标 + 本周数字 + 三受众行动建议），服务端预渲染进静态 HTML，禁 JS 也可见
 - **市场数据双源**：全球 + 中国市场规模 / 融资 4 图 2×2 布局，含趋势洞察 × 本周印证桥接
-- **模型资料卡**：26+ 模型档案（成本 / 上下文 / 许可证 / 币种），以 `model_profiles.json` 为唯一权威源
+- **模型资料卡**：26+ 模型档案（成本 / 上下文 / 许可证 / 币种），以 `model_profiles.json` 为权威源
 - **可定时**：支持每周自动生成最新版网站
 - **安全加固**：RSS / CLI 不可信内容的注入面在**服务端 Python**与**客户端模板**两层分别防御——`<script>` 上下文 JSON 注入、URL 属性突破、属性内 JS 字符串、客户端 `${...}` 插值均按上下文转义 / 协议白名单处理
 - **多后端部署**：`deploy.py` 统一入口支持 GitHub Pages / 腾讯云 COS / Vercel / Netlify / Cloudflare Pages / 本地 6 种托管，飞书卡片 `view_url` 与部署解耦，非 GitHub 后端完全不碰 GitHub

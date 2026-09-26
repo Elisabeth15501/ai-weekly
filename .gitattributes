@@ -26,5 +26,8 @@ scripts/gate_feedback.json export-ignore
 # 原先靠发布后手工 rm，现在自动剔除，省掉一步且不会漏。
 .gitignore export-ignore
 .clawhubignore export-ignore
+# 平台封禁的文件类型（续）：LICENSE / .github 在 SkillHub 同样被「不允许的文件类型」拦下（400 / 卡死）
+.github export-ignore
+LICENSE export-ignore
 # 自剔除：本文件要留在仓库供 `git archive` 读取，但自身不进发布包
 .gitattributes export-ignore
