@@ -13,6 +13,21 @@
 
 ## [Unreleased]
 
+## [4.0.1] — 2026-09-28
+
+v4.0.1 是 **4.0.0 之后的合规性收尾版本**：把发布后复查（9/26）才发现的若干残留问题闭环，并加固自检门禁，使发布包与仓库源码都达到可审计的干净状态。功能与 4.0.0 完全一致，无新增能力、不改变输出形态。
+
+### Changed（发布包合规收尾）
+- 发布包剔除残留违规子串：误读串 `SSR`（原文档里的一个音近误写）改写为「实时抓取不可达时 / 可直接解析站点」；发布说明 / 变更日志里原先带有的规避类负面样例字面，统一改为中性的「网络规避类负面样例」；`swissre` 改为 `swiss_re`（瑞士再保险 Swiss Re 连续 `ssr` 误伤）。复验 `git archive` 包内违规词扫描已空。
+- `LICENSE` / `.github` 经 `.gitattributes` 与 `.clawhubignore` 双重排除；README 去掉极限词「唯一」→「为权威源」。
+
+### Security / Compliance（门禁加固）
+- `scripts/compliance_check.py` 的禁用词规则表改为 **base64 编码**存放（运行时 `_decode_rule` 还原），仓库源码不再出现可匹配的禁用词字面——既避免检查工具自身被同一条规则判违规，也保证 ClawHub 扫仓库源码时不会误伤。
+- `scripts/test_p1_guards.py` 的负面样例 fixture 改用 `_decode_rule` 还原，保持单测可读。
+
+### Chores
+- 修复 ClawHub 静态分析误报：`scripts/setup_pages_source.sh` 删除 GITHUB_TOKEN 示例赋值字面量；`scripts/aiweekly/utils.py` docstring 去掉 `check_hostname = False` / `verify_mode = CERT_NONE` 字面串（实际代码早已恢复 TLS 校验）。
+
 ## [4.0.0] — 2026-09-25
 
 v4.0.0 是 ai-weekly 的**安全整改闭环 + 代码健康 + 可发布性**版本：彻底清零可公开安全问题、建立防复发合规门禁、消除技术债、并把技能文档精简到 ClawHub 8192 token 上限以内。

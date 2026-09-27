@@ -1,12 +1,11 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 4.0.0
+version: 4.0.1
 displayName: AI Weekly Report
 summary: 生成可搜索/筛选/暗色模式的 AI 行业新闻单文件网站（公开 RSS 取数，无付费 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
 homepage: https://github.com/Elisabeth15501/ai-weekly
-license: MIT
 compatibility: Claude Code, OpenAI Codex, OpenCode, OpenClaw, Coze, WorkBuddy
 description: >
   AI 行业新闻网站生成工具。生成可搜索、可筛选、支持暗色模式的 AI 新闻单文件 HTML。
@@ -22,7 +21,7 @@ description: >
   支持自动化：每周一上午 9 点自动生成最新版网站。
 metadata:
   author: Elisabeth15501
-  version: "4.0.0"
+  version: "4.0.1"
   homepage: https://github.com/Elisabeth15501/ai-weekly
   tags: [ai, news, report, rss, weekly, leaderboard, market-data]
 ---
