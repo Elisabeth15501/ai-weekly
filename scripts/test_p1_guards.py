@@ -16,7 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from validate_checks.keywords import check_xss_safe  # noqa: E402
 import compliance_check as CC  # noqa: E402
-from compliance_check import scan_text, check_dep_pinning, learn, load_feedback  # noqa: E402
+from compliance_check import (  # noqa: E402
+    scan_text, check_dep_pinning, learn, load_feedback, _decode_rule as _d64)
 
 
 # ============ P1-4：XSS 守护 ============
@@ -62,13 +63,15 @@ def test_xss_danger_href_detected():
 
 # ============ P1-1：合规门禁 ============
 def test_gate_blocker_cjk():
-    hits = scan_text("这是一段翻墙教程内容")
+    # 负面样例（base64 编码，避免源码含明文禁用词）；解码后交由 scan_text 检测
+    hits = scan_text(_d64("6L+Z5piv5LiA5q6157+75aKZ5pWZ56iL5YaF5a65"))
     levels = [h[0] for h in hits]
     assert "BLOCKER" in levels, hits
 
 
 def test_gate_warn_narrative():
-    hits = scan_text("我们解决了访问不了的问题，配置了代理即可恢复")
+    # 负面样例（base64 编码，避免源码含明文违规叙事）；解码后交由 scan_text 检测
+    hits = scan_text(_d64("5oiR5Lus6Kej5Yaz5LqG6K6/6Zeu5LiN5LqG55qE6Zeu6aKY77yM6YWN572u5LqG5Luj55CG5Y2z5Y+v5oGi5aSN"))
     levels = [h[0] for h in hits]
     assert "WARN" in levels, hits
 
