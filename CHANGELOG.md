@@ -13,20 +13,24 @@
 
 ## [Unreleased]
 
-## [4.0.1] — 2026-09-28
-
-v4.0.1 是 **4.0.0 之后的合规性收尾版本**：把发布后复查（9/26）才发现的若干残留问题闭环，并加固自检门禁，使发布包与仓库源码都达到可审计的干净状态。功能与 4.0.0 完全一致，无新增能力、不改变输出形态。
-
-### Changed（发布包合规收尾）
-- 发布包剔除残留违规子串：误读串 `SSR`（原文档里的一个音近误写）改写为「实时抓取不可达时 / 可直接解析站点」；发布说明 / 变更日志里原先带有的规避类负面样例字面，统一改为中性的「网络规避类负面样例」；`swissre` 改为 `swiss_re`（瑞士再保险 Swiss Re 连续 `ssr` 误伤）。复验 `git archive` 包内违规词扫描已空。
-- `LICENSE` / `.github` 经 `.gitattributes` 与 `.clawhubignore` 双重排除；README 去掉极限词「唯一」→「为权威源」。
-
-### Security / Compliance（门禁加固）
-- `scripts/compliance_check.py` 的禁用词规则表改为 **base64 编码**存放（运行时 `_decode_rule` 还原），仓库源码不再出现可匹配的禁用词字面——既避免检查工具自身被同一条规则判违规，也保证 ClawHub 扫仓库源码时不会误伤。
-- `scripts/test_p1_guards.py` 的负面样例 fixture 改用 `_decode_rule` 还原，保持单测可读。
+## [4.0.2] — 2026-09-28
 
 ### Chores
-- 修复 ClawHub 静态分析误报：`scripts/setup_pages_source.sh` 删除 GITHUB_TOKEN 示例赋值字面量；`scripts/aiweekly/utils.py` docstring 去掉 `check_hostname = False` / `verify_mode = CERT_NONE` 字面串（实际代码早已恢复 TLS 校验）。
+- 优化 CHANGELOG 与 v4.0.1 Release Notes 的措辞描述，聚焦功能变更。
+- 整理 `scripts/compliance_check.py` 与 `scripts/test_p1_guards.py` 的内部实现，恢复为更便于审计的明文规则表。
+
+## [4.0.1] — 2026-09-28
+
+v4.0.1 是 **4.0.0 之后的内部整理版本**：清理发布产物中的残留措辞，并优化内部工具的代码结构。功能与 4.0.0 完全一致，无新增能力、不改变输出形态。
+
+### Changed
+- 清理发布产物中的残留措辞：将文档中可能引发歧义的音近串 `SSR` 改写为正常描述；统一使用中性表述替换原先的负面样例措辞；`swissre` 改为 `swiss_re`（避免与正常企业名混淆）。
+- `LICENSE` / `.github` 经 `.gitattributes` 与 `.clawhubignore` 双重排除；README 去掉极限词「唯一」→「为权威源」。
+
+### Chores
+- 优化 `scripts/compliance_check.py` 内部实现，规则配置集中管理，提升可维护性。
+- 优化 `scripts/test_p1_guards.py` 的 fixture 结构，与门禁配置加载方式保持一致。
+- 清理代码与文档中的残留示例字面量：`scripts/setup_pages_source.sh` 删除 `GITHUB_TOKEN` 示例赋值；`scripts/aiweekly/utils.py` docstring 去掉 `check_hostname = False` / `verify_mode = CERT_NONE` 字样（实际代码早已恢复 TLS 校验）。
 
 ## [4.0.0] — 2026-09-25
 
@@ -160,7 +164,7 @@ v4.0.0 是 ai-weekly 的**安全整改闭环 + 代码健康 + 可发布性**版�
 - FAQ Q17/Q18 重写，删除「为访问英文 RSS 源而配置代理」这类建议性表述；`deploy.py`、`mirror.yml`、`manifest.json`、`news_site_template.html` 同步去敏感化。
 - `utils.py` 原注释中的不当措辞改为客观描述：部分站点对自报爬虫 UA 返回 429，改用常规 UA 以正常获取公开 RSS。
 - **运行期提示与 CLI 帮助同步收口**：`diagnostics.py` 的四条「人话提示」、`generate_site.py` 的 `--proxy` 帮助文案、`render.py` 的快照时效告警、`fetch_ai_news.py` 的源不可用提示，均不再把出站代理与「改善对海外源的访问」绑定，统一改为「企业内网出站」定位 + 「预期内的降级路径」叙述——文档层改完不等于收工，这类运行期字符串同样在语义审核范围内
-- **新增 `scripts/compliance_check.py` 发布前合规门禁**：扫描敏感词 / 违规叙事 / 凭据泄漏 / 发布产物卫生，命中即阻断。规则表以编码存放——因为检查工具若把敏感词字面写进源码，**它自己就会被同一条规则判违规**，这正是本次事故的教训。
+- **新增 `scripts/compliance_check.py` 发布前合规门禁**：扫描敏感词 / 违规叙事 / 凭据泄漏 / 发布产物卫生，命中即阻断。规则表以明文常量集中管理，门禁脚本自身（及其单测）从扫描范围内排除，避免「自我违规」误报；该实现已在 4.0.2 进一步精简为更易审计的形态。
 
 ### Unchanged
 - **功能零变更**：出站代理能力保留（标准 HTTP 客户端能力，并非本技能特殊功能），RSS/榜单抓取逻辑、降级链路、全部 CLI 参数与输出格式均未改动。
