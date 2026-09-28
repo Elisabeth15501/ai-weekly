@@ -13,6 +13,11 @@
 
 ## [Unreleased]
 
+## [4.0.3] — 2026-09-28
+
+### Fixed
+- 修复综合榜 AA（Artificial Analysis 智能指数）槽位的快照兜底逻辑：原兜底被 `detected == "cn"` 限定，在 `global` 网络环境下国际源不可达时 AA 槽为空、本地 cache 的 `aa` 也为空，导致校验 23/25 失败、周报流水线中断。现改为任意区域均回退 `cn_leaderboard_snapshot.json`（标注 `is_cache`，如实显示截止日），并按 key 精确路由（aa 槽取快照 `"aa"` 键）。
+
 ## [4.0.2] — 2026-09-28
 
 ### Chores

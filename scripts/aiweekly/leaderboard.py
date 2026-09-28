@@ -300,23 +300,20 @@ def fetch_all_leaderboards(top_n: int = 15, region: str = "auto"):
     # （leaderboard_health.jsonl 实测 0% 实时率），原「oc/sv 补综合榜双列」回退永不触发——
     # 删去死代码，不假装「cn 区域真出实时榜」。cn 综合榜实际依赖 aa(96%)/lm(35~67%)，
     # 二者皆失败才回退 cn_snap 静态快照（已标注 is_cache=True）。oc/sv/ms 仍留池作 best-effort。
-    # 综合榜不足 / 全失败：国内环境回退快照，否则回退本地缓存
-    if not comp["lmarena"]["rows"]:
-        if detected == "cn" and cn_snap.get("comprehensive"):
-            for key in cn_snap["comprehensive"]:
-                if not comp["lmarena"]["rows"]:
-                    comp["lmarena"] = snap_slot(cn_snap["comprehensive"][key], cn_snap.get("snapshot_date", ""))
-                elif not comp["aa"]["rows"]:
-                    comp["aa"] = snap_slot(cn_snap["comprehensive"][key], cn_snap.get("snapshot_date", ""))
-                else:
-                    break
-        elif cache.get("lmarena") or cache.get("aa"):
+    # 综合榜不足 / 全失败：回退到国内权威快照 cn_leaderboard_snapshot.json（标注 is_cache）。
+    # 不区分区域——global 环境下国际源（aa/lm）不可达时，本地 cache 的 aa 常为空，
+    # 必须借助快照才能补齐，否则校验会因某榜 0 行而不通过。
+    if not comp["lmarena"]["rows"] or not comp["aa"]["rows"]:
+        if cn_snap.get("comprehensive"):
+            if not comp["lmarena"]["rows"] and "lmarena" in cn_snap["comprehensive"]:
+                comp["lmarena"] = snap_slot(cn_snap["comprehensive"]["lmarena"], cn_snap.get("snapshot_date", ""))
+            if not comp["aa"]["rows"] and "aa" in cn_snap["comprehensive"]:
+                comp["aa"] = snap_slot(cn_snap["comprehensive"]["aa"], cn_snap.get("snapshot_date", ""))
+        # 仍缺失的列再退本地 cache（原 global 环境设计路径）
+        if not comp["lmarena"]["rows"] and (cache.get("lmarena") or cache.get("aa")):
             _fill_from_cache(comp, cache, snapshot)
-    elif not comp["aa"]["rows"] and detected == "cn" and cn_snap.get("comprehensive"):
-        # 已有一个综合源命中：第二列用快照补足（仅国内环境）
-        for key in cn_snap["comprehensive"]:
-            comp["aa"] = snap_slot(cn_snap["comprehensive"][key], cn_snap.get("snapshot_date", ""))
-            break
+        if not comp["aa"]["rows"] and (cache.get("aa") or cache.get("lmarena")):
+            _fill_from_cache(comp, cache, snapshot)
 
     # —— 开源榜（双列：LLM-Stats + Hugging Face）——
     os_board = {"ls": {"rows": []}, "hf": {"rows": []}}
