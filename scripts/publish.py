@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""publish.py — 组装本周头条 report.json 并推送至 IM（P0：飞书群机器人）。
+"""publish.py — 组装本周头条 report.json 并经飞书连接器推送头条卡片（P0）。
 
 数据来源（均为 generate_site.py 已产出的结构化产物，不重新跑生成器）：
   --news-json       news.json        {count, items[{title,url,summary,source,category,score}]}
@@ -10,22 +10,22 @@
   --output report.json   本周头条结构化载荷（headlines/insights/audience/keywords/view_url）
   --dry-run              仅构造卡片并打印，不发起网络请求
 
-Webhook 解析（优先级，首个非空生效）：
-  1. --webhook CLI 参数
-  2. 环境变量 FEISHU_WEBHOOK
-  3. delivery/feishu_config.json {"webhook": "..."}
+推送通道：**飞书连接器（lark-cli，密钥由连接器托管，绝不落配置文件）**，取代原 Webhook 自定义机器人路径。
+目标会话解析（优先级，首个命中生效）：
+  1. --chat-id / --user-id CLI 参数
+  2. 环境变量 FEISHU_CHAT_ID / FEISHU_USER_ID
+  3. delivery/feishu_target.json {"chat_id": "oc_xxx"} 或 {"user_id": "ou_xxx"}
   三者皆空 -> 仅警告、exit 0（不阻断上游生成管线，符合"推送失败不丢报告"原则）。
 
 度量：view_url 自动追加 ?src=feishu&uid=<uid>，uid 默认 auto 生成短 uuid。
 
-合规：仅用 requests 调飞书官方 webhook，不引入任何第三方商业 API / SDK。
+合规：经 WorkBuddy 飞书连接器（lark-cli）发送，不引入任何第三方商业 API / SDK，webhook token 不落仓库。
 """
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
 import sys
 import uuid
 from datetime import datetime
@@ -39,7 +39,8 @@ if str(REPO_ROOT) not in sys.path:
 if str(REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from delivery.feishu_bot import build_headline_card, push  # noqa: E402
+from delivery.feishu_bot import build_headline_card  # noqa: E402
+from delivery.feishu_connector import resolve_target, send_card  # noqa: E402
 
 # 关键词保送集（与 aiweekly.insights._PRIORITY_ALIASES 对齐，确保民间绰号等
 # 高感知词在飞书卡片 6 槽截断时不被吃掉）。导入失败则回退本地最小集。
@@ -145,23 +146,6 @@ def build_report(
     }
 
 
-def resolve_webhook(args: argparse.Namespace) -> str | None:
-    if args.webhook:
-        return args.webhook
-    env = os.environ.get("FEISHU_WEBHOOK")
-    if env:
-        return env
-    cfg = REPO_ROOT / "delivery" / "feishu_config.json"
-    if cfg.exists():
-        try:
-            d = json.load(open(cfg, encoding="utf-8"))
-            if d.get("webhook"):
-                return d["webhook"]
-        except (OSError, ValueError):
-            pass
-    return None
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description="组装本周头条 report.json 并推送飞书卡片（P0）")
     ap.add_argument("--platform", default="feishu", choices=["feishu"],
@@ -172,7 +156,10 @@ def main() -> int:
                          "与 generate_site.py 行为一致——静态 insights.json 已废弃，勿再传入）")
     ap.add_argument("--audience-json", default=None, help="audience_summary.json（可选，缺省用 insights.audience_summary）")
     ap.add_argument("--report-json", default=None, help="直接复用已生成的 report.json（跳过组装）")
-    ap.add_argument("--webhook", default=None, help="飞书自定义机器人 Webhook 地址")
+    ap.add_argument("--chat-id", default=None, help="飞书目标群 chat_id（oc_xxx）；优先于环境变量与 feishu_target.json")
+    ap.add_argument("--user-id", default=None, help="飞书目标用户 open_id（ou_xxx），用于私聊")
+    ap.add_argument("--as", dest="identity", default="bot", choices=["bot", "user"],
+                    help="发送身份（默认 bot·应用机器人；user 为以本人身份私聊）")
     ap.add_argument("--view-url", default=None, help="完整周报托管链接（自动追加 ?src=feishu&uid=）")
     ap.add_argument("--uid", default="auto", help="度量 uid；'auto' 生成短 uuid")
     ap.add_argument("--output", default=None, help="report.json 写出路径（默认 news 同目录/report.json）")
@@ -240,22 +227,26 @@ def main() -> int:
         return 0
 
     rc = 0
-    webhook = resolve_webhook(args)
-    if not webhook:
-        print("⚠️ 未配置飞书 Webhook（--webhook / $FEISHU_WEBHOOK / delivery/feishu_config.json 均空），"
-              "跳过推送（报告已生成，不阻断）。")
+    # 推送通道：飞书连接器（lark-cli）。目标解析优先级：CLI > 环境变量 > feishu_target.json
+    flag, val = resolve_target(argparse.Namespace(chat_id=args.chat_id, user_id=args.user_id))
+    if not flag:
+        print("⚠️ 未配置飞书推送目标（--chat-id/--user-id / $FEISHU_CHAT_ID/$FEISHU_USER_ID / "
+              "delivery/feishu_target.json 均空），跳过推送（报告已生成，不阻断）。")
     else:
         try:
-            resp = push(webhook, card)
-            code = resp.get("code")
-            if code in (0, None):
-                print(f"✅ 飞书推送成功：{resp}")
+            res = send_card(card["card"], flag, val, args.identity, dry_run=False)
+            if res.stdout:
+                sys.stdout.write(res.stdout)
+            if res.stderr:
+                sys.stderr.write(res.stderr)
+            if res.returncode == 0:
+                print("✅ 飞书连接器推送成功。")
             else:
-                print(f"❌ 飞书返回业务错误：{resp}")
+                print(f"❌ 飞书连接器推送失败（returncode={res.returncode}）。")
                 rc = 1
         except Exception as e:  # noqa: BLE001  传输层错误，best-effort 上报
-            logger.warning("飞书推送传输失败: %s", e)
-            print(f"❌ 飞书推送失败：{e}")
+            logger.warning("飞书连接器推送异常: %s", e)
+            print(f"❌ 飞书连接器推送异常：{e}")
             rc = 1
 
     # 流水线最终分发步骤：按 --deploy-to 部署周报到公开托管（P0-1：多后端·去 GitHub 化）

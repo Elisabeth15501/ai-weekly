@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Feishu (Lark) custom group bot — push weekly headline card via incoming webhook.
+"""Feishu (Lark) headline card builder — 构造周报头条 interactive 卡片。
 
 设计原则（沿用 skill 合规约束）：
-- 仅用 `requests`（已是 requirements 依赖）POST 到飞书官方 incoming-webhook，
-  **不引入任何第三方商业 SDK / 云端服务**。
-- 构造 interactive 卡片（消息卡片），承载本周头条速览 + 三视角看点 + 分角色摘要
+- 仅负责**构造** interactive 卡片（消息卡片），承载本周头条速览 + 三视角看点 + 分角色摘要
   + 「查看完整周报」按钮（链接带 ?src=feishu&uid= 度量参数）。
 - 防御式处理 report 各字段，任一缺失都不崩，缺失段落自动跳过。
+- 发送通道已迁移至飞书连接器（delivery/feishu_connector.py，经 lark-cli，密钥不落盘）；
+  本模块不再持有任何 webhook 发送逻辑。
 
-飞书自定义机器人卡片协议（精简）：
-  POST <webhook>  body = {"msg_type": "interactive", "card": {...}}
-  成功响应 {"code":0,"msg":"success"}；业务错误 {"code":19021,...}。
+飞书卡片协议（精简）：card = {"msg_type": "interactive", "card": {...}}
+（实际发送由连接器走 lark-cli `api POST /open-apis/im/v1/messages`）。
 """
 from __future__ import annotations
 
@@ -170,19 +169,3 @@ def build_headline_card(report: dict[str, Any]) -> dict[str, Any]:
             "elements": elements,
         },
     }
-
-
-def push(webhook: str, card: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
-    """POST 卡片到飞书 incoming webhook，返回 API JSON 响应。
-
-    仅在传输层失败时抛 requests.RequestException（由调用方决定重试）；
-    业务错误（code != 0）不抛异常，由调用方读取返回值判断。
-    """
-    import requests  # 惰性导入：仅 webhook 推送路径需要，卡片构建无需此依赖
-
-    resp = requests.post(webhook, json=card, timeout=timeout)
-    resp.raise_for_status()
-    try:
-        return resp.json()
-    except ValueError:
-        return {"code": None, "msg": resp.text}
