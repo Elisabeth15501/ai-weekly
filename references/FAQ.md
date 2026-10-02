@@ -75,16 +75,16 @@ bash run_report.sh scripts/<脚本>.py [参数]
 4. 校验：`bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html`
 5. 展示：把 `AI_News_YYYY-MM-DD.html` 用 `present_files` 打开
 
-### Q5：飞书配置怎么写？Webhook 在哪获取？
+### Q5：飞书推送目标怎么配置？
 最简方式——跑交互式向导（免手动建文件）：
 ```bash
 python scripts/init_feishu_config.py
 ```
-它会问你用 Webhook 还是连接器，自动生成 `delivery/feishu_config.json` 或 `delivery/feishu_target.json` 并校验。详情见第五节。
+它会引导你填群 chat_id 或私聊 user_id，自动生成 `delivery/feishu_target.json` 并校验。详情见第五节。
 
-也可手动：飞书群 → 设置 → 智能群助手 → 添加机器人（自定义） → 拿到 Webhook URL，写入 `delivery/feishu_config.json`：
+也可手动：把目标写进 `delivery/feishu_target.json`：
 ```json
-{ "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/你的TOKEN" }
+{ "chat_id": "oc_xxxx" }
 ```
 （该文件已被 `.gitignore` 忽略，不会入库。）
 
@@ -116,9 +116,8 @@ python scripts/init_feishu_config.py
 
 ## 五、飞书推送
 
-### Q11：Webhook 和连接器（connector）选哪个？
-- **Webhook 自定义机器人**：最省事，一个 URL 搞定，适合已建好群机器人的环境。凭据写在 `delivery/feishu_config.json`（或 `--webhook` / 环境变量 `FEISHU_WEBHOOK`）。
-- **飞书连接器直推（推荐，密钥不落盘）**：经 `lark-cli` 发送，密钥由连接器托管，不写进仓库。适合 WorkBuddy 用户、不想把 token 放配置文件。
+### Q11：飞书推送走什么通道？
+推送统一走 **飞书连接器（connector）**：经 `lark-cli` 发送，密钥由连接器托管、不写进仓库（webhook 自定义机器人路径已移除）。适合 WorkBuddy 用户。
   ```bash
   python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx
   python delivery/feishu_connector.py --report report.json --user-id ou_xxxx --as user   # 私聊给自己冒烟
@@ -129,11 +128,10 @@ python scripts/init_feishu_config.py
 - `--as user`：以你本人身份发，需你对该会话有发消息权限（首次测试最省事，不用加机器人）。
 
 ### Q13：飞书配置能不能一键生成？
-能。`scripts/init_feishu_config.py` 交互式引导，自动产出正确格式的配置文件并做基础校验：
+能。`scripts/init_feishu_config.py` 交互式引导，自动产出正确格式的 `feishu_target.json` 并做基础校验：
 ```bash
 python scripts/init_feishu_config.py
-# 选 Webhook → 填 URL → 写入 delivery/feishu_config.json
-# 选连接器 → 填 chat_id/user_id → 写入 delivery/feishu_target.json
+# 填 chat_id（群）或 user_id（私聊）→ 写入 delivery/feishu_target.json
 ```
 
 ---

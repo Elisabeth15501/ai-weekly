@@ -102,7 +102,7 @@ metadata:
 周报托管地址供飞书卡片 `view_url` 用，**不一定要 GitHub Pages**：`scripts/deploy.py --deploy-to` 选 `github-pages`（默认）/ `tencent-cos` / `vercel` / `netlify` / `cloudflare-pages` / `local`；非 github 后端无需配置 GitHub。
 
 - **GitHub Pages**：`bash run_report.sh deploy --html AI_News_YYYY-MM-DD.html`（`--no-push` 仅本地；`--switch-pages` 经 API 切 Pages 源到 gh-pages）。
-- **飞书头条卡片**：`bash run_report.sh scripts/publish.py --news-json news.json --insights-json insights.json --audience-json audience_summary.json --html AI_News_YYYY-MM-DD.html --deploy`（Webhook 或飞书连接器双路径，密钥不落盘）。
+- **飞书头条卡片**：`bash run_report.sh scripts/publish.py --news-json news.json --audience-json audience_summary.json --html AI_News_YYYY-MM-DD.html --chat-id oc_xxxx --deploy`（经飞书连接器 lark-cli 发送，密钥不落盘）。
 
 ### 6.2 自动化（每周一 09:00）
 
@@ -142,7 +142,7 @@ metadata:
 | `scripts/generate_site.py` | v3.0 主入口：从 API 生成新闻站 |
 | `scripts/fetch_ai_news.py` | RSS 抓取（备用离线；`--news-api` 可选） |
 | `scripts/validate_report.py` | 质量校验（含 XSS 守护） |
-| `scripts/deploy.py` / `scripts/publish.py` | 多后端部署 / 飞书卡片推送 |
+| `scripts/deploy.py` / `scripts/publish.py` | 多后端部署 / 飞书卡片推送（经连接器） |
 | `scripts/aiweekly/` | 核心引擎包（news/leaderboard/render/translate/market/insights…） |
 | `assets/news_site_template.html` | v3.0 HTML 模板 |
 | `model_profiles.json` · `translations_offline.json` | canonical 模型资料档案 / 离线译文包 |

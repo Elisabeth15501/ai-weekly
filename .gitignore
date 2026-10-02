@@ -40,7 +40,7 @@ __pycache__/
 # 本地备份（非源码，绝不入库）
 *.bak
 
-# 飞书/钉钉 Webhook 凭证（含真实机器人地址，绝不入库；仅 feishu_config.example.json 入库）
+# 飞书连接器推送目标 / 钉钉 Webhook 凭证（真实值绝不入库；示例仅 feishu_target.example.json / deploy_config.example.json 等入库）
 delivery/feishu_config.json
 delivery/feishu_target.json
 delivery/dingtalk_config.json

@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""飞书配置向导（P1-3）：交互式生成飞书推送所需的配置文件，免去手动建文件。
+"""飞书连接器配置向导：交互式生成连接器推送目标 delivery/feishu_target.json，免去手动建文件。
 
-两种推送路径对应两个文件：
-  - Webhook 自定义机器人  -> delivery/feishu_config.json  {"webhook": "..."}
-  - 飞书连接器直推（密钥不落盘）-> delivery/feishu_target.json  {"chat_id": "oc_xxx"} 或 {"user_id": "ou_xxx"}
+仅支持飞书连接器直推（密钥由连接器托管、绝不落配置文件）：
+  - delivery/feishu_target.json  {"chat_id": "oc_xxx"} 或 {"user_id": "ou_xxx"}
 
-两个文件均被 .gitignore 忽略，不入库。
+该文件被 .gitignore 忽略，不入库。
 
-支持两种用法：
+用法：
   1) 交互式（默认）：   python scripts/init_feishu_config.py
-  2) 一键（CI / 脚本）： python scripts/init_feishu_config.py --method webhook --webhook "https://open.feishu.cn/.../hook/TOKEN"
-                      python scripts/init_feishu_config.py --method connector --chat-id oc_xxxx
-                      python scripts/init_feishu_config.py --method connector --user-id ou_xxxx --as user
+  2) 一键（CI / 脚本）： python scripts/init_feishu_config.py --chat-id oc_xxxx
+                      python scripts/init_feishu_config.py --user-id ou_xxxx --as user
 
-校验：仅做 JSON 合法 + URL / ID 格式基础检查，不实际发请求（连通性在推送时用 --dry-run 验证）。
+校验：仅做 JSON 合法 + ID 格式基础检查，不实际发请求（连通性在推送时用 --dry-run 验证）。
 """
 from __future__ import annotations
 
@@ -25,10 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DELIVERY = REPO_ROOT / "delivery"
-CONFIG_JSON = DELIVERY / "feishu_config.json"
 TARGET_JSON = DELIVERY / "feishu_target.json"
-
-WEBHOOK_PREFIX = "https://open.feishu.cn/open-apis/bot/v2/hook/"
 
 
 def _ask(prompt: str, default: str = "") -> str:
@@ -37,21 +32,6 @@ def _ask(prompt: str, default: str = "") -> str:
     except EOFError:
         val = ""
     return val or default
-
-
-def _confirm(prompt: str) -> bool:
-    ans = _ask(prompt + " [y/N] ", "n").lower()
-    return ans in ("y", "yes")
-
-
-def validate_webhook(url: str) -> tuple[bool, str]:
-    if not url:
-        return False, "Webhook 不能为空"
-    if not url.startswith(WEBHOOK_PREFIX):
-        return False, f"Webhook 应以 {WEBHOOK_PREFIX} 开头（你在飞书群→智能群助手→自定义机器人里复制的完整 URL）"
-    if "REPLACE_WITH_YOUR_TOKEN" in url or "XXXX" in url:
-        return False, "Webhook 里还含占位符，请填入真实 token"
-    return True, ""
 
 
 def validate_target_id(flag: str, vid: str) -> tuple[bool, str]:
@@ -69,22 +49,6 @@ def write_json(path: Path, data: dict) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)  # 原子替换，避免写到一半被读
-
-
-def do_webhook(webhook: str) -> int:
-    ok, msg = validate_webhook(webhook)
-    if not ok:
-        print(f"❌ {msg}")
-        return 1
-    write_json(CONFIG_JSON, {"webhook": webhook})
-    print(f"✅ 已写入 {CONFIG_JSON}")
-    print("\n下一步（Webhook 推送）：")
-    print('  bash run_report.sh scripts/publish.py \\')
-    print('    --news-json news.json --insights-json insights.json \\')
-    print('    --audience-json audience_summary.json \\')
-    print(f'    --view-url "https://你的托管地址/AI_News_YYYY-MM-DD.html" --output report.json')
-    print("\n  仅预览卡片不推送：在末尾加 --dry-run")
-    return 0
 
 
 def do_connector(chat_id: str, user_id: str, identity: str) -> int:
@@ -111,46 +75,31 @@ def do_connector(chat_id: str, user_id: str, identity: str) -> int:
 
 
 def interactive() -> int:
-    print("=== 飞书配置向导 ===")
-    print("选推送方式：")
-    print("  1) Webhook 自定义机器人（一个 URL 搞定，最省事）")
-    print("  2) 飞书连接器直推（密钥不落盘，推荐 WorkBuddy 用户）")
-    choice = _ask("输入 1 或 2：", "1")
-    if choice == "1":
-        webhook = _ask(f"粘贴飞书 Webhook URL（以 {WEBHOOK_PREFIX} 开头）：\n> ")
-        return do_webhook(webhook)
-    elif choice == "2":
-        print("目标类型：")
-        print("  a) 群（chat_id，机器人需已入群）")
-        print("  b) 私聊（user_id，以你本人身份发，首次测试最省事）")
-        t = _ask("输入 a 或 b：", "a")
-        if t == "b":
-            vid = _ask("粘贴你的 user_id（ou_ 开头）：\n> ")
-            return do_connector("", vid, "user")
-        else:
-            vid = _ask("粘贴群 chat_id（oc_ 开头）：\n> ")
-            return do_connector(vid, "", "bot")
+    print("=== 飞书连接器配置向导 ===")
+    print("目标类型：")
+    print("  a) 群（chat_id，机器人需已入群）")
+    print("  b) 私聊（user_id，以你本人身份发，首次测试最省心）")
+    t = _ask("输入 a 或 b：", "a")
+    if t == "b":
+        vid = _ask("粘贴你的 user_id（ou_ 开头）：\n> ")
+        return do_connector("", vid, "user")
+    elif t == "a":
+        vid = _ask("粘贴群 chat_id（oc_ 开头）：\n> ")
+        return do_connector(vid, "", "bot")
     else:
         print("❌ 无效选择")
         return 1
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="飞书配置向导（P1-3）：交互式生成 feishu_config.json / feishu_target.json")
-    ap.add_argument("--method", choices=["webhook", "connector"], help="非交互模式：指定推送方式")
-    ap.add_argument("--webhook", help="Webhook 模式：完整 webhook URL")
-    ap.add_argument("--chat-id", help="连接器模式：目标群 chat_id（oc_xxx）")
-    ap.add_argument("--user-id", help="连接器模式：目标用户 open_id（ou_xxx），用于私聊")
+    ap = argparse.ArgumentParser(description="飞书连接器配置向导：交互式生成 feishu_target.json")
+    ap.add_argument("--chat-id", help="目标群 chat_id（oc_xxx）")
+    ap.add_argument("--user-id", help="目标用户 open_id（ou_xxx），用于私聊")
     ap.add_argument("--as", dest="identity", default="bot", choices=["bot", "user"], help="连接器发送身份（默认 bot）")
     args = ap.parse_args()
 
     # 非交互模式
-    if args.method == "webhook":
-        if not args.webhook:
-            print("❌ --method webhook 需配合 --webhook")
-            return 1
-        return do_webhook(args.webhook)
-    if args.method == "connector":
+    if args.chat_id or args.user_id:
         return do_connector(args.chat_id or "", args.user_id or "", args.identity)
 
     # 交互模式

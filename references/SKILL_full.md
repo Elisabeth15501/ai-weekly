@@ -73,7 +73,7 @@ metadata:
 → 技能激活，走「轻量模式」：直接在对话里输出 Markdown 分组列表，不生成网站。
 
 用户：帮我把上周的周报推送到飞书
-→ 技能激活，读取已生成的 report.json，调飞书 Webhook / 连接器推头条卡片
+→ 技能激活，读取已生成的 report.json，调飞书连接器推头条卡片
   （部署托管可用 deploy.py --deploy-to 选腾讯云 COS / Vercel 等，不必依赖 GitHub Pages）。
 
 用户：生成 8 月最后一周的 AI 周报，时间范围 2026-08-25 到 2026-08-31
@@ -354,59 +354,31 @@ bash run_report.sh scripts/publish.py \
 
 ### 6.2 分发：飞书头条卡片推送（P0，可选但推荐）
 
-生成报告后，可把**本周头条速览**推到飞书（群机器人 / 连接器），让情报在"工作者已在用的地方"被消费。两种推送路径**共用同一张卡片 schema**（由 `delivery/feishu_bot.build_headline_card` 构造），区别只在"怎么发出去"：
-
-| 路径 | 发送方式 | 凭据 | 依赖 | 适合 |
-|------|---------|------|------|------|
-| **A. Webhook 自定义机器人** | `feishu_bot.push()` POST 到飞书 incoming webhook | webhook URL（token 内嵌在 URL） | `requests` | 任意环境，已建好自定义机器人 |
-| **B. 飞书连接器直推（推荐）** | `delivery/feishu_connector.py` 经 `lark-cli im +messages-send` 发送 | 连接器托管，**绝不落配置文件** | 标准库 + 已连接的飞书连接器（lark-cli + node） | WorkBuddy 用户，密钥不想写进仓库 |
-
-> **文件职责**：`delivery/feishu_bot.py` 是共用的卡片构造库（`build_headline_card` + webhook 发送的 `push`）；`delivery/feishu_connector.py` 是独立 CLI，import 前者的卡片构造、改用 lark-cli 发送。两者产出的卡片内容完全一致。
-
-**模式 A — Webhook（由 `publish.py` 一步完成）**
+生成报告后，可把**本周头条速览**推到飞书，让情报在"工作者已在用的地方"被消费。卡片由 `delivery/feishu_bot.build_headline_card` 构造，经 **飞书连接器**（lark-cli，密钥由连接器托管、绝不落配置文件）发送——`publish.py` 组装 `report.json` 后自动经连接器推送。
 
 ```bash
-# 组装 report.json 并直接推送到 webhook（三级回退：--webhook > $FEISHU_WEBHOOK > delivery/feishu_config.json）
+# 组装 report.json 并经飞书连接器推送到群（bot 身份，需先把「WorkBuddy-Feishu CLI」机器人加进群）
 bash run_report.sh scripts/publish.py \
-  --news-json news.json \
-  --insights-json insights.json \
-  --audience-json audience_summary.json \
-  --view-url "https://<你的托管地址>/AI_News_YYYY-MM-DD.html" \
-  --output report.json
+  --news-json news.json --audience-json audience_summary.json \
+  --output report.json --chat-id oc_xxxx
+
+# 推给自己（user 身份 → 私聊，首次冒烟测试最省心，无需加机器人）
+bash run_report.sh scripts/publish.py \
+  --news-json news.json --output report.json --user-id ou_xxxx --as user
 
 # 仅构造卡片预览、不推送：
-bash run_report.sh scripts/publish.py --news-json news.json --insights-json insights.json --audience-json audience_summary.json --dry-run
+bash run_report.sh scripts/publish.py --news-json news.json --audience-json audience_summary.json --dry-run
 
-# 直接指定 webhook（也可写入 delivery/feishu_config.json，已被 .gitignore 忽略）：
-bash run_report.sh scripts/publish.py ... --webhook "https://open.feishu.cn/open-apis/bot/v2/hook/XXXX"
-```
-webhook 三级皆空 → 自动跳过推送（exit 0，不阻断报告生成）；推送返回业务错误时 exit 1。
-
-**模式 B — 飞书连接器直推（密钥不落盘，推荐）**
-
-先让 `publish.py` 产出 `report.json`（可加 `--dry-run` 只组装不推），再用连接器 CLI 发送：
-
-```bash
-# 1) 组装 report.json（此步不推送）
-bash run_report.sh scripts/publish.py \
-  --news-json news.json --insights-json insights.json \
-  --audience-json audience_summary.json --output report.json
-
-# 2) 经飞书连接器推送到群（bot 身份，需先把「WorkBuddy-Feishu CLI」机器人加进群）
-python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx
-
-# 推给自己（user 身份 → 私聊，首次冒烟测试最省事，无需加机器人）
-python delivery/feishu_connector.py --report report.json --user-id ou_xxxx --as user
-
-# 预览（不实际发送）
+# 也可直接调连接器 CLI（等价于上面 publish.py 内部行为）：
 python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry-run
 ```
 
 - **目标解析优先级**：`--chat-id/--user-id` > 环境变量 `FEISHU_CHAT_ID/FEISHU_USER_ID` > `delivery/feishu_target.json`（`{"chat_id":"oc_xxx"}` 或 `{"user_id":"ou_xxx"}`）。
 - **发送身份**：`--as bot`（默认，应用机器人，需机器人已入群）/ `--as user`（以你本人身份，需你对该会话有发消息权限）。
 - 依赖：仅标准库 + 已连接的飞书连接器；**无需 `requests`**，卡片构建路径不会因缺 `requests` 而失败。
+- 未配置任何目标时自动跳过推送（exit 0，不阻断报告生成）；推送返回业务错误时 exit 1。
 
-**卡片内容（两种模式一致）**：本周主线 + 🔥本周重点（按 score 取 Top5，带链接/来源）+ 💡本周看点（Top3）+ 👥分角色摘要（开发者/PM/自媒体）+ 🔖关键词 + 「查看完整周报」按钮（链接自动追加 `?src=feishu&uid=<uid>` 度量参数）。
+**卡片内容**：本周主线 + 🔥本周重点（按 score 取 Top5，带链接/来源）+ 💡本周看点（Top3）+ 👥分角色摘要（开发者/PM/自媒体）+ 🔖关键词 + 「查看完整周报」按钮（链接自动追加 `?src=feishu&uid=<uid>` 度量参数）。
 
 ### 7. 自动化设置
 
@@ -725,10 +697,10 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `scripts/validate_models.py` | **模型档案守护（P0-2）**：`--check` 扫描 `model_profiles.json` 有无未核实条目；`--fix` 将无来源推测条目移入 `model_profiles_unverified.json` |
 | `scripts/leaderboard_diagnose.py` | **排行榜源探活（P0-3）**：逐个源探测可达性 + 统计国内镜像回退命中 |
 | `scripts/install_scheduler.py` | **R4 系统级调度兜底**：注册每日 09:00 刷新任务（Windows 任务计划 / Linux cron），会话不在线也能刷新 |
-| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（支持 webhook 与连接器两种路径；`--deploy`/`--deploy-to` 顺带部署） |
-| `delivery/feishu_bot.py` | 飞书卡片构造（`build_headline_card`）+ Webhook 发送（`push`），两路径共用的卡片 schema |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并经飞书连接器推送卡片（`--deploy`/`--deploy-to` 顺带部署） |
+| `delivery/feishu_bot.py` | 飞书卡片构造库（`build_headline_card`，纯卡片 schema）；连接器复用 |
 | `delivery/feishu_connector.py` | 飞书连接器直推 CLI（lark-cli，密钥不落盘），复用前者的卡片构造 |
-| `scripts/init_feishu_config.py` | **飞书配置向导（P1-3）**：交互式生成 `feishu_config.json`（Webhook）或 `feishu_target.json`（连接器），免去手动建文件 |
+| `scripts/init_feishu_config.py` | **飞书配置向导**：交互式生成连接器推送目标 `feishu_target.json`，免去手动建文件 |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
 | `model_profiles.json` | **canonical 模型资料档案**（按模型名索引，逐条 `verified=true` + 真实来源），每次生成自动加载、新模型研究后合并写回 |
 | `model_profiles.pending.json` | 新上榜但档案缺失的模型清单（**运行期生成、不随包分发**；检测为空自动删除；运行方据此联网补档） |
@@ -761,8 +733,8 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `scripts/deploy_ghpages.py` | GitHub Pages 后端（`gh-pages` worktree 操作，**被 `deploy.py` 导入调用**） |
 | `scripts/deploy_report.py` | 部署摘要文本提取（框架无关通知文本） |
 | `scripts/setup_pages_source.sh` | **GitHub Pages 首次配置脚本**：设置仓库 Pages 源（按 README 指引运行一次；不参与日常生成） |
-| `scripts/publish.py` | 组装本周头条 `report.json` 并推送飞书卡片（webhook / 连接器双路径） |
-| `scripts/init_feishu_config.py` | 飞书配置向导（交互式生成 Webhook 或连接器配置） |
+| `scripts/publish.py` | 组装本周头条 `report.json` 并经飞书连接器推送卡片 |
+| `scripts/init_feishu_config.py` | 飞书连接器配置向导（交互式生成推送目标） |
 | `scripts/install_scheduler.py` | R4 系统级调度：注册每日 09:00 刷新任务（**以子进程调用 `refresh_deploy.py`**） |
 | `scripts/refresh_deploy.py` | 每日刷新周报站（**由 `install_scheduler.py` 调用**；会话不在线也生效） |
 | `scripts/refresh_snapshot.py` | 刷新国内榜源兜底快照 `cn_leaderboard_snapshot.json`（**手动运行**，无自动调用方） |
@@ -770,14 +742,14 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `scripts/build_pages_site.py` | 在 CI 内生成周报站并产出 Pages artifact（**由 `.github/workflows/mirror.yml` 调用**） |
 | `scripts/backfill_translations.py` | 离线译文包回填（`--emit-source` 重新生成 `translations_offline.json`） |
 | `tools/accumulate_data.py` | 历史数据累积（独立辅助工具，不在主流程） |
-| `delivery/feishu_bot.py` · `delivery/feishu_connector.py` · `delivery/__init__.py` | 飞书卡片构造 + Webhook 发送 · 连接器直推（lark-cli，密钥不落盘） |
-| `delivery/deploy_config.example.json` · `delivery/feishu_config.example.json` | 部署与飞书配置**示例文件**（用户据此生成真实配置，示例本身不含凭据） |
+| `delivery/feishu_bot.py` · `delivery/feishu_connector.py` · `delivery/__init__.py` | 飞书卡片构造库 · 连接器直推（lark-cli，密钥不落盘） |
+| `delivery/deploy_config.example.json` · `delivery/feishu_target.example.json` | 部署与飞书连接器目标**示例文件**（用户据此生成真实配置，示例本身不含凭据） |
 | `delivery/sample_report.json` · `delivery/v3.4.6_release_notes.md` | 示例报告 · 历史发布说明 |
 | `references/FAQ.md` · `references/data_sources.md` · `references/report_structure.md` · `references/SKILL_full.md` | 常见问题集中解答 / 备用数据源 / v2.0 报告结构 / **SKILL.md 完整版（精简版的展开文档，同仓库 GitHub）** |
 | `releases/` | 19 个历史版本的发布说明（归档用，反映逐版真实改动） |
 | `.github/workflows/ci.yml` · `.github/workflows/mirror.yml` | 单测 + 语法门禁 + 样张生成再校验 · 每日刷新榜源与周报站 |
 
-**运行期生成（不随包分发，首次运行或按需创建）**：`delivery/feishu_config.json` 或 `delivery/feishu_target.json`（配置向导产出，含真实 webhook，永不入库）· `model_profiles.pending.json`（待补档清单，为空自动删除）· `cn_leaderboard_snapshot.json`（本地兜底快照，缺失时降级到 `leaderboard_cache.json`）· `index.html` / `report.json` / `public/`（生成与部署产物）。
+**运行期生成（不随包分发，首次运行或按需创建）**：`delivery/feishu_target.json`（配置向导产出，含真实推送目标，永不入库）· `model_profiles.pending.json`（待补档清单，为空自动删除）· `cn_leaderboard_snapshot.json`（本地兜底快照，缺失时降级到 `leaderboard_cache.json`）· `index.html` / `report.json` / `public/`（生成与部署产物）。
 
 ### 10.2 不随包分发的文件（发布裁剪，附理由）
 
@@ -794,7 +766,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `clean_code_audit_generate_site.md` | 发布者本地的一次性代码审计记录（`.gitignore:8`） |
 | `__pycache__/` · `*.pyc` · `*.pyo` | Python 字节码 |
 | `openclaw-edition/` · `*.skill` | 本地打包产物 |
-| `delivery/feishu_config.json` · `delivery/feishu_target.json` · `delivery/dingtalk_config.json` · `.github_token` | **含真实凭据，绝不入库**（`.gitignore` 已覆盖） |
+| `delivery/feishu_target.json` · `delivery/dingtalk_config.json` · `.github_token` | **含真实凭据，绝不入库**（`.gitignore` 已覆盖） |
 
 ## 参考资料
 
