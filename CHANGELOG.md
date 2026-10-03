@@ -13,6 +13,17 @@
 
 ## [Unreleased]
 
+## [4.0.4] — 2026-10-03
+
+### Removed
+- 移除已过时的飞书 Webhook「通道 A」旁路：`publish.py` 删除 `resolve_webhook()` / `--webhook` 入参 / `feishu_bot.push()`；`delivery/feishu_bot.py` 收敛为纯标题卡片构造器（`build_headline_card()`）；`scripts/init_feishu_config.py` 移除 `--method webhook` / `do_webhook()` / `validate_webhook()`。
+- 删除已废弃的 `delivery/feishu_config.example.json`（含 `REPLACE_WITH_YOUR_TOKEN` 占位符）。
+
+### Changed
+- 飞书投递统一收敛为单一飞书连接器（lark-cli 子进程 + stdin）通道，密钥不落盘；`publish.py` 改调用 `feishu_connector.send_card()`。
+- 文档（README.md、SKILL.md、references/SKILL_full.md、references/FAQ.md、manifest.json）移除 Webhook 双通道对照表 / 模式 A / `--webhook` 示例，统一表述为「飞书连接器推送（密钥不落盘）」。
+- 新增 `delivery/feishu_target.example.json` 作为连接器推送目标示例。
+
 ## [4.0.3] — 2026-09-28
 
 ### Fixed
