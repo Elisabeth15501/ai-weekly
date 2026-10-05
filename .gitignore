@@ -62,3 +62,7 @@ openclaw-edition/models_cost.json
 data/
 docs/agent-skill-format-landscape.md
 assets/sample_chart_data.json
+
+# H5 去重 fixture 与实跑报告（本地验证用，点号起始亦已被排除）
+.h5_*.py
+.h5_*.md
