@@ -205,3 +205,78 @@ def test_main_json_outputs_machine_readable(monkeypatch, capsys):
     assert payload["ok"] is False
     assert payload["exit_code"] == rc == 1
     assert payload["bot_identity"] == "warn"
+
+def test_run_doctor_passes_env_to_subprocess(monkeypatch):
+    """回归：run_doctor 必须显式传 env。
+
+    背景——.cmd 是批处理，要靠 PATH 找 node.exe。若不传 env，父进程 PATH 为空时
+    子进程什么都不输出，preflight 会在「本该由它发现的场景」里自己先崩掉。
+    """
+    captured = {}
+
+    class _Proc:
+        stdout = '{"checks": []}'
+        stderr = ""
+        returncode = 0
+
+    def _fake_run(cmd, **kw):
+        captured.update(kw)
+        return _Proc()
+
+    monkeypatch.setattr(preflight.subprocess, "run", _fake_run)
+    preflight.run_doctor("dummy-lark-cli")
+    assert "env" in captured, "subprocess.run 未传 env，PATH 回退场景会失效"
+    assert isinstance(captured["env"], dict)
+    assert "PATH" in captured["env"] or "Path" in captured["env"]
+
+
+def test_run_doctor_env_preserves_windows_vars(monkeypatch):
+    """传 env 时不能把 Windows 关键变量弄丢（变量名大小写不敏感）。
+
+    背景：Windows 环境变量不区分大小写，不同 shell / 沙箱里同一个变量可能
+    呈现为 ``SystemRoot`` 或 ``SYSTEMROOT``。preflight 补 System32 时必须
+    大小写无关地取值，否则会拼出空路径。
+    """
+    captured = {}
+
+    class _Proc:
+        stdout = '{"checks": []}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(preflight.subprocess, "run",
+                        lambda cmd, **kw: (captured.update(kw), _Proc())[1])
+    preflight.run_doctor("dummy")
+    env = captured["env"]
+    # 子进程 env 必须是父环境的完整副本（逐键比较，不区分大小写地挑几个关键的）
+    upper = {k.upper(): v for k, v in env.items()}
+    for key in ("WINDIR", "SYSTEMROOT", "COMSPEC", "TEMP"):
+        if key in os.environ:
+            assert key in upper, f"{key} 在传入子进程的 env 里丢失了"
+    # 且必须是副本而非同一对象，避免污染父进程
+    assert env is not os.environ
+
+
+def test_run_doctor_appends_system32_case_insensitively(monkeypatch):
+    """回归：拼 System32 时大小写无关。
+
+    沙箱/宿主可能是 ``SYSTEMROOT``（大写）。若按 ``SystemRoot`` 取值会拿到
+    None，拼出 ``System32`` 这样的相对路径，反而把 PATH 弄坏。
+    """
+    captured = {}
+
+    class _Proc:
+        stdout = '{"checks": []}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(preflight.subprocess, "run",
+                        lambda cmd, **kw: (captured.update(kw), _Proc())[1])
+    monkeypatch.setattr(preflight.os, "environ",
+                        {"SYSTEMROOT": r"C:\WINDOWS", "PATH": r"C:\only"})
+    preflight.run_doctor("dummy")
+    parts = captured["env"]["PATH"].split(os.pathsep)
+    assert any(p.lower() == os.path.join("c:\\windows", "system32").lower() for p in parts), \
+        f"System32 未被正确补入，实际 PATH 段：{parts}"
+    # 不能出现裸的 "System32"（说明 Windows 根目录取空了）
+    assert not any(p == "System32" for p in parts), "Windows 根目录取空，拼出了相对路径"

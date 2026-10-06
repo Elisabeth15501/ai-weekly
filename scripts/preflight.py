@@ -91,7 +91,27 @@ def run_doctor(cli_cmd: str) -> tuple[dict, str]:
 
     Windows 的 ``.cmd`` 批处理会把 Node 的警告打到 stderr（噪音），
     故只取 stdout 解析，stderr 仅在 JSON 解析失败时作为诊断信息回传。
+
+    必须显式传 ``env``：``.cmd`` 是批处理，它要靠 PATH 找到 ``node.exe`` 才能
+    执行 shim。若父进程 PATH 为空且走的是回退路径，子进程会因找不到 node 而
+    什么都不输出——那正是本脚本要防的场景，却会先把自己弄崩。
     """
+    env = os.environ.copy()
+    # Windows 上补回 PATH 里必然存在的 System32，避免 node 定位失败。
+    # 注意：Windows 环境变量名**不区分大小写**，不同 shell / 沙箱里可能是
+    # ``SystemRoot`` 或 ``SYSTEMROOT``，因此这里大小写无关地取值，
+    # 否则取不到会拼出一个空路径，反而制造新问题。
+    if os.name == "nt" and env.get("PATH"):
+        windows_root = (
+            env.get("SystemRoot") or env.get("SYSTEMROOT")
+            or env.get("windir") or env.get("WINDIR")
+            or r"C:\Windows"
+        )
+        system32 = os.path.join(windows_root, "System32")
+        parts = [p for p in env["PATH"].split(os.pathsep) if p]
+        if not any(p.lower() == system32.lower() for p in parts):
+            parts.append(system32)
+            env["PATH"] = os.pathsep.join(parts)
     proc = subprocess.run(
         [cli_cmd, "doctor"],
         capture_output=True,
@@ -99,6 +119,7 @@ def run_doctor(cli_cmd: str) -> tuple[dict, str]:
         encoding="utf-8",
         errors="replace",
         timeout=60,
+        env=env,
     )
     raw = (proc.stdout or "").strip()
     try:
