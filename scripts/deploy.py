@@ -27,10 +27,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -141,13 +143,110 @@ def _stage_dir(html_path: Path) -> Path:
     return d
 
 
-def _run_cli(cmd: list[str], verbose: bool) -> str:
+# ---------------------------------------------------------------------------
+# 凭据脱敏（T09）
+# ---------------------------------------------------------------------------
+# 已知的 token 明文值。CLI 报错时可能**回显** token 且不带任何前缀
+# （如 `Error: token abc123 is expired`），单靠「找 key=value 形态」兜不住，
+# 故把本进程真实用过的 token 登记在此，按字面量兜底替换。
+_SECRET_VALUES: set[str] = set()
+
+# 环境变量名以这些后缀结尾时，其值视为凭据
+_SECRET_ENV_SUFFIX = ("_TOKEN", "_KEY", "_SECRET")
+
+# 打码后统一替换成什么（dry-run 亦复用，保证输出形态一致）
+_MASK = "<redacted>"
+
+# 形如 --token=X / --auth=X / --apiKey X 的 flag 形态。
+# 注意前缀用 ``[\w-]*``（可为空）而非 ``[A-Za-z][\w-]*``：后者会贪婪吃掉
+# ``--token`` 里的 "token"，导致后面的关键字组匹配不到。
+_FLAG_ASSIGN_RE = re.compile(
+    r"(--[\w-]*(?:token|auth|secret|password|key)[\w-]*=)"
+    r"(?:\"[^\"]*\"|'[^']*'|\S+)",
+    re.IGNORECASE,
+)
+# 形如 --token X / --auth X（空格分隔，值可能带引号）
+_FLAG_SEP_RE = re.compile(
+    r"(--[\w-]*(?:token|auth|secret|password|key)[\w-]*\s+)"
+    r"(?:\"[^\"]*\"|'[^']*'|\S+)",
+    re.IGNORECASE,
+)
+# 形如 FOO_TOKEN=X / FOO_KEY: X / FOO_SECRET = X（CLI 调试输出常见）
+_ENV_ASSIGN_RE = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL)[A-Za-z0-9_]*)"
+    r"(\s*[=:]\s*)"
+    r"(?:\"[^\"]*\"|'[^']*'|\S+)",
+)
+# 形如 Authorization: Bearer X / authorization=X
+_AUTHZ_RE = re.compile(
+    r"([Aa]uthorization\s*[=:]\s*)(?:Bearer\s+|Basic\s+|Token\s+)?(?:\"[^\"]*\"|'[^']*'|\S+)"
+)
+
+
+def _register_secrets(extra_env: dict[str, str]) -> None:
+    """登记本次要传给子进程的凭据值，供 :func:`_redact` 按字面量兜底打码。
+
+    只登记名字像凭据的环境变量（``*_TOKEN`` / ``*_KEY`` / ``*_SECRET``），
+    避免把 ``--dir`` 之类的普通配置值也拉进脱敏名单。
+    """
+    for name, value in extra_env.items():
+        if name.upper().endswith(_SECRET_ENV_SUFFIX) and value:
+            _SECRET_VALUES.add(value)
+
+
+def _redact(text: str) -> str:
+    """把文本中的凭据替换为 ``<redacted>``。
+
+    做法是**先定位所有「看起来像 secret 的片段」，再逐个替换**，而不是对整条
+    命令做一次大正则：token 长度不定，且可能出现在 ``--token=X``（等号）、
+    ``--auth X``（空格）、``X-TOKEN=Y``（env 赋值）三种不同位置。
+
+    四道防线（任一命中即打码）：
+
+    1. **字面量兜底** —— 本进程用过的真实 token 值，治「CLI 原样回显且无前缀」。
+    2. ``--token=X`` / ``--auth=X`` 等flag 赋值形态（等号）。
+    3. ``--token X`` / ``--auth X`` 等 flag 空格分隔形态。
+    4. ``FOO_TOKEN=X`` / ``Authorization: Bearer X`` 等 env 与 header 形态。
+
+    长于 4 字符才登记为字面量，避免短 token 造成大面积误伤。
+    """
+    if not text:
+        return text
+
+    # 1) 字面量兜底（先做：它对格式无要求，能顺带覆盖后面几道防线漏掉的形态）
+    for secret in _SECRET_VALUES:
+        if len(secret) > 4 and secret in text:
+            text = text.replace(secret, _MASK)
+
+    # 2~4) 形态识别。替换值只保留 flag / 环境变量名 / 分隔符 / header 名，值一律打码。
+    # flag 形态的值在group(2)，env/authz 形态的值在 group(3)（分隔符须保留）。
+    text = _FLAG_ASSIGN_RE.sub(lambda m: m.group(1) + _MASK, text)
+    text = _FLAG_SEP_RE.sub(lambda m: m.group(1) + _MASK, text)
+    text = _ENV_ASSIGN_RE.sub(lambda m: m.group(1) + m.group(2) + _MASK, text)
+    text = _AUTHZ_RE.sub(lambda m: m.group(1) + _MASK, text)
+
+    return text
+
+
+def _run_cli(cmd: list[str], verbose: bool, extra_env: dict[str, str] | None = None) -> str:
+    """执行一条部署 CLI 命令，返回其 stdout+stderr 合并文本。
+
+    安全约束（T09）：**任何 token 都不得进 argv**——argv 在进程列表（`ps`/任务管理器）
+    与部分 CI 日志中对同机其他用户可见。故 token 一律经``extra_env`` 传入子进程环境。
+    打印与异常三条出口统一过 :func:`_redact`，避免「改了打印、漏了异常」这类半截修复。
+    """
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+        _register_secrets(extra_env)
     if verbose:
-        print("  $ " + " ".join(cmd))
-    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        print("  $ " + _redact(" ".join(cmd)))
+    res = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
     out = (res.stdout or "") + (res.stderr or "")
     if res.returncode != 0:
-        raise RuntimeError(f"部署命令失败（exit={res.returncode}）：{out[-500:]}")
+        # 先整体脱敏再截断：反过来（_redact(out[-500:])）会在 token 被截断时
+        # 漏出前半截明文。
+        raise RuntimeError(f"部署命令失败（exit={res.returncode}）：{_redact(out)[-500:]}")
     return out
 
 
@@ -157,15 +256,17 @@ def _deploy_vercel(html_path: Path, dry_run: bool, verbose: bool,
     project = project or os.environ.get("VERCEL_PROJECT") or _load_json_config("vercel_config.json").get("project")
     _require(bool(token), "Vercel 未配置：设置 VERCEL_TOKEN（及可选 VERCEL_PROJECT）。")
     stage = _stage_dir(html_path)
-    cmd = ["npx", "vercel", "deploy", "--prod", "--yes", f"--token={token}"]
+    cmd = ["npx", "vercel", "deploy", "--prod", "--yes"]
     if project:
         cmd += ["--name", project]
     cmd += [str(stage)]
+    env = {"VERCEL_TOKEN": token}
     if dry_run:
         if verbose:
-            print(f"🛑 [dry-run] 将执行：{' '.join(cmd)}")
+            print(f"🛑 [dry-run] 将执行：{_redact(' '.join(cmd))}")
+            print(f"   凭据来源：环境变量 VERCEL_TOKEN（{_MASK}）")
         return {"pushed": False, "view_base": None, "reports": [html_path.name]}
-    out = _run_cli(cmd, verbose)
+    out = _run_cli(cmd, verbose, env)
     # Vercel 输出最后一行通常是部署 URL
     url = out.strip().splitlines()[-1].strip() if out.strip() else None
     return {"pushed": True, "view_base": (url.rstrip("/") + "/") if url else None,
@@ -178,13 +279,14 @@ def _deploy_netlify(html_path: Path, dry_run: bool, verbose: bool,
     site = site or os.environ.get("NETLIFY_SITE_ID") or _load_json_config("netlify_config.json").get("site_id")
     _require(bool(token) and bool(site), "Netlify 未配置：设置 NETLIFY_AUTH_TOKEN 与 NETLIFY_SITE_ID。")
     stage = _stage_dir(html_path)
-    cmd = ["npx", "netlify", "deploy", "--prod", "--dir", str(stage),
-           "--auth", token, "--site", site]
+    cmd = ["npx", "netlify", "deploy", "--prod", "--dir", str(stage), "--site", site]
+    env = {"NETLIFY_AUTH_TOKEN": token}
     if dry_run:
         if verbose:
-            print(f"🛑 [dry-run] 将执行：{' '.join(cmd)}")
+            print(f"🛑 [dry-run] 将执行：{_redact(' '.join(cmd))}")
+            print(f"   凭据来源：环境变量 NETLIFY_AUTH_TOKEN（{_MASK}）")
         return {"pushed": False, "view_base": None, "reports": [html_path.name]}
-    out = _run_cli(cmd, verbose)
+    out = _run_cli(cmd, verbose, env)
     return {"pushed": True, "view_base": None, "reports": [html_path.name]}
 
 
@@ -196,13 +298,16 @@ def _deploy_cloudflare(html_path: Path, dry_run: bool, verbose: bool,
     stage = _stage_dir(html_path)
     cmd = ["npx", "wrangler", "pages", "deploy", str(stage),
            "--project-name", project, "--commit-dirty=true"]
-    if token:
-        cmd = ["CLOUDFLARE_API_TOKEN=" + token] + cmd
+    env = {"CLOUDFLARE_API_TOKEN": token} if token else {}
     if dry_run:
         if verbose:
-            print(f"🛑 [dry-run] 将执行：{' '.join(cmd)}")
+            print(f"🛑 [dry-run] 将执行：{_redact(' '.join(cmd))}")
+            if token:
+                print(f"   凭据来源：环境变量 CLOUDFLARE_API_TOKEN（{_MASK}）")
+            else:
+                print("   凭据来源：wrangler 本地登录态（wrangler login）")
         return {"pushed": False, "view_base": None, "reports": [html_path.name]}
-    out = _run_cli(cmd, verbose)
+    out = _run_cli(cmd, verbose, env)
     return {"pushed": True, "view_base": None, "reports": [html_path.name]}
 
 
