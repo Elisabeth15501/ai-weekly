@@ -83,6 +83,7 @@ except ImportError:
 # 缺依赖时先由自检给出人话提示，而不是抛裸 ImportError。
 import aiweekly.insights as INS  # noqa: E402
 import aiweekly.leaderboard as LB  # noqa: E402
+import aiweekly.market as _mk  # noqa: E402  --check-snapshot 只需 market 的快照体检
 from aiweekly import const as _ac  # noqa: E402
 from aiweekly.cli_utils import (  # noqa: E402
     _CountingWriter, _parse_csv_arg, _parse_num_arg,
@@ -193,6 +194,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="可切换的搜索源 JSON {name:url} 或该 JSON 的文件路径；默认百度/谷歌/ arXiv")
     parser.add_argument("--health-check", action="store_true",
                         help="只探测网络/榜源可达性，不生成报告（CI/定时任务前置探测）")
+    parser.add_argument("--check-snapshot", action="store_true",
+                        help="只校验市场快照 assets/market_snapshot.json 的新鲜度，不生成报告"
+                             "（缺失或超过阈值天数则退出码非 0）")
+    parser.add_argument("--snapshot-max-age-days", type=bounded_int(1, 3650, "--snapshot-max-age-days"),
+                        default=None,
+                        help=f"快照过期阈值天数（默认取 market.SNAPSHOT_STALE_DAYS）")
     return parser
 
 
@@ -298,6 +305,13 @@ def main() -> None:
     if args.health_check:
         run_health_check(args.no_live_ranking, args.translate_model)
         return
+
+    # 市场快照体检（HON-2）：与 --health-check 同为「只检查不生成」的独立子命令。
+    # 放在读 --api-json 之前，缺失/过期时立刻以非 0 退出，不浪费一次新闻读取。
+    if args.check_snapshot:
+        _max_age = (args.snapshot_max_age_days if args.snapshot_max_age_days is not None
+                    else _mk.SNAPSHOT_STALE_DAYS)
+        sys.exit(_mk.run_snapshot_check(_max_age))
 
     # 获取新闻数据（默认仅 RSS 自治抓取结果；不内置任何第三方 API）
     if not args.api_json:

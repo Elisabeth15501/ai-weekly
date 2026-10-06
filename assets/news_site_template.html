@@ -640,6 +640,16 @@ a:hover { text-decoration: underline; }
 }
 .footer p { font-size: 13px; color: var(--footer-text); margin: 4px 0; }
 .footer a { color: var(--primary); }
+/* 来源两组分块：静态快照 vs 本周真抓，视觉上也要分开（HON-1） */
+.src-block { max-width: 900px; margin: 14px auto 0; padding: 10px 14px; text-align: left;
+  border: 1px solid var(--border); border-radius: 8px; }
+.src-block-snapshot { border-left: 3px solid #b45309; }
+.src-block-weekly { border-left: 3px solid #15803d; }
+.footer .src-head { font-size: 13px; font-weight: 600; color: var(--footer-text); margin: 0 0 6px; }
+.src-list { list-style: none; padding: 0; margin: 0; }
+.src-list li { font-size: 12px; color: var(--footer-text); line-height: 1.7; }
+.src-note { font-size: 12px; color: var(--footer-text); opacity: .85; margin: 6px 0 0; }
+.src-uncited { color: #b45309; }
 
 /* ========== Insights (本周看点) ========== */
 .insights-section { max-width: 1100px; margin: 28px auto 0; padding: 0 20px; }
@@ -1104,7 +1114,9 @@ button.kw-chip { font-family: inherit; line-height: 1; text-align: left; }
 <!-- ========== FOOTER ========== -->
 <footer class="footer">
   <p>新闻数据来自 RSS 聚合（14 个公开源）[NEWS_SOURCE_EXTRA]，[MARKET_SOURCE_FOOTER]</p>
-  <p>数据来源：[ALL_SOURCES]</p>
+  <!-- 数据来源拆成两块：静态快照引用（人工誊录的历史基线） / 本周信号来源（本周真抓的） -->
+  [SNAPSHOT_SOURCES_BLOCK]
+  [WEEKLY_SOURCES_BLOCK]
   <p style="margin-top:8px;">生成时间：[GEN_DATE] · 本站仅聚合公开报道，不代表任何立场</p>
   <p style="margin-top:8px;">本报告由 <strong>AI 辅助编制</strong>，数据为公开来源的静态快照或折算估算，仅供参考，<strong>不构成投资建议</strong>；投资决策请以官方公告为准。</p>
 </footer>

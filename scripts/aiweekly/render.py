@@ -26,7 +26,7 @@ from aiweekly.market import (
     DEFAULT_CN_MARKET_SOURCE, DEFAULT_CN_FUNDING_SOURCE,
     _extract_market_signals, _compute_weekly_stats, _lb_name_map,
     _render_market_signals_html_with_theme, _render_trend_insights_html,
-    resolve_chart_data,
+    resolve_chart_data, snapshot_status_text,
 )
 # 服务端 SVG 图表轨：与 Chart.js 轨同源数据，保证 JS / Canvas 被拦时市场图仍可见
 from aiweekly.charts_svg import build_svg_charts
@@ -198,6 +198,87 @@ def _build_capability_card(translate_en: bool, audience_summary: bool,
         f'{tag(t, "cap-off")} <code>{cmd}</code>' for t, cmd in off)
     return (f'<div class="cap-row"><b>本期已启用</b>　{on_html}</div>'
             f'<div class="cap-row"><b>未启用</b>　{off_html}</div>')
+
+
+# ---------- 页脚「数据来源」拆成两组（HON-1）----------
+# 为什么拆：此前 8 家静态引用与本周真实抓取的 RSS 源混在同一段排版里，
+# 读者第一眼会把「市场基线的人工誊录」误读成「数据来自这 8 家机构」。
+# 两组的性质根本不同，必须各自成块：
+#   1. 静态快照引用 —— 人工誊录的历史数字，带 as_of /每家 retrieved_at；
+#   2. 本周信号来源   —— 本周真的抓了哪些源，从 news_items 的 source 字段统计得出。
+def _build_footer_snapshot_block(snapshot_note: str = "") -> str:
+    """页脚第一块：静态快照引用（截止 as_of），每家带 retrieved_at 与被哪张图引用。
+
+    外部可控字段：机构名 / URL / retrieved_at 全部来自外部 JSON 文件，
+    按不可信输入处理——转义 + URL 仅放行安全协议（safe_url）。
+    """
+    rows = []
+    for s in BASE_SOURCES:
+        name = html.escape(s["name"])
+        url = safe_url(s["url"]) if s["url"] else ""
+        label = f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener">{name}</a>' if url else name
+        # used_for 为空 = 该机构没被任何一张图的数字引用，必须说清楚而不是混排
+        usage = (f'用于{html.escape(s["used_for"])}' if s["used_for"]
+                 else '<span class="src-uncited">未引用其数字</span>')
+        got = html.escape(s["retrieved_at"]) if s["retrieved_at"] else "未标注"
+        rows.append(f'<li>{label} · {usage} · 誊录于 {got}</li>')
+    if not rows:
+        return ""
+    note_html = f'<p class="src-note">{html.escape(snapshot_note)}</p>' if snapshot_note else ""
+    as_of = html.escape(_snapshot_as_of())
+    return ('<div class="src-block src-block-snapshot">'
+            '<p class="src-head">📌 静态快照引用（人工誊录的历史基线，'
+            f'截止 {as_of}；<b>非本周抓取</b>）</p>'
+            f'<ul class="src-list">{"".join(rows)}</ul>{note_html}</div>')
+
+
+def _snapshot_as_of() -> str:
+    """快照截止日（as_of），取自 market 模块已加载的快照；缺失时返回明确文案。"""
+    from aiweekly.market import _SNAPSHOT
+    return str(_SNAPSHOT.get("as_of") or "未标注")
+
+
+def _count_weekly_sources(news_items: list) -> list:
+    """统计本周新闻实际来自哪些源 -> ``[(源名, 条数), ...]``，按条数降序。
+
+    这是**真实可数**的：直接数news_items 的 source 字段，
+    不再像从前那样把「配置里有哪些源」当成「本周抓到了什么」。
+    """
+    counts = {}
+    for it in news_items or []:
+        name = (it.get("source") or "").strip()
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def _build_footer_weekly_block(news_items: list, external_source: tuple = None) -> str:
+    """页脚第二块：本周信号来源——这周实际抓到哪些源、各多少条。
+
+    空数据时显式说明「本周无RSS 源」，不静默消失（静默会让读者以为漏了东西）。
+    """
+    pairs = _count_weekly_sources(news_items)
+    if not pairs:
+        items_html = '<li>本周未取到任何 RSS 源（--api-json 为空或全部解析失败）</li>'
+        total_note = "0 条"
+    else:
+        items_html = "".join(
+            f'<li>{html.escape(name)} · <b>{n}</b> 条</li>' for name, n in pairs)
+        total_note = f"{len(pairs)} 个源 / {sum(n for _, n in pairs)} 条"
+    ext_html = ""
+    if external_source and external_source[0]:
+        nm = html.escape(external_source[0])
+        eu = safe_url(external_source[1] or "") if external_source[1] else ""
+        ext_html = (f'<li>用户补充外部 API：'
+                    + (f'<a href="{html.escape(eu, quote=True)}" target="_blank" '
+                       f'rel="noopener">{nm}</a>' if eu else nm)
+                    + '</li>')
+    return ('<div class="src-block src-block-weekly">'
+            '<p class="src-head">🛰️ 本周信号来源（本周真实抓取，'
+            f'{total_note}）</p>'
+            f'<ul class="src-list">{items_html}{ext_html}</ul>'
+            '<p class="src-note">市场板块的「实测值」来自这些源的本周报道，'
+            '与上方静态快照是两回事。</p></div>')
 
 
 def generate(api_data: dict, output_path: str = None,
@@ -404,23 +485,27 @@ def generate(api_data: dict, output_path: str = None,
     # 市场数据口径路由（国内适配性）：说明当前该以哪套口径为主、哪套仅作对照
     template = template.replace("[MARKET_ROUTING_NOTE]", build_market_routing_note(region))
 
-    # 页脚数据来源：基础列表 + 用户自备的外部 API（仅当用户显式提供）
-    # 外部来源名/URL 由用户 CLI 提供，按不可信输入处理：转义 + 仅放行安全协议
-    sources = [(html.escape(n), safe_url(u)) for n, u in BASE_SOURCES]
+    # 页脚数据来源拆成两组（HON-1）：静态快照引用 / 本周信号来源，各成一块不混排。
+    # 旧的单行混排会把「人工誊录的历史基线」伪装成「本周从这些机构抓到的数据」。
+    _snapshot_note = snapshot_status_text()
+    template = template.replace(
+        "[SNAPSHOT_SOURCES_BLOCK]",
+        _build_footer_snapshot_block(_snapshot_note))
+    template = template.replace(
+        "[WEEKLY_SOURCES_BLOCK]",
+        _build_footer_weekly_block(news_items, external_source))
+    # 兼容旧占位符：仍渲染成「本周真实来源」的一句话摘要（供自定义模板沿用）
+    _weekly_pairs = _count_weekly_sources(news_items)
+    template = template.replace(
+        "[ALL_SOURCES]",
+        "、".join(html.escape(n) for n, _ in _weekly_pairs) or "本周未取到 RSS 源")
     news_extra = ""
     if external_source and external_source[0]:
-        ext_name, ext_url = external_source[0], (external_source[1] or "")
-        ext_url_safe = safe_url(ext_url) if ext_url else ""
-        ext_name_e = html.escape(ext_name)
-        if ext_url_safe:
-            sources.append((ext_name_e, ext_url_safe))
-            news_extra = f' 与 <a href="{html.escape(ext_url_safe, quote=True)}" target="_blank" rel="noopener">{ext_name_e}</a>'
-        else:
-            news_extra = f' 与 {ext_name_e}'
-    all_sources_html = '、'.join(
-        f'<a href="{html.escape(u, quote=True)}" target="_blank" rel="noopener">{n}</a>' for n, u in sources
-    )
-    template = template.replace("[ALL_SOURCES]", all_sources_html)
+        ext_name_e = html.escape(external_source[0])
+        ext_url_safe = safe_url(external_source[1] or "") if external_source[1] else ""
+        news_extra = (f' 与 <a href="{html.escape(ext_url_safe, quote=True)}" target="_blank" '
+                      f'rel="noopener">{ext_name_e}</a>' if ext_url_safe
+                      else f' 与 {ext_name_e}')
     template = template.replace("[NEWS_SOURCE_EXTRA]", news_extra)
     template = template.replace("[GEN_DATE]", datetime.now().astimezone().isoformat(timespec="minutes"))  # P0#16
 
