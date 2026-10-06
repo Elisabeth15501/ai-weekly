@@ -222,13 +222,13 @@ bash run_report.sh deploy --html AI_News.html
 | 守护项 | 检查内容 |
 |---|---|
 | 结构完整性 | `<script>`, `</script>`, `</html>` 存在 |
-| 新闻体量 | ≥ 8 条新闻（数据不足时警告而非失败） |
+| 新闻体量 | ≥ 20 条新闻（10–19 条降级为警告而非失败） |
 | ISO 8601 日期 | 所有 `publishedAt` 格式正确 |
 | 本周看点 | `.insight-card`, `.kw-tag`, `.audience-card` 均存在 |
 | 市场图表 | 6 组 Chart.js canvas（含中国数据图） |
 | 合作桥接 | `.trend-evidence` 趋势印证行存在 |
 
-校验器参数可通过环境变量覆盖阈值：`AIWEEKLY_MIN_NEWS`（默认 8）、`AIWEEKLY_MIN_INSIGHT_CARDS`（默认 1）等。
+阈值通过命令行参数调整：`--min-news`（默认 20）、`--min-coverage`（默认 80）、`--min-ranking`（默认 5）；加 `--strict` 可让警告项也算不通过。
 
 ---
 
@@ -252,6 +252,10 @@ bash run_report.sh deploy --html AI_News.html
 本技能**默认完全自治**，不调用任何付费/商业 API（可选 NewsAPI 接入需自备 `NEWSAPI_KEY`，且默认关闭）。
 
 若希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，请**自行**获取数据并导出 JSON，以 `--external-news-json` 注入；页脚会自动署名。是否启用完全由你决定，并须遵守对应服务条款、自行承担合规风险。使用任何第三方 API 时请保留其署名与授权。
+
+> **AI HOT 停服提醒**：其 legacy `/api/public/*` 接口已按官方 openapi 明示于 **2026-10-31 停止服务**（原定 12-31，提前至 9-30 公告），域名已 301 到 `aihot.news`。
+> v1（`/api/v1/*`）是完全不同的形态：端点从 9 个扩到 33 个，新增 `weeklies` / `monthlies` / `stories/{id}` / `agent/*` 等 12 个 Agent 专用端点；参数 `take` → `limit`、`since` → `window`、另有 `by`。
+> 照着 legacy 形态写的脚本切到 v1 **不会抛异常**，而是拿到 `400 {"detail":"Unknown query parameter: take."}` —— 静默失败、取数为空。取数前请先对照目标 API 的 openapi 确认参数名。
 
 ---
 

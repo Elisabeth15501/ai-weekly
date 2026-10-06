@@ -27,9 +27,19 @@ jobs:
           pip list | grep -iE "pytest|beautifulsoup4|feedparser|requests" || true
       - name: Syntax gate (py_compile all scripts)
         run: python -m compileall -q scripts
-      - name: Unit tests (pure, offline)
+      # 84 个纯函数单测 + 11 个 XSS/合规门禁单测。
+      # test_p1_guards.py 此前游离在 CI 之外（只跑 aiweekly/tests/），门禁回归会静默溜过，
+      # 故一并纳入；它只依赖同目录模块，纯离线，可在 ubuntu 上直接跑。
+      - name: Unit tests (pure, offline) + P1 guard tests
         working-directory: scripts
-        run: python -m pytest aiweekly/tests/ -q --tb=short
+        run: python -m pytest aiweekly/tests/ test_p1_guards.py -q --tb=short
+
+      # 发布前合规门禁：词表检查，命中 BLOCKER 即退出码 1，让 CI 变红。
+      # 此前全仓无任何地方调用它，等于门禁只存在于开发者记忆里。
+      # 该脚本被 .clawhubignore 排除、不随包分发，因此在 CI 中运行不影响发布产物。
+      - name: Compliance gate (pre-publish wording check)
+        working-directory: scripts
+        run: python compliance_check.py
 
       # 端到端质量门禁：用确定性 fixture（离线）生成报告，再跑 24/24 校验。
       # 任何生成/校验回归都会让 CI 变红——这是把"手动看周报挑刺"自动化。

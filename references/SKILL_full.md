@@ -13,6 +13,8 @@ description: >
   新闻默认全部来自公开 RSS 抓取（14 个精选源：国内 7 + 国外 7，国内源优先，无单点依赖）；**默认不调用任何付费/商业 API**。另提供一个**可选**的 NewsAPI 接入（`--news-api` + 自备 `NEWSAPI_KEY`，**默认关闭**），是否启用完全由用户决定。
   如需用 AI HOT 或其他「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以
   --external-news-json 注入，是否启用完全由用户决定。每条新闻含原始来源链接。
+  注意：AI HOT 的 legacy /api/public/* 已于 2026-10-31 停服（域名 301 到 aihot.news）；
+  v1 参数形态不同（take→limit、since→window、新增 by），沿用 legacy 参数会静默返回 400 空结果。
   市场/融资图表数据由 WebSearch 获取后注入，未提供时明确标注「示例/估算」。
   触发词·生成（任意一句即可）：AI周报、AI行业周报、AI新闻、人工智能周报、AI行业动态、生成AI报告、
   AI新闻网站、AI新闻站、这周AI有什么大事、AI圈最近怎么样、给我看个AI简报、AI新闻汇总、
@@ -81,6 +83,8 @@ metadata:
 
 用户：用我导出的 AI HOT 数据增强这期周报
 → 技能把你的 JSON 以 --external-news-json 注入（页脚自动署名），是否启用完全由你决定。
+  （若这份 JSON 来自 AI HOT：其 legacy 接口已于 2026-10-31 停服，v1 参数名为
+   limit / window 而非 take / since，取数时按 v1 写，否则会静默拿到空结果。）
 ```
 
 > 卡片文案 + 更多对话示例见 [references/FAQ.md](references/FAQ.md)。飞书配置一步到位见 [scripts/init_feishu_config.py](scripts/init_feishu_config.py)。
@@ -170,7 +174,7 @@ Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translat
 
 ## 二、核心设计理念
 
-- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`scripts/fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），**默认不调用任何付费/商业 API**（唯一例外是可选的 NewsAPI 接入，见 frontmatter 说明，默认关闭）；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担
+- **自治优先，增强可选**：新闻内容**默认全部来自 RSS 抓取**（`scripts/fetch_ai_news.py`，14 个精选源：国内 7 个优先 + 国外 7 个），**默认不调用任何付费/商业 API**（唯一例外是可选的 NewsAPI 接入，见 frontmatter 说明，默认关闭）；若用户希望用 AI HOT 等「AI 行业知识类」外部 API 增强可信度，由用户自行获取数据并以 `--external-news-json` 注入（含来源署名），是否启用完全由用户决定、风险自担（AI HOT 的 legacy 接口已于 2026-10-31 停服，需按 v1 的 `limit`/`window` 参数取数）
 - **单文件交付**：所有 CSS/JS 内联，Chart.js 也内联进 HTML，无需任何外部文件
 - **高可信度**：每条新闻必须附带原始报道 URL
 - **零脑补**：市场/融资图表数据必须由 Agent 从 WebSearch 获取真实值后注入；未提供时明确标注「示例/估算数据」，绝不编造模型榜单
@@ -213,12 +217,13 @@ Agent：→ generate_site.py --api-json news.json --ranking-top 20 --no-translat
 | 融资并购金额 | **口径路由**：`--region cn` 时国内源优先——IT桔子 / 烯牛数据 / 新浪创投Plus（可自行核对）；国外源 Crunchbase / CB Insights 为**可选增强**。结果通过 `--funding-data` / `--cn-funding-data` 注入 | 主（需搜索） |
 | 模型排行榜 | **网络环境自适应多源池**（国外源 LMArena/Artificial Analysis/Hugging Face + 国内源 OpenCompass 司南/SuperCLUE/ModelScope）；按运行环境（国内/国外）自动排序优先级，实时源全失败则回退国内快照或本地缓存，绝不空白 | 主 |
 | 政策监管 | RSS + WebSearch | 主 |
-| **外部 API 增强（可选）** | 用户自备 AI 行业知识类 API（如 AI HOT）导出 JSON，以 `--external-news-json` 注入，页脚自动署名；是否启用由用户决定 | 可选增强 |
+| **外部 API 增强（可选）** | 用户自备 AI 行业知识类 API（如 AI HOT）导出 JSON，以 `--external-news-json` 注入，页脚自动署名；是否启用由用户决定。注：AI HOT legacy 接口已于 2026-10-31 停服，v1 参数为 `limit`/`window`/`by` | 可选增强 |
 
 > **依赖说明**：`scripts/fetch_ai_news.py` 需要 `feedparser`、`requests`、`beautifulsoup4`（随技能提供 `requirements.txt`）。
 > 运行：一律用仓库根目录的 `bash run_report.sh scripts/xxx.py ...` 启动，启动器会自动探测并复用 `aiweekly` 受管 venv；若 venv 缺失，按提示 `python -m venv` + `pip install -r requirements.txt` 即可。
 > 若这些包不可用，可手动用 WebSearch 搜集新闻后写成同样结构的 JSON，再走 `--api-json` 消费；
 > 也可用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入——**注意：使用任何第三方 API 须遵守其服务条款，并自行承担合规风险**。
+> AI HOT 的 legacy `/api/public/*` 已于 2026-10-31 停服（域名 301 到 `aihot.news`）；改用 v1 时参数名是 `limit`（非 `take`）、`window`（非 `since`），另有新增的 `by`，沿用旧参数会静默返回 400 空结果。
 
 ## 五、轻量模式与完整模式
 
@@ -247,7 +252,7 @@ bash run_report.sh scripts/fetch_ai_news.py --output news.json
 分类已由脚本完成（`ai-models` / `ai-products` / `industry` / `paper` / `tip`）。
 
 **降级**：若 RSS 抓取不可用（缺依赖/无网络），可手动用 WebSearch 搜集后写成同样结构的 JSON，
-再走 `--api-json` 消费；也可用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入。
+再走 `--api-json` 消费；也可用你自己的外部 API（如 AI HOT）导出 JSON 后以 `--external-news-json` 注入（AI HOT legacy 接口已于 2026-10-31 停服，按 v1 的 `limit`/`window` 取数）。
 
 ### 3. 补充市场/融资数据（必需搜索，结果注入图表）
 
@@ -419,6 +424,8 @@ python delivery/feishu_connector.py --report report.json --chat-id oc_xxxx --dry
 
 注意：默认流程不含任何外部商业 API。若用户明确要求用 AI HOT 等外部 API 增强可信度，
      请提示用户自行从官方渠道导出 JSON，并以 --external-news-json 注入（含 --external-source-name/url 署名）。
+     AI HOT 的 legacy /api/public/* 已于 2026-10-31 停服（域名 301 到 aihot.news）；
+     v1 端点与参数均已改版（limit/window/by），沿用 legacy 参数会静默取到空结果。
 ```
 
 ## 七、「本周看点」编辑洞察（头版导语，必做）
@@ -662,7 +669,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 
 - 新闻默认全部来自 14 个公开 RSS 源（国内 7 + 国外 7）；市场/融资图表由运行方通过 WebSearch 注入；排行榜从公开网页（LMArena / Artificial Analysis / Hugging Face / OpenCompass / SuperCLUE / ModelScope 等）自适应抓取，国内兜底快照随技能附带。
 - **不内置、不打包任何 AI HOT / 卡兹克的内容**。页脚仅保留基础参考来源链接（Grand View Research / Crunchbase / CB Insights / 中国信通院 / IT桔子 / 新浪创投Plus / Stanford HAI / LMMarketCap），与报告实际引用的 `DEFAULT_*_SOURCE` 保持一致。
-- **外部 API 增强是用户 opt-in 的**：技能**默认不调用任何外部商业 API**。两条可选增强路径——① `--news-api` 走 NewsAPI（需自备 `NEWSAPI_KEY`，默认关闭）；② 用户自备 JSON 以 `--external-news-json` 注入 AI HOT 等来源（页脚自动署名）。两条路径都需用户显式开启，是否启用、是否遵守其服务条款均由用户自行决定。
+- **外部 API 增强是用户 opt-in 的**：技能**默认不调用任何外部商业 API**。两条可选增强路径——① `--news-api` 走 NewsAPI（需自备 `NEWSAPI_KEY`，默认关闭）；② 用户自备 JSON 以 `--external-news-json` 注入 AI HOT 等来源（页脚自动署名）。两条路径都需用户显式开启，是否启用、是否遵守其服务条款均由用户自行决定。AI HOT 的 legacy 接口已于 2026-10-31 停服，取数需改用 v1（`limit`/`window`/`by`）。
 - **发布建议**：① 附带 `LICENSE` 文件（如 MIT / Apache-2.0）；② 如需大范围传播，建议提示用户使用外部 API 前先取得授权。
 - **跨平台分发**：本技能以单一 `SKILL.md`（开放 Agent Skill 规范）为唯一入口，直接放入支持该规范的任意 Agent 目录即可加载；框架级调用（LangGraph / Dify / Coze）参考 `manifest.json` 的引擎接口描述。无需任何平台专属包装（无 `plugin.json`、无 per-agent 副本）。
 

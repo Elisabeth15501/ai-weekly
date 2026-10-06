@@ -13,6 +13,13 @@
 
 ## [Unreleased]
 
+### Removed
+- README.md 删除对 `AIWEEKLY_MIN_NEWS` / `AIWEEKLY_MIN_INSIGHT_CARDS` 两个环境变量的承诺——代码侧从未读取过它们（已全仓 grep 确认），属「文档承诺但未实现」。改为记录校验器真实存在的命令行参数 `--min-news`（默认 20）/ `--min-coverage`（默认 80）/ `--min-ranking`（默认 5）/ `--strict`。选删文档而非补实现，因为这是诚实性欠账而非功能缺失。
+- 同表「新闻体量」阈值由「≥ 8 条」更正为「≥ 20 条（10–19 条降级为警告）」，与 `validate_report.py` 的 `--min-news` 默认值及 `check_news_v3()` 的 `warn = min_news // 2` 对齐。
+
+### Changed
+- 标注 AI HOT 停服：其 legacy `/api/public/*` 接口于 2026-10-31 停止服务（域名 301 到 `aihot.news`）。README.md、SKILL.md、references/SKILL_full.md、scripts/generate_site.py 共 11 处 `--external-news-json` 相关说明均已加注，说明 v1 参数形态为 `limit` / `window` / `by`（非 `take` / `since`）、端点由 9 个扩至 33 个，并提示沿用 legacy 参数会静默返回 `400 {"detail":"Unknown query parameter: take."}` 而非抛异常。示例中的域名同步由 `aihot.virxact.com` 更新为 `aihot.news`。仅改注释、docstring 与 help 文本，未改动任何代码逻辑，`--external-news-json` 功能保留。
+
 ## [4.0.4] — 2026-10-03
 
 ### Removed

@@ -18,9 +18,18 @@ generate_site.py
 
 本技能**默认不调用任何付费/商业 API**；新闻默认全部来自公开 RSS 聚合。
 唯一例外是可选的 NewsAPI 接入（`--news-api` + 自备 `NEWSAPI_KEY`，默认关闭，见 fetch_ai_news.py）。
+
 可选外部增强：如希望用 AI HOT、或任何「AI 行业知识类」外部 API 增强报告可信度，
 请自行从其官方渠道获取数据并导出为 JSON（schema 见下），再用 --external-news-json
 注入。是否启用完全由你决定，风险自担（需遵守该 API 的服务条款）。
+
+  ⚠️ AI HOT 停服提醒：其 legacy `/api/public/*` 接口已于 2026-10-31 停止服务，
+     域名已 301 到 aihot.news。v1（`/api/v1/*`）是完全不同的形态：端点从 9 个扩到
+     33 个（新增 `weeklies` / `monthlies` / `stories/{id}` / `agent/*` 等 12 个 Agent
+     专用端点），参数 `take` → `limit`、`since` → `window`、另有 `by`。
+     沿用 legacy 参数的脚本切到 v1 不会抛异常，而是拿到
+     `400 {"detail":"Unknown query parameter: take."}` —— 静默失败、取数为空，
+     排查起来很费时间。取数前请先对照目标 API 的 openapi 确认参数名。
 
 用法：
   # 用 RSS 抓取结果生成（默认，无任何第三方 API 依赖）
@@ -29,7 +38,7 @@ generate_site.py
   # 叠加用户自备的外部 API 数据增强（例：AI HOT 导出 JSON）
   python scripts/generate_site.py --api-json news.json \
       --external-news-json aihot_export.json --external-source-name "AI HOT" \
-      --external-source-url "https://aihot.virxact.com" -o AI_News.html
+      --external-source-url "https://aihot.news" -o AI_News.html
 
   # 从自定义排行榜 JSON 文件生成
   python scripts/generate_site.py --api-json news.json --ranking-json ranking.json -o AI_News.html
@@ -99,7 +108,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", "-o", help="输出 HTML 文件路径")
     parser.add_argument("--dry-run", action="store_true", help="仅显示数据摘要，不生成")
     # 可选外部 API 增强：用户自备（如 AI HOT 或其他 AI 行业知识 API），自行承担合规风险
-    parser.add_argument("--external-news-json", help="可选：自备外部 API 导出的新闻 JSON（增强报告，如 AI HOT）")
+    # 注：AI HOT 的 legacy /api/public/* 已于 2026-10-31 停服（域名 301 到 aihot.news）。
+    # v1 参数形态不同（take→limit、since→window、新增 by），沿用 legacy 参数会静默返回 400 空结果。
+    parser.add_argument("--external-news-json", help="可选：自备外部 API 导出的新闻 JSON（增强报告，如 AI HOT；其 legacy 接口已于 2026-10-31 停服，需按 v1 参数取数）")
     parser.add_argument("--external-source-name", help="外部数据源名称（页脚署名，如 AI HOT）")
     parser.add_argument("--external-source-url", help="外部数据源主页 URL（页脚链接，可选）")
     parser.add_argument("--ranking-json", help="从本地 JSON 文件读取排行榜数据（覆盖自动获取）")

@@ -13,6 +13,8 @@ description: >
   新闻默认全部来自公开 RSS 抓取（国内 7 + 国外 7 共 14 个精选源，国内源优先，无单点依赖）；
   默认不调用任何付费/商业 API。可选增强：用户自备 NewsAPI key（--news-api，默认关）或以
   --external-news-json 注入 AI HOT 等来源 JSON（页脚自动署名，是否启用由用户决定）。
+  注意：AI HOT 的 legacy /api/public/* 已于 2026-10-31 停服（域名 301 到 aihot.news）；
+  v1 参数形态不同（take→limit、since→window、新增 by），沿用 legacy 参数会静默返回 400 空结果。
   市场/融资图表数据由 WebSearch 获取后注入，未提供时明确标注「示例/估算」。
   触发词：AI周报、AI行业周报、AI新闻、人工智能周报、AI行业动态、生成AI报告、AI新闻网站、
   AI新闻站、这周AI有什么大事、AI圈最近怎么样、给我看个AI简报、AI新闻汇总、做个AI周报、
