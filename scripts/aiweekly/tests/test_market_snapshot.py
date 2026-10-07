@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aiweekly import market as M  # noqa: E402
+from aiweekly import market_snapshot as SNAP  # noqa: E402
 from aiweekly.render import (  # noqa: E402
     _build_footer_snapshot_block,
     _build_footer_weekly_block,
@@ -32,10 +33,15 @@ def _restore_module_snapshot():
     必须连BASE_SOURCES 一起还原：它是在 import 期由 _load_base_sources() 从
     _SNAPSHOT 派生的，用例里改_SNAPSHOT 不会自动同步它，
     不还原会让后续用例读到上个用例残留的名单（顺序相关的假绿/假红）。
+
+    状态写在``SNAP``（market_snapshot，快照的真身模块）而非 ``M``：
+    market_snapshot._SNAPSHOT 才是 load_snapshot() 写入的对象，
+    改 SNAP._SNAPSHOT 只会新建一个没人读的副本——那样本用例看着过了，
+    残留的恶意快照却会污染后续所有用例。
     """
-    saved = (M._SNAPSHOT, M._SNAPSHOT_LOAD_ERROR, M.BASE_SOURCES)
+    saved = (SNAP._SNAPSHOT, SNAP._SNAPSHOT_LOAD_ERROR, M.BASE_SOURCES)
     yield
-    M._SNAPSHOT, M._SNAPSHOT_LOAD_ERROR, M.BASE_SOURCES = saved
+    SNAP._SNAPSHOT, SNAP._SNAPSHOT_LOAD_ERROR, M.BASE_SOURCES = saved
 
 
 def _write(obj, tmp_path, name="market_snapshot.json"):
@@ -54,7 +60,7 @@ def test_snapshot_file_present_is_fresh(tmp_path):
         "series": [{"key": "market", "labels": ["2020"], "values": [103]}],
     }, tmp_path)
     M.load_snapshot(p)
-    assert M._SNAPSHOT != {}
+    assert SNAP._SNAPSHOT != {}
     assert M.snapshot_stale(today=date(2026, 10, 7)) is False
     assert M.snapshot_status_text(today=date(2026, 10, 7)) == ""
 
@@ -166,9 +172,9 @@ def test_repo_snapshot_values_match_legacy_constants():
 def test_repo_snapshot_has_all_six_series():
     """快照必须真的被读到（而不是静默走兜底）。"""
     M.load_snapshot(M.SNAPSHOT_PATH)
-    assert M._SNAPSHOT != {}, "库内快照读不到，测试环境异常"
-    assert len(M._SNAPSHOT.get("series", [])) == 6
-    assert M._SNAPSHOT.get("as_of") == "2026-W32"
+    assert SNAP._SNAPSHOT != {}, "库内快照读不到，测试环境异常"
+    assert len(SNAP._SNAPSHOT.get("series", [])) == 6
+    assert SNAP._SNAPSHOT.get("as_of") == "2026-W32"
 
 
 # ---------- 本周源统计 ----------
@@ -249,14 +255,14 @@ def test_snapshot_block_handles_missing_url():
 def test_snapshot_block_rejects_unsafe_url():
     """URL 走 safe_url，javascript: 这类协议不得进入 href。"""
     M.load_snapshot("__不存在__")
-    saved = (M._SNAPSHOT,)
+    saved = (SNAP._SNAPSHOT,)
     try:
-        M._SNAPSHOT = {"sources": [
+        SNAP._SNAPSHOT = {"sources": [
             {"name": "坏源", "url": "javascript:alert(1)", "used_for": "x", "retrieved_at": ""},
         ]}
         M.BASE_SOURCES = M._load_base_sources()
         html = _build_footer_snapshot_block()
         assert "javascript:" not in html
     finally:
-        M._SNAPSHOT = saved[0]
+        SNAP._SNAPSHOT = saved[0]
         M.BASE_SOURCES = M._load_base_sources()

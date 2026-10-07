@@ -233,8 +233,10 @@ def _build_footer_snapshot_block(snapshot_note: str = "") -> str:
 
 
 def _snapshot_as_of() -> str:
-    """快照截止日（as_of），取自 market 模块已加载的快照；缺失时返回明确文案。"""
-    from aiweekly.market import _SNAPSHOT
+    """快照截止日（as_of），取自快照模块已加载的快照；缺失时返回明确文案。"""
+    # 从 market_snapshot（快照状态真身）读，而不是从 market 转出的副本——
+    # 后者是 import 期的值拷贝，load_snapshot() 重载后不会同步。
+    from aiweekly.market_snapshot import _SNAPSHOT
     return str(_SNAPSHOT.get("as_of") or "未标注")
 
 
@@ -510,8 +512,10 @@ def generate(api_data: dict, output_path: str = None,
     template = template.replace("[GEN_DATE]", datetime.now().astimezone().isoformat(timespec="minutes"))  # P0#16
 
     # 在排行榜标题旁标注数据来源
+    # 「live」= 多源池实时抓取（LMArena / Artificial Analysis / LLM-Stats / HF 等），
+    # **不是** LMMarketCap——后者从未提供过任何榜单数字，只作为「未引用」署名条目保留。
     source_label = {
-        "live": "LMMarketCap 实时数据",
+        "live": "多源实时榜单数据（LMArena / Artificial Analysis / LLM-Stats / Hugging Face）",
         "json": "自定义数据",
         "default": "默认数据（可能过时）",
         "unavailable": "暂无实时数据",

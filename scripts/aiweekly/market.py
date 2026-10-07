@@ -5,14 +5,9 @@
 - `_extract_market_signals` / `_render_trend_insights_html` 负责「宏观图 ↔ 本周新闻」的桥接
   （计划第九章 M1/M2），全部服务端预渲染进静态 HTML，禁 JS 也可见。
 
-快照外置（HON-2）：
-- 数值基准不再是躺在本文件里的常量，而来自 `assets/market_snapshot.json`
-  （含 as_of / retrieved_at / provenance），便于版本化与过期检测。
-- **拿不到该文件时回退到本文件内的 `_FALLBACK_*` 常量，并把 `snapshot_stale()`
-  置为 True** —— 页脚与各图来源行会显式标注「使用代码内默认值（已过期）」，
-  绝不静默显示旧数（静默回落等于把 bug 换了个藏身处）。
-- 署名口径见 `assets/market_snapshot.json` 的 `honesty_note`：这些机构是**人工誊录**的
-  静态基线，从未被本 skill 网络抓取；每周真正实时抓取的是 fetch_ai_news.py 的 14 个 RSS 源。
+快照外置（HON-2）：快照的读取、兜底常量与过期判定已拆到 `market_snapshot.py`
+（该模块是 `_SNAPSHOT` 的唯一真身，本文件按属性读它）。拿不到快照文件时会回退
+`_FALLBACK_*` 并把 `snapshot_stale()` 置True，页面显式标注「已过期」，绝不静默用旧数。
 """
 from __future__ import annotations
 
@@ -20,20 +15,43 @@ import html
 import json
 import re
 from datetime import date, datetime
-from pathlib import Path
 
 from aiweekly.leaderboard import _collect_leaderboard_models
+from aiweekly.market_snapshot import (
+    SNAPSHOT_PATH,
+    SNAPSHOT_STALE_DAYS,
+    load_snapshot,
+    snapshot_age_days,
+    snapshot_stale,
+    snapshot_status_text,
+    run_snapshot_check,
+)
+from aiweekly.market_snapshot import (
+    _FALLBACK_CN_CONCENTRATION_DATA,
+    _FALLBACK_CN_CONCENTRATION_LABELS,
+    _FALLBACK_CN_FUNDING_DATA,
+    _FALLBACK_CN_FUNDING_LABELS,
+    _FALLBACK_CN_FUNDING_SOURCE,
+    _FALLBACK_CN_MARKET_DATA,
+    _FALLBACK_CN_MARKET_LABELS,
+    _FALLBACK_CN_MARKET_SOURCE,
+    _FALLBACK_CN_STRUCTURE_DATA,
+    _FALLBACK_CN_STRUCTURE_LABELS,
+    _FALLBACK_FUNDING_DATA,
+    _FALLBACK_FUNDING_LABELS,
+    _FALLBACK_FUNDING_SOURCE,
+    _FALLBACK_MARKET_DATA,
+    _FALLBACK_MARKET_LABELS,
+    _FALLBACK_MARKET_SOURCE,
+    _FALLBACK_NOTE,
+    _FALLBACK_SOURCES,
+    _labels_values,
+)
 from aiweekly.utils import safe_href
 
-# 技能根目录：assets/market_snapshot.json 与 leaderboard_fetch.py 用同一套定位方式
-SKILL_DIR = Path(__file__).resolve().parents[2]
-SNAPSHOT_PATH = SKILL_DIR / "assets" / "market_snapshot.json"
-# 快照超过该天数即视为过期（--check-snapshot 默认阈值，可CLI 覆盖）。
-# 90 天 ≈ 一个季度：市场基线是季度级数字，超过一个季度没更新就不该再当"当前口径"用。
-SNAPSHOT_STALE_DAYS = 90
-
-# ISO 周粒度的 as_of（形如 2026-W32）
-_ISO_WEEK_RE = re.compile(r"(\d{4})-W(\d{1,2})")
+# 快照状态的真身模块。必须以**模块对象**持有并按属性读`_SNAPSHOT`，
+# 不可 `from ... import _SNAPSHOT`（那是值拷贝：调用方改真身后本模块仍读旧值）。
+from aiweekly import market_snapshot as _snapshot_mod
 
 
 def _e(v, quote: bool = False) -> str:
@@ -78,201 +96,6 @@ __all__ = [
 ]
 
 
-# ============ 快照外置（HON-2）============
-# 以下 `_FALLBACK_*` 是**快照文件缺失时的兜底常量**，与外置前的取值逐字一致。
-# 保留它们不是为了"代码里还得有一份数"，而是为了文件读不到时报告仍能出图——
-# 但此时 snapshot_stale() 为 True，页面必须显式标注「已过期」（见 _FALLBACK_NOTE）。
-_FALLBACK_MARKET_LABELS = ['2020','2021','2022','2023','2024','2025','2026E','2027F','2028F']
-_FALLBACK_MARKET_DATA = [103, 134, 176, 229, 299, 391, 540, 705, 921]
-_FALLBACK_FUNDING_LABELS = ['23Q1','23Q2','23Q3','23Q4','24Q1','24Q2','24Q3','24Q4','25Q1','25Q2','25Q3','25Q4','26Q1','26Q2']
-_FALLBACK_FUNDING_DATA = [72.4, 72.4, 72.4, 72.4, 79.9, 79.9, 79.9, 79.9, 110.0, 110.0, 110.0, 110.0, 305.0, 205.0]
-_FALLBACK_CN_MARKET_LABELS = ['2024', '2025', '2026E']
-_FALLBACK_CN_MARKET_DATA = [9188, 12000, 17000]
-_FALLBACK_CN_FUNDING_LABELS = ['2024', '2025', '2026H1']
-_FALLBACK_CN_FUNDING_DATA = [391.51, 656.04, 3076.82]
-_FALLBACK_CN_STRUCTURE_LABELS = ['大模型', '具身智能', 'AIGC 应用', '基础层']
-_FALLBACK_CN_STRUCTURE_DATA = [1598, 906, 596, 725]
-_FALLBACK_CN_CONCENTRATION_LABELS = ['TOP3 大模型', 'TOP4–30 名', '其他赛道']
-_FALLBACK_CN_CONCENTRATION_DATA = [930, 770, 1376]
-
-_FALLBACK_MARKET_SOURCE = "Grand View Research 2026（全球 AI 市场规模，CAGR 30.6%；海外机构，静态快照引用）"
-_FALLBACK_FUNDING_SOURCE = "Crunchbase / CB Insights（全球 AI 融资，H1 2026 口径；海外机构，静态快照引用）"
-_FALLBACK_CN_MARKET_SOURCE = "中国信通院 · 中商产业研究院《2025–2030 中国人工智能产业现状调查》（中国核心产业规模）"
-_FALLBACK_CN_FUNDING_SOURCE = "新浪创投Plus 2025 国内一级市场 AI 行业统计 + IT桔子 2026H1（一级市场股权融资，标签「人工智能」）"
-
-# 兜底时追加到 4 个来源串尾部的显式标注——不允许静默回落
-_FALLBACK_NOTE = "【已过期：快照文件缺失，使用代码内默认值】"
-
-# 旧 BASE_SOURCES（快照文件缺失时的兜底署名名单）。快照可用时以文件里的 sources 为准。
-# used_for 照抄各机构在 DEFAULT_*_SOURCE 里真实承担的引用关系——降级时若一律留空，
-# 渲染层会把7 家真正被引用的机构误标成「未引用其数字」，那是降级路径上的新失实。
-_FALLBACK_SOURCES = [
-    ("Grand View Research", "https://www.grandviewresearch.com", "全球 AI 市场规模图"),
-    ("Crunchbase", "https://crunchbase.com", "全球 AI 融资图（H1 2026 口径）"),
-    ("CB Insights", "https://www.cbinsights.com", "全球 AI 融资图（2023–2025 年度基准）"),
-    ("中国信通院", "https://www.caict.ac.cn", "中国 AI 市场规模图"),
-    ("IT桔子", "https://www.itjuzi.com", "中国 AI 融资图 / 赛道结构图 / 头部集中度图"),
-    ("新浪创投Plus", "https://venture.sina.com.cn", "中国 AI 融资图（2025 全年）"),
-    ("Stanford HAI", "https://hai.stanford.edu", ""),
-    ("LMMarketCap", "https://lmmarketcap.com", ""),
-]
-
-
-def _parse_snapshot_date(raw) -> date | None:
-    """快照的 as_of / retrieved_at -> date；解析不了返回 None（不当场抛）。
-
-    接受 ``YYYY-MM-DD`` 与 ``YYYY-Www``（ISO 周，与 as_of 实际取值同形）。
-    周粒度按该周的**周一**计，用于算过期天数。
-    """
-    s = str(raw or "").strip()
-    if not s:
-        return None
-    try:
-        return datetime.strptime(s, "%Y-%m-%d").date()
-    except ValueError:
-        pass
-    # ISO 周形如 2026-W32：不能用 strptime —— %G 强制要求同时给星期指令（%u/%w/%a/%A），
-    # 而快照里的 as_of 不带星期，故走 fromisocalendar（year, week, 1=周一）。
-    m = _ISO_WEEK_RE.fullmatch(s)
-    if m:
-        try:
-            return date.fromisocalendar(int(m.group(1)), int(m.group(2)), 1)
-        except ValueError:
-            return None  # 非法周号（如 W53 而该年只有 52 周）
-    return None
-
-
-# 模块级快照状态：进程内只解析一次（多次读同一文件没有收益，且要保证
-# 「同一份报告里 as_of / 过期判定 / 页脚来源」三处口径一致，不会各读各的）。
-_SNAPSHOT: dict = {}
-_SNAPSHOT_LOAD_ERROR: str = ""
-
-
-def load_snapshot(path=None) -> dict:
-    """读取 ``assets/market_snapshot.json``；读不到或结构不对返回 ``{}``。
-
-    best-effort：不在此抛异常——快照缺失不该让整份报告打挂，
-    但会把原因记进 ``_SNAPSHOT_LOAD_ERROR`` 并让 ``snapshot_stale()`` 为真，
-    使页面显式标注「已过期」。
-    """
-    global _SNAPSHOT, _SNAPSHOT_LOAD_ERROR
-    p = Path(path) if path else SNAPSHOT_PATH
-    try:
-        raw = p.read_text(encoding="utf-8")
-    except OSError as e:
-        #只带文件名不带绝对路径：这段文案会渲染进发布的 HTML，
-        # 带上开发机的 C:\Users\... 会把本地目录结构泄进公开产物。
-        _SNAPSHOT, _SNAPSHOT_LOAD_ERROR = {}, f"快照文件不可读（{p.name}：{e.strerror or type(e).__name__}）"
-        return {}
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        _SNAPSHOT, _SNAPSHOT_LOAD_ERROR = {}, f"快照文件不是合法 JSON（{p.name}：{e}）"
-        return {}
-    if not isinstance(data, dict) or not isinstance(data.get("series"), list):
-        _SNAPSHOT, _SNAPSHOT_LOAD_ERROR = {}, "快照文件结构异常：缺 series 数组"
-        return {}
-    _SNAPSHOT, _SNAPSHOT_LOAD_ERROR = data, ""
-    return data
-
-
-def _series(key: str) -> dict:
-    """按 key 取快照里的单条序列（含 labels / values / provenance）。"""
-    for item in _SNAPSHOT.get("series", []):
-        if isinstance(item, dict) and item.get("key") == key:
-            return item
-    return {}
-
-
-def _labels_values(key: str, fb_labels, fb_values):
-    """取序列的 (labels, values)，任何缺项都回退兜底常量（由 snapshot_stale 负责标注）。"""
-    s = _series(key)
-    labels, values = s.get("labels"), s.get("values")
-    if not (isinstance(labels, list) and labels
-            and isinstance(values, list) and len(values) == len(labels)):
-        return fb_labels, fb_values
-    return list(labels), list(values)
-
-
-def snapshot_age_days(today: date | None = None) -> int | None:
-    """快照距今多少天；无法判定返回 None（调用方须据此报警，不得当作"新鲜"）。"""
-    ref = today or date.today()
-    d = _parse_snapshot_date(_SNAPSHOT.get("retrieved_at")) or _parse_snapshot_date(
-        _SNAPSHOT.get("as_of"))
-    if d is None:
-        return None
-    return (ref - d).days
-
-
-def snapshot_stale(max_age_days: int = SNAPSHOT_STALE_DAYS, today: date | None = None) -> bool:
-    """快照是否不可用于当"当前口径"用。
-
-    三种情况都算 stale（宁可报警也不静默用旧数）：
-      * 文件读不到 / 结构不对；
-      * retrieved_at 与 as_of 都解析不出日期（无法证明新鲜）；
-      * 距今超过 max_age_days。
-    """
-    if not _SNAPSHOT:
-        return True
-    age = snapshot_age_days(today)
-    if age is None:
-        return True
-    return age > max_age_days
-
-
-def snapshot_status_text(max_age_days: int = SNAPSHOT_STALE_DAYS, today: date | None = None) -> str:
-    """页脚 / 各图来源行用的快照状态标注；新鲜时返回空串（不制造噪音）。
-
-    过期时给出可执行信息：快照截止日 + 距今天数 + 缺文件的具体原因。
-    """
-    if not snapshot_stale(max_age_days, today):
-        return ""
-    if not _SNAPSHOT:
-        return _FALLBACK_NOTE + f"（{_SNAPSHOT_LOAD_ERROR or '原因未知'}）"
-    age = snapshot_age_days(today)
-    as_of = _SNAPSHOT.get("as_of") or "未知"
-    if age is None:
-        return f"【已过期：快照 {as_of} 的日期无法解析，无法证明其新鲜度】"
-    return f"【已过期：快照截止 {as_of}，距今 {age} 天 > {max_age_days} 天】"
-
-
-def run_snapshot_check(max_age_days: int = SNAPSHOT_STALE_DAYS,
-                       today: date | None = None) -> int:
-    """``--check-snapshot`` 入口：打印快照体检结论，过期 / 缺失返回非 0。
-
-    与 ``--health-check`` 同为"只检查不生成"的独立子命令，故沿用其返回码风格
-    （调用方 ``sys.exit(rc)``）。
-    """
-    print("📊 市场快照检查（assets/market_snapshot.json）", flush=True)
-    if not _SNAPSHOT:
-        print(f"  ❌ 快照不可用：{_SNAPSHOT_LOAD_ERROR or '文件不存在'}", flush=True)
-        print(f"     ↳ 生成时会回退代码内默认值，页面将标注「{_FALLBACK_NOTE}」。",
-              flush=True)
-        print("     ↳ 修法：确认 assets/market_snapshot.json 在库内（注意 data/ 被 .gitignore 忽略，"
-              "快照必须放assets/）。", flush=True)
-        return 1
-    print(f"  ✅ 已载入快照：as_of={_SNAPSHOT.get('as_of') or '未标注'} · "
-          f"retrieved_at={_SNAPSHOT.get('retrieved_at') or '未标注'}", flush=True)
-    print(f"     序列 {len(_SNAPSHOT.get('series', []))} 条 · "
-          f"署名机构 {len(_SNAPSHOT.get('sources', []))} 家 · "
-          f"基准机构 {(_SNAPSHOT.get('source') or {}).get('name') or '未标注'}", flush=True)
-    age = snapshot_age_days(today)
-    if age is None:
-        print("  ❌ 无法解析 retrieved_at / as_of 为日期，不能证明快照新鲜度", flush=True)
-        print("     ↳ 请在快照文件里补retrieved_at（YYYY-MM-DD）。", flush=True)
-        return 1
-    if age > max_age_days:
-        print(f"  ❌ 快照已过期：距今 {age} 天 > 阈值 {max_age_days} 天"
-              f"（as_of={_SNAPSHOT.get('as_of')}）", flush=True)
-        print("     ↳ 这批市场数字是人工誊录的静态基线，不会自动更新；"
-              "请复核来源后更新快照的 retrieved_at 与 series。", flush=True)
-        return 1
-    print(f"  ✅ 新鲜度通过：距今 {age} 天 ≤ 阈值 {max_age_days} 天", flush=True)
-    print("     ↳ 注意：新鲜 ≠ 实时。这些机构从未被本skill 抓取，"
-          "「新鲜」只说明誊录时间不算久。", flush=True)
-    return 0
-
-
 # 模块加载：一次即可，后面的常量都从它派生
 load_snapshot()
 
@@ -300,13 +123,14 @@ DEFAULT_CN_CONCENTRATION_DATA = _cc_values
 
 # 图来源署名：取快照的 chart_sources；过期时统一追加显式标注
 _stale_note = snapshot_status_text()
-DEFAULT_MARKET_SOURCE = _SNAPSHOT.get("chart_sources", {}).get(
+_chart_sources = _snapshot_mod._SNAPSHOT.get("chart_sources", {})
+DEFAULT_MARKET_SOURCE = _chart_sources.get(
     "market", _FALLBACK_MARKET_SOURCE) + _stale_note
-DEFAULT_FUNDING_SOURCE = _SNAPSHOT.get("chart_sources", {}).get(
+DEFAULT_FUNDING_SOURCE = _chart_sources.get(
     "funding", _FALLBACK_FUNDING_SOURCE) + _stale_note
-DEFAULT_CN_MARKET_SOURCE = _SNAPSHOT.get("chart_sources", {}).get(
+DEFAULT_CN_MARKET_SOURCE = _chart_sources.get(
     "cn_market", _FALLBACK_CN_MARKET_SOURCE) + _stale_note
-DEFAULT_CN_FUNDING_SOURCE = _SNAPSHOT.get("chart_sources", {}).get(
+DEFAULT_CN_FUNDING_SOURCE = _chart_sources.get(
     "cn_funding", _FALLBACK_CN_FUNDING_SOURCE) + _stale_note
 # 兜底免责（已不再默认触发；表述改为诚实的「静态快照」而非「示例/估算」）
 ESTIMATE_NOTE = "数据快照（静态，非实时）"
@@ -576,7 +400,10 @@ cnConcentrationChart = new Chart(cnConcCtx, {{
 def _load_base_sources() -> list:
     """从快照取署名名单；快照不可用时回退 _FALLBACK_SOURCES（并由 stale 标注兜住）。"""
     items = []
-    for s in _SNAPSHOT.get("sources", []):
+    # 按属性读真身，使「调用方改了 market_snapshot._SNAPSHOT 后立刻重建 BASE_SOURCES」
+    # 生效（回归测试test_snapshot_block_rejects_unsafe_url 依赖这一点）。
+    snapshot = _snapshot_mod._SNAPSHOT
+    for s in snapshot.get("sources", []):
         if not isinstance(s, dict):
             continue
         name = (s.get("name") or "").strip()
@@ -586,7 +413,7 @@ def _load_base_sources() -> list:
             "name": name,
             "url": (s.get("url") or "").strip(),
             "used_for": (s.get("used_for") or "").strip(),
-            "retrieved_at": (s.get("retrieved_at") or _SNAPSHOT.get("retrieved_at") or "").strip(),
+            "retrieved_at": (s.get("retrieved_at") or snapshot.get("retrieved_at") or "").strip(),
         })
     if items:
         return items

@@ -21,7 +21,7 @@
 
 退出码语义：
   0  预检通过（identity_ready 与 bot_identity 均非 fail/warn）
-  1  预检不通过（凭据不可用，stderr 给出可操作修复步骤）
+  1  预检不通过（凭据不可用，或 doctor 输出缺必需检查项，stderr 给出可操作修复步骤）
   2  用法错误（argparse 自身）
 
 用法：
@@ -56,6 +56,11 @@ _CHECK_LABELS = {
     "bot_identity": "飞书 bot 身份未就绪",
     "app_resolved": "飞书应用凭据无法解析",
 }
+
+# 判定推送成败所**必需**的检查项。键不在 checks 里即视为预检失败——
+# 缺键说明 doctor 的输出结构变了，我们对凭据可用性其实一无所知，
+# 不能因为「没看到 fail」就报「已通过」。见 evaluate()。
+_REQUIRED_CHECKS = ("identity_ready", "bot_identity", "app_resolved")
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -150,11 +155,32 @@ def evaluate(checks: dict) -> list[str]:
     """按检查项返回问题列表；空列表表示通过。
 
     判定规则：
+      * **三个必需键缺任一即 fail** —— 缺键意味着无法判断凭据可用性，
+        此时「没有发现问题」不等于「没问题」，而是「没看清」。
+        旧实现对缺键用 ``.get(...) or {}`` 兜底，``status`` 取到 None，
+        三条if 全部不进分支 -> 静默绿灯。只要 lark-cli 升级改个字段名，
+        预检就会永远显示「已通过」，比没有门禁更危险：它给出的是虚假的安全感。
       * ``identity_ready`` 为 fail —— 没有任何可用身份，推送必失败
       * ``bot_identity``为 warn/fail —— bot 凭据不可用，发消息会报 20140
       * ``app_resolved`` 为 fail —— app_id/app_secret 解析不出来
     """
     problems: list[str] = []
+
+    # 反向断言：必需键必须齐备。缺键时 doctor 的输出结构可能变了（例如上游
+    # 把 bot_identity 改名），此时任何 status 判断都建立在「键不存在」之上，
+    # 不能当作通过——故此处与真实不通过同级处理。
+    missing = [k for k in _REQUIRED_CHECKS if k not in checks]
+    if missing:
+        # 同时给出原始键名与中文释义：原始键名可直接拿去 grep / 对照上游 changelog，
+        # 中文释义让用户不必理解内部字段就能读懂问题。
+        detail = "、".join(f"{k}（{_CHECK_LABELS.get(k, k)}）" for k in missing)
+        present = "、".join(sorted(checks)) or "（无）"
+        problems.append(
+            f"lark-cli doctor 输出缺少必需检查项：{detail}"
+            f"（缺失 {len(missing)}/{len(_REQUIRED_CHECKS)} 项）。"
+            f"通常是 lark-cli 升级后改了检查项名称或输出结构，不是你没登录——"
+            f"请升级 lark-cli 后重跑；doctor 当前实际返回的检查项：{present}"
+        )
 
     identity = checks.get("identity_ready") or {}
     if identity.get("status") == "fail":
@@ -214,10 +240,12 @@ def main(argv: list[str] | None = None) -> int:
 
     cli_cmd = resolve_lark_cli()
     if not cli_cmd:
+        # 报错文案用「~形式」而非 _CLI_DIR 的真实展开：这份输出会进 CI 日志与
+        # issue 贴图，带 C:/Users/<用户名>/ 会泄露本机目录结构。
         err = PreflightError(
             "ERR-FS-CLI-001",
             "找不到 lark-cli",
-            [f"确认宿主连接器已安装：ls {_CLI_DIR}",
+            ["确认宿主连接器已安装：ls ~/.workbuddy/binaries/node/cli-connector-packages",
              "或在 PATH 中提供 lark-cli"],
             verbose="shutil.which('lark-cli') -> None，且回退路径不存在",
         )
@@ -246,7 +274,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "ok": not problems,
             "exit_code": rc,
-            "cli": cli_cmd,
+            # 只输出文件名：`cli_cmd` 是含用户名的本机绝对路径
+            # （C:/Users/<用户名>/.workbuddy/...），本JSON 会被粘进 issue /
+            # CI 日志，只留 basename 即可定位，泄露则会把本机目录结构带出去。
+            "cli": Path(cli_cmd).name,
             "identity_ready": (checks.get("identity_ready") or {}).get("status"),
             "bot_identity": (checks.get("bot_identity") or {}).get("status"),
             "app_resolved": (checks.get("app_resolved") or {}).get("status"),

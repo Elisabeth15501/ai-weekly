@@ -160,6 +160,129 @@ def test_evaluate_multiple_problems_all_reported():
     assert len(preflight.evaluate(checks)) == 3
 
 
+# ---------- 缺必需检查项必须 fail（fail-open 回归）----------
+
+def test_missing_checks_is_not_silent_pass():
+    """doctor 只返回部分检查项时，**不得**静默判定为通过。
+
+    这条守的是 fail-open：旧实现对缺键用 ``.get(...) or {}`` 兜底，
+    ``status`` 取到 None，三条 if 全不进分支 -> evaluate 返回 [] -> exit 0。
+    后果是 lark-cli 一旦升级改了字段名，预检就永远绿灯——比没有门禁更危险，
+    因为它给出「已预检通过」的虚假安全感。
+    """
+    doctor = {"checks": [{"name": "identity_ready", "status": "pass",
+                          "message": "identities: [pass]"}]}
+    checks = preflight.collect_checks(doctor)
+    problems = preflight.evaluate(checks)
+    assert problems, "缺 bot_identity / app_resolved 却判定为通过（fail-open 回归）"
+    # 文案要说清是「输出结构变了」而不是「用户没登录」，否则用户会去反复登录
+    joined = " ".join(problems)
+    assert "缺少必需检查项" in joined
+    assert "lark-cli" in joined
+
+
+def test_missing_checks_key_is_not_silent_pass():
+    """doctor 输出连 ``checks`` 键都没有（结构变了）时同样必须 fail。"""
+    problems = preflight.evaluate(preflight.collect_checks({}))
+    assert problems, "doctor 无 checks 键却判定为通过（fail-open 回归）"
+    assert "缺少必需检查项" in " ".join(problems)
+
+
+def test_empty_checks_list_is_not_silent_pass():
+    """``{"checks": []}`` 是最常见的结构漂移表现，必须 fail 而非通过。"""
+    problems = preflight.evaluate(preflight.collect_checks({"checks": []}))
+    assert problems, "空 checks 数组却判定为通过（fail-open 回归）"
+    # 三个必需键全缺，应一次报全而不是只报一个
+    assert len(problems) == 1
+    assert "3/3" in problems[0]
+
+
+def test_missing_app_resolved_is_not_silent_pass():
+    """app_resolved 从未被验证 -> 不能算通过（它决定 app_id/secret 能否解析）。"""
+    doctor = {"checks": [
+        {"name": "identity_ready", "status": "pass", "message": "ok"},
+        {"name": "bot_identity", "status": "pass", "message": "ok"},
+    ]}
+    problems = preflight.evaluate(preflight.collect_checks(doctor))
+    assert problems
+    assert "app" in " ".join(problems).lower()
+
+
+def test_renamed_check_is_not_silent_pass():
+    """上游把 bot_identity 改名（如 bot_identity_v2）时必须 fail，而非当通过。"""
+    doctor = {"checks": [
+        {"name": "identity_ready", "status": "pass", "message": "ok"},
+        {"name": "bot_identity_v2", "status": "pass", "message": "ok"},
+        {"name": "app_resolved", "status": "pass", "message": "ok"},
+    ]}
+    problems = preflight.evaluate(preflight.collect_checks(doctor))
+    assert problems, "检查项被改名却判定为通过"
+    assert "bot" in " ".join(problems).lower()
+
+
+def test_missing_keys_exit_code_is_nonzero(monkeypatch):
+    """端到端：缺键时 main() 的退出码必须非 0（真实风险在 exit code 上）。"""
+    _patch_doctor(monkeypatch, {"checks": []})
+    assert preflight.main([]) == 1, "缺检查项时 exit code 仍为 0"
+
+
+def test_extra_unknown_checks_do_not_fail():
+    """doctor 多返回无关检查项时不应误报（只对**缺**必需键 fail）。"""
+    doctor = _doctor_json()
+    doctor["checks"].append({"name": "cli_version", "status": "pass", "message": "1.0.97"})
+    doctor["checks"].append({"name": "some_new_check", "status": "warn", "message": "x"})
+    assert preflight.evaluate(preflight.collect_checks(doctor)) == []
+
+
+def test_required_checks_constant_matches_labels():
+    """_REQUIRED_CHECKS 与 _CHECK_LABELS 的键必须一致，避免两处漂移。"""
+    assert set(preflight._REQUIRED_CHECKS) == set(preflight._CHECK_LABELS)
+
+
+# ---------- --json 不得泄露本机绝对路径 ----------
+
+def test_json_output_has_no_absolute_path(monkeypatch, capsys, tmp_path):
+    """--json 的机器可读输出不得含本机绝对路径（会连同用户名粘进 issue / CI 日志）。
+
+    这与 test_market_snapshot.py:71 守的「降级文案避免绝对路径泄进发布产物」
+    是同一类问题：输出被粘到别处时，本机目录结构与用户名就跟着泄露了。
+    """
+    fake_home = tmp_path / "Users" / "someveryuniquename"
+    cli = fake_home / ".workbuddy" / "binaries" / "node" / "cli-connector-packages" / "lark-cli.cmd"
+    monkeypatch.setattr(preflight, "resolve_lark_cli", lambda: str(cli))
+    _patch_doctor_only_doctor(monkeypatch, _doctor_json())
+
+    preflight.main(["--json"])
+    out = capsys.readouterr().out
+    assert "someveryuniquename" not in out, "--json 输出泄露了本机用户名目录"
+    assert str(tmp_path) not in out, "--json 输出泄露了本机绝对路径"
+    # 但仍要保留足以定位的信息：文件名在
+    payload = json.loads(out)
+    assert payload["cli"] == "lark-cli.cmd"
+
+
+def _patch_doctor_only_doctor(monkeypatch, payload):
+    """只打桩 run_doctor 链路（resolve_lark_cli 由用例自己指定）。"""
+    monkeypatch.setattr(
+        preflight.subprocess, "run",
+        lambda *a, **k: _FakeProc(json.dumps(payload)),
+    )
+
+
+def test_cli_missing_error_message_has_no_absolute_path(monkeypatch, capsys, tmp_path):
+    """找不到 lark-cli 时，报错文案不得带含用户名的绝对路径。"""
+    monkeypatch.setattr(preflight.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(preflight, "_CLI_DIR", tmp_path / "Users" / "someveryuniquename" / "cli")
+
+    rc = preflight.main([])
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "someveryuniquename" not in captured.err, "报错文案泄露了本机用户名目录"
+    assert str(tmp_path) not in captured.err, "报错文案泄露了本机绝对路径"
+    # 仍要给出可操作的定位线索
+    assert "~/.workbuddy/binaries/node/cli-connector-packages" in captured.err
+
+
 # ---------- main 退出码 ----------
 
 def _patch_doctor(monkeypatch, payload):

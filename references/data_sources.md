@@ -133,12 +133,16 @@ RSS 抓取比 HTML 解析更稳定，推荐优先使用。`scripts/fetch_ai_news
 - **端点**：`https://huggingface.co/api/spaces/open-llm-leaderboard/open_llm_leaderboard/api/leaderboard`
 - **无需配置**，脚本直接调用
 
-### Crunchbase API（融资数据）
+### 融资数据（无 API，人工誊录快照）
 
-- **用途**：结构化融资数据
-- **付费**：需订阅
-- **获取 key**：https://www.crunchbase.com/developers
-- **配置方法**：在 `.env` 中添加 `CRUNCHBASE_KEY=xxx`
+- **用途**：全球 / 中国 AI 融资规模图的数据来源
+- **当前实现**：**无可配置 API**。融资数字来自 `assets/market_snapshot.json`，
+  由人工从公开报道誊录（Crunchbase / CB Insights / 新浪创投Plus / IT桔子 等），
+  并在页脚标注为「静态快照引用」。**没有任何代码会去读 `.env` 里的融资类 key**，
+  所以配置了也不会生效——这是刻意的：与其做一个假装能连的接口，不如如实说明。
+- **更新方式**：改`assets/market_snapshot.json` 的 `series` 与 `chart_sources`，
+  并更新 `retrieved_at`（快照超过 90 天会被判过期并在页面显式标注）。
+  相关代码见 `scripts/aiweekly/market_snapshot.py`。
 
 ### .env 文件模板
 
@@ -147,9 +151,6 @@ RSS 抓取比 HTML 解析更稳定，推荐优先使用。`scripts/fetch_ai_news
 ```bash
 # News API（可选）
 NEWSAPI_KEY=
-
-# Crunchbase API（可选）
-CRUNCHBASE_KEY=
 
 # 出站代理（仅企业内网等需要统一出网代理的场景）
 HTTP_PROXY=
