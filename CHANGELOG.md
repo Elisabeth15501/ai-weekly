@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 3.4.0 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.0 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -11,14 +11,34 @@
 
 ---
 
-## [Unreleased]
+## [4.1.0] — 2026-10-08
+
+v4.1.0 是**安全整改 + 分发可靠性 + 来源诚实性**版本：清掉最后一个凭据暴露面（T09），把「飞书推送静默失败」这类故障从流水线第 6 步提前到第 0 步暴露，并消灭页脚上把人工誊录的历史基线混进「本周来源」的误导性引用。周报生成形态与 4.0.4 一致。
+
+### Security
+- **T09 凭据经 argv 泄漏**（`deploy.py`）：Vercel / Netlify / Cloudflare Pages 三家 provider 的 token 原先以命令行参数形式传给子进程，而 `ps` 在部分 CI 镜像与部分 Windows 环境中对同机其他用户可见，令牌因此可被旁路读取。现改为经子进程 `env` 传递（`VERCEL_TOKEN` / `NETLIFY_AUTH_TOKEN` / `CLOUDFLARE_API_TOKEN`），令牌不进 `ps`——与v4.0.0 确立的 P0-4（GitHub Pages 凭据）、v4.0.4 确立的飞书连接器 stdin 通道同属一条「凭据不落 argv、不落盘」基线。
+- 新增集中脱敏 `_redact()`，覆盖**打印 / dry-run / 异常**三条出口，避免「改了打印、漏了异常」这类半截修复；并按已登记的凭据字面量兜底打码，覆盖 `--auth X`、`X-TOKEN=Y`（flag 形态）与 `FOO_TOKEN=X` / `Authorization: Bearer X`（env 与 header 形态）两类位置。
+- 新增 `scripts/aiweekly/tests/test_deploy_redact.py`（26 例）：以**假 sentinel token** 跑三家 provider 路径，断言 sentinel 不出现在 stdout / stderr / 异常文本 / 下游 CLI 回显四处，从测试层锁死该缺陷不复发。
+
+### Added
+- 新增 `scripts/preflight.py`（242 行）：流水线启动**前**的飞书凭据预检（SEC-12）。调 `lark-cli doctor` 并解析其 JSON 输出，抽取 `identity_ready` / `bot_identity` / `app_resolved` 三项决定推送成败的检查，翻译成人话错误与可操作修复步骤；退出码 0 通过 / 1 不通过 / 2 用法错误。`lark-cli` 不在 PATH 时回退到宿主连接器安装目录硬编码路径（该目录实测不在用户 PATH 内）。
+- 新增 `scripts/aiweekly/tests/test_preflight.py`（19 例）。
+- 新增 `assets/market_snapshot.json`（127 行）：市场/融资图表数值基准从躺在 `market.py` 里的常量外置为独立快照文件，带 `as_of` / `retrieved_at` / `honesty_note` / 逐家 `sources` 署名，并显式标注哪些机构「未引用任何数字」及其`uncited_reason`。
+- `scripts/aiweekly/market.py` 新增快照子系统：`load_snapshot()` / `snapshot_stale()`（阈值 `SNAPSHOT_STALE_DAYS = 90`，可由 `--check-snapshot` 覆盖）/ `snapshot_status_text()` / `run_snapshot_check()`；读不到快照文件时回退既有 `_FALLBACK_*` 常量，并让页面显式标注「已过期」而非静默沿用旧数。
+- 新增 `scripts/aiweekly/tests/test_market_snapshot.py`（22 例）。
+
+### Fixed
+- **飞书推送静默失败**（preflight 自身缺陷）：`run_doctor` 未显式传`env`，以及 Windows 环境变量大小写（`SYSTEMROOT` vs `SystemRoot`）导致 PATH 回退场景下 preflight 自身崩溃——即用来暴露故障的预检工具自己先挂。
+- 市场/融资快照过期后不再静默沿用：过期或缺失时 `run_snapshot_check()` 返回非 0 并打印修法。
+
+### Changed
+- **页脚来源拆成两组**（`render.py`）：原页脚把两类东西混列在一起，读者无法区分哪些是人工誊录的历史基线、哪些是本周真的抓了源。现拆为①「静态快照引用」（人工誊录的历史基线，带 `as_of` 与每家 `retrieved_at`）与 ②「本周信号来源」（本周真实抓取，直接数 `news_items` 的 `source` 字段得出，各多少条），并在页面上明写「与上方静态快照是两回事」。`render.py` 新增 `_build_footer_snapshot_block()` / `_build_footer_weekly_block()` / `_count_weekly_sources()`。
+- 标注 AI HOT 停服：其 legacy `/api/public/*` 接口于 2026-10-31 停止服务（域名 301 到 `aihot.news`）。README.md、SKILL.md、references/SKILL_full.md、scripts/generate_site.py 共 11 处 `--external-news-json` 相关说明均已加注，说明 v1 参数形态为 `limit` / `window` / `by`（非 `take` / `since`）、端点由 9 个扩至 33 个，并提示沿用 legacy 参数会静默返回 `400 {"detail":"Unknown query parameter: take."}` 而非抛异常。示例中的域名同步由 `aihot.virxact.com` 更新为 `aihot.news`。仅改注释、docstring 与 help 文本，未改动任何代码逻辑，`--external-news-json` 功能保留。
+- CI 纳入两个此前游离的门禁：`.github/workflows/ci.yml` 的 pytest 调用范围加入 `scripts/test_p1_guards.py`（11 例 XSS/合规测试，此前完全脱离自动化，门禁回归会静默溜过），并新增一步调用 `scripts/compliance_check.py`（退出码非 0 即 CI 失败，未加 `|| true`）。两者均被 `.clawhubignore` 排除、不随包分发。
 
 ### Removed
 - README.md 删除对 `AIWEEKLY_MIN_NEWS` / `AIWEEKLY_MIN_INSIGHT_CARDS` 两个环境变量的承诺——代码侧从未读取过它们（已全仓 grep 确认），属「文档承诺但未实现」。改为记录校验器真实存在的命令行参数 `--min-news`（默认 20）/ `--min-coverage`（默认 80）/ `--min-ranking`（默认 5）/ `--strict`。选删文档而非补实现，因为这是诚实性欠账而非功能缺失。
 - 同表「新闻体量」阈值由「≥ 8 条」更正为「≥ 20 条（10–19 条降级为警告）」，与 `validate_report.py` 的 `--min-news` 默认值及 `check_news_v3()` 的 `warn = min_news // 2` 对齐。
-
-### Changed
-- 标注 AI HOT 停服：其 legacy `/api/public/*` 接口于 2026-10-31 停止服务（域名 301 到 `aihot.news`）。README.md、SKILL.md、references/SKILL_full.md、scripts/generate_site.py 共 11 处 `--external-news-json` 相关说明均已加注，说明 v1 参数形态为 `limit` / `window` / `by`（非 `take` / `since`）、端点由 9 个扩至 33 个，并提示沿用 legacy 参数会静默返回 `400 {"detail":"Unknown query parameter: take."}` 而非抛异常。示例中的域名同步由 `aihot.virxact.com` 更新为 `aihot.news`。仅改注释、docstring 与 help 文本，未改动任何代码逻辑，`--external-news-json` 功能保留。
 
 ## [4.0.4] — 2026-10-03
 
