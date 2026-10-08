@@ -326,7 +326,7 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 > 内容请求（要新闻/周报/简报）与运维动作是**两件事**：要内容就只生成内容。
 > 凭据只从环境变量或用户本次提供的值读取，**不写入项目文件、不回显、不进子进程 argv**。
 
-飞书/钉钉卡片里的「查看完整周报」按钮 `view_url` 需要一个可公开访问的地址。**不一定要用 GitHub Pages**——`scripts/deploy.py` 统一入口按 `--deploy-to` 选后端（**白名单校验，非法取值直接报错退出**）：
+飞书卡片里的「查看完整周报」按钮 `view_url` 需要一个可公开访问的地址。**不一定要用 GitHub Pages**——`scripts/deploy.py` 统一入口按 `--deploy-to` 选后端（**白名单校验，非法取值直接报错退出**）：
 
 | `--deploy-to` | 适合 | GitHub 依赖 |
 |------|------|------|
@@ -737,7 +737,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `translations_offline.json` | 离线译文包（随技能附带，断网可用；由 `backfill_translations.py --emit-source` 重新生成） |
 | `model_profiles.json` · `model_profiles_unverified.json` · `model_aliases.json` · `models_cost.json` | 模型资料档案（canonical，逐条带来源）· 无来源推测条目的隔离区 · 别名表 · 成本表 |
 | `assets/news_site_template.html` · `assets/report_template.html` · `assets/chart.umd.min.js` | v3.0 新闻站模板 · v2.0 周报模板（保留兼容）· 内联图表库 |
-| `scripts/aiweekly/` | **核心引擎包（19 模块）**：`news`（RSS 抓取/解析/分类/去重）· `leaderboard` + `leaderboard_sources` + `leaderboard_fetch` + `leaderboard_checks`（榜单多源抓取/合并/质量校验/资料卡权威覆盖）· `insights`（本周看点聚类 + 受众摘要）· `market`（市场与融资数据）· `render`（HTML 渲染 + XSS 安全序列化）· `translate`（英文报道中文翻译）· `charts_svg`（纯 SVG 图表兜底）· `model_meta`（模型元数据）· `utils`（HTTP 重试退避/出站代理/区域探测/ISO8601）· `const`（硬约束常量）· `types`（TypedDict）· `errors`（错误码体系）· `health`（源健康检查）· `diagnostics`（错误提示渲染）· `cli_utils`（CLI 公共逻辑） |
+| `scripts/aiweekly/` | **核心引擎包（20 模块）**：`news`（RSS 抓取/解析/分类/去重）· `leaderboard` + `leaderboard_sources` + `leaderboard_fetch` + `leaderboard_checks`（榜单多源抓取/合并/质量校验/资料卡权威覆盖）· `insights`（本周看点聚类 + 受众摘要）· `market`（市场与融资数据）· `render`（HTML 渲染 + XSS 安全序列化）· `translate`（英文报道中文翻译）· `charts_svg`（纯 SVG 图表兜底）· `model_meta`（模型元数据）· `utils`（HTTP 重试退避/出站代理/区域探测/ISO8601）· `const`（硬约束常量）· `errors`（错误码体系）· `health`（源健康检查）· `diagnostics`（错误提示渲染）· `cli_utils`（CLI 公共逻辑）· `canon`（模型名归一化原语，拆解循环依赖的叶子模块）· `leaderboard_snapshot`（榜单时序快照 / 本地缓存 / 国内兜底快照读写）· `market_snapshot`（外置市场快照读取、兜底常量与过期判定） |
 | `scripts/validate_checks/` | 产出校验规则包（8 模块，由 `validate_report.py` 导入：结构 / 新闻体量 / 看点 / 市场 / 来源 / 关键词 / 约束） |
 | `scripts/generate_site.py` | v3.0 主入口：从 API 数据生成新闻站 |
 | `scripts/fetch_ai_news.py` | RSS 抓取（备用离线路径；可选 `--news-api` 走 NewsAPI，需自备 key） |
@@ -781,7 +781,7 @@ python scripts/backfill_translations.py --emit-source translations.json AI_News_
 | `clean_code_audit_generate_site.md` | 发布者本地的一次性代码审计记录（`.gitignore:8`） |
 | `__pycache__/` · `*.pyc` · `*.pyo` | Python 字节码 |
 | `openclaw-edition/` · `*.skill` | 本地打包产物 |
-| `delivery/feishu_target.json` · `delivery/dingtalk_config.json` · `.github_token` | **含真实凭据，绝不入库**（`.gitignore` 已覆盖） |
+| `delivery/feishu_target.json` · `.github_token` | **含真实凭据，绝不入库**（`.gitignore` 已覆盖） |
 
 ## 参考资料
 
