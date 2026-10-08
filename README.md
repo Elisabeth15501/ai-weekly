@@ -45,7 +45,7 @@ bash run_report.sh scripts/generate_site.py --api-json news.json -o AI_News.html
 # 4. 校验产出
 bash run_report.sh scripts/validate_report.py --html AI_News.html
 
-# 5. 部署到 GitHub Pages（gh-pages 分支；飞书/钉钉卡片的 view_url 即此地址）
+# 5. 部署到 GitHub Pages（gh-pages 分支；飞书卡片的 view_url 即此地址）
 bash run_report.sh deploy --html AI_News.html
 #   离线仅本地提交：加 --no-push
 #   部署后顺手把 Pages 源切到 gh-pages：加 --switch-pages（需 gh 凭据，见下文）
@@ -124,7 +124,7 @@ ai-weekly 的**排行榜、市场分析**等展示「实时数据 / 趋势」的
 
 ## GitHub Pages 公开站点（在线 demo）
 
-周报通过 `scripts/deploy_ghpages.py` 部署到 **`gh-pages` 分支根目录**，飞书/钉钉卡片里的 `view_url`（`https://<owner>.github.io/<repo>/AI_News_<date>.html`）即指向这里。部署是**本地流水线的一步**（不是 CI），结构如下：
+周报通过 `scripts/deploy_ghpages.py` 部署到 **`gh-pages` 分支根目录**，飞书卡片里的 `view_url`（`https://<owner>.github.io/<repo>/AI_News_<date>.html`）即指向这里。部署是**本地流水线的一步**（不是 CI），结构如下：
 
 ```
 gh-pages 分支（Pages 源 = Deploy from a branch: gh-pages / /root）

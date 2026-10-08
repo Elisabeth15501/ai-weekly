@@ -44,6 +44,8 @@ __pycache__/
 
 # 飞书连接器推送目标 / 各托管平台部署令牌（真实值绝不入库；
 # 示例仅 feishu_target.example.json / deploy_config.example.json 等入库）
+# 注：delivery/dingtalk_config.json 是为**尚未实现**的钉钉通道预留的规则，
+#     钉钉模块当前不存在（见 CHN-1），保留仅为将来接入时不必补漏。
 delivery/feishu_config.json
 delivery/feishu_target.json
 delivery/dingtalk_config.json
