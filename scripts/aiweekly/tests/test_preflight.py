@@ -380,11 +380,21 @@ def test_run_doctor_env_preserves_windows_vars(monkeypatch):
     assert env is not os.environ
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="Windows 专属行为：run_doctor 的 System32 补入逻辑在 `os.name == \"nt\"` "
+           "分支内，Linux/macOS 上根本不执行，断言无意义",
+)
 def test_run_doctor_appends_system32_case_insensitively(monkeypatch):
-    """回归：拼 System32 时大小写无关。
+    """回归：拼 System32 时大小写无关（仅 Windows）。
 
     沙箱/宿主可能是 ``SYSTEMROOT``（大写）。若按 ``SystemRoot`` 取值会拿到
     None，拼出 ``System32`` 这样的相对路径，反而把 PATH 弄坏。
+
+    ⚠️ 这段逻辑在 ``preflight.py:109`` 的 ``os.name == "nt"`` 分支内，
+    **非 Windows 平台不会执行**。本测试必须 skipif，否则 CI（Linux runner）
+    会因 ``os.pathsep`` 是 ``:`` 而把 ``C:\\only`` 切成 ``['C', '\\\\only']`` 误报。
+    这正是「本地 Windows 全绿 → CI Linux 挂」的典型模式。
     """
     captured = {}
 
