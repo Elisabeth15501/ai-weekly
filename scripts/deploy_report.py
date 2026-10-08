@@ -3,7 +3,7 @@
 deploy_report.py
 
 从生成的 AI 周报 HTML 文件提取结构化摘要，并生成一段**框架无关**的通知文本，
-可被粘贴到任意 IM / 推送通道（飞书、钉钉、Email、OpenClaw 通知等）。
+可被粘贴到任意 IM / 推送通道（飞书、Email、OpenClaw 通知等）。
 
 本脚本只做"提取 + 文本拼装"，**不依赖任何 Agent SDK / 云端部署工具**——
 具体的推送（飞书连接器 / 邮件 / 云部署）由调用方决定，从而保持跨框架可移植。
@@ -118,18 +118,18 @@ def generate_notification(summary: dict, platform: str = "generic") -> str:
     """生成框架无关的通知消息文本。
 
     不绑定任何 Agent / IM 平台；输出纯文本，调用方可自行包裹为
-    飞书卡片 / 钉钉 Markdown / Email / OpenClaw 通知等格式。
+    飞书卡片 / Email / OpenClaw 通知等格式。
 
     参数:
         summary: extract_summary() 的返回值（含 week_label / kpi_summary / top_news / report_file）
-        platform: 仅用于可选前缀文案（"generic" | "workbuddy" | "feishu" | "dingtalk" ...），不影响正文结构
+        platform: 仅用于可选前缀文案，当前只有 "workbuddy" 有差异化前缀（"AI行业周报"，无空格）；
+            其余取值（含默认 "generic"）均回落到通用前缀 "AI 行业周报"，不影响正文结构
     返回:
         多行纯文本通知体
     """
+    # 只有 workbuddy 的前缀文案与默认值不同；其余取值共用默认前缀，不需单独列键
     title_prefix = {
         "workbuddy": "📊 AI行业周报",
-        "feishu": "📊 AI 行业周报",
-        "dingtalk": "📊 AI 行业周报",
     }.get(platform, "📊 AI 行业周报")
     lines = [
         f"{title_prefix} · {summary['week_label']}",
@@ -154,6 +154,9 @@ def main():
     )
     parser.add_argument("--html", required=True, help="HTML 报告文件路径")
     parser.add_argument("--output", default=None, help="摘要输出路径（JSON）")
+    parser.add_argument("--platform", default="generic", choices=["generic", "workbuddy"],
+                        help="通知前缀文案风格（仅影响标题前缀，不影响正文结构）。"
+                             "当前只有 workbuddy 用无空格的「AI行业周报」前缀，generic 为默认")
     args = parser.parse_args()
 
     html_path = Path(args.html)
@@ -164,7 +167,7 @@ def main():
     print(f"📖 正在读取报告：{html_path.name}")
 
     summary = extract_summary(html_path)
-    notification = generate_notification(summary, platform="generic")
+    notification = generate_notification(summary, platform=args.platform)
 
     # 输出摘要 JSON
     out_path = Path(args.output) if args.output else html_path.with_suffix(".summary.json")
