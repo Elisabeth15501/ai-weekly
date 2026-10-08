@@ -149,7 +149,9 @@ def build_report(
 def main() -> int:
     ap = argparse.ArgumentParser(description="组装本周头条 report.json 并推送飞书卡片（P0）")
     ap.add_argument("--platform", default="feishu", choices=["feishu"],
-                    help="目标平台（当前仅 feishu）")
+                    help="目标平台。**当前仅支持 feishu**；钉钉等通道尚未实现（见 CHN-1），"
+                         "传入其他值会由 argparse 直接报错退出。本参数为未来多通道预留，"
+                         "当前不构成能力开关")
     ap.add_argument("--news-json", required=True, help="news.json 路径")
     ap.add_argument("--insights-json", default=None,
                     help="insights.json 路径（可选；缺省时由本周新闻自动派生看点/关键词，"
@@ -176,7 +178,9 @@ def main() -> int:
     ap.add_argument("--view-base", default=None,
                     help="周报公开基址（覆盖后端推导的 view_base，用于拼 view_url）")
     ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（仅 github-pages）")
-    ap.add_argument("--switch-pages", action="store_true", help="部署时一并把 Pages 源切到 gh-pages（需 GITHUB_TOKEN）")
+    # 注：Pages 源切换（gh-pages/root）请直接用 `python scripts/deploy_ghpages.py --html <file> --switch-pages`。
+    # 本脚本曾提供 --switch-pages 转发开关，但 deploy() 的 github-pages 分支并不消费该参数，
+    # 传入后会被静默忽略——属于虚假承诺，故移除；需要切源请走上面的真实入口。
     args = ap.parse_args()
 
     uid = args.uid if args.uid != "auto" else uuid.uuid4().hex[:8]
