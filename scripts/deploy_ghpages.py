@@ -37,6 +37,95 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGES_BRANCH = "gh-pages"
 
+# 部署仓库白名单：逗号分隔的**绝对路径**。未配置时只允许仓库自身（安全默认）。
+# 存在的理由：`--repo` 显式传入时若不受约束，本脚本会在该路径下 git init + commit +
+# push，等于把 GitHub 凭据的推送能力开放给任意路径——一旦参数被注入内容影响，
+# 凭据就会被用来向任意仓库推送内容（=「改动对外可见的基础设施」的真实形态）。
+DEPLOY_REPO_ALLOWLIST_ENV = "AIWEEKLY_DEPLOY_REPO_ALLOWLIST"
+
+
+def _allowlist_paths() -> list[Path]:
+    """读取并解析白名单环境变量（逗号 / 分号 / 空白分隔均可）。"""
+    raw = os.environ.get(DEPLOY_REPO_ALLOWLIST_ENV, "")
+    out = []
+    for chunk in re.split(r"[,;\s]+", raw.strip()):
+        if not chunk:
+            continue
+        try:
+            out.append(Path(chunk).expanduser().resolve())
+        except OSError:
+            # 单条路径解析失败不应让整份白名单失效，跳过即可（后续会因不匹配而拒绝）
+            continue
+    return out
+
+
+def resolve_repo(explicit=None) -> Path:
+    """解析部署目标仓库，并对其做白名单校验。
+
+    安全边界（务必保留）：`--repo` 是本脚本唯一能改变「推送目标」的入口，
+    因此**显式传入的路径必须同时满足**：
+      1. 路径存在，且是一个 git 仓库（含 `.git`）；
+      2. 路径 == 仓库自身，或路径在 `AIWEEKLY_DEPLOY_REPO_ALLOWLIST` 白名单内。
+
+    白名单未配置时**只允许仓库自身**——即默认行为，把「显式放开」变成有意为之的动作。
+    校验失败直接抛异常终止（绝不 warning 后继续），否则等于没有边界。
+    """
+    if not explicit:
+        return REPO_ROOT
+
+    try:
+        repo = Path(explicit).expanduser().resolve()
+    except OSError as exc:
+        raise SystemExit(_repo_reject_message(explicit, f"路径无法解析：{exc}"))
+
+    if not repo.is_dir():
+        raise SystemExit(_repo_reject_message(explicit, "该路径不存在或不是一个目录"))
+    if not (repo / ".git").exists():
+        raise SystemExit(
+            _repo_reject_message(explicit, "该目录不是一个 git 仓库（缺少 .git）")
+        )
+
+    if repo == REPO_ROOT:
+        return repo
+
+    allowed = _allowlist_paths()
+    if repo in allowed:
+        return repo
+
+    raise SystemExit(_repo_reject_message(explicit, "未在部署白名单内"))
+
+
+def _repo_reject_message(explicit: str, reason: str) -> str:
+    """构造可操作的中文拒绝提示（含如何放开白名单）。"""
+    env_name = DEPLOY_REPO_ALLOWLIST_ENV
+    own = REPO_ROOT.as_posix()
+    allow_raw = os.environ.get(env_name, "").strip()
+    lines = [
+        "",
+        "❌ --repo 安全校验未通过：拒绝向该路径部署。",
+        f"   目标路径：{explicit}",
+        f"   原因：{reason}",
+        "",
+        "为什么这是硬边界：",
+        "   本脚本会在目标路径下执行 git init / commit / push。--repo 若不受约束，",
+        "   等于把 GitHub 推送凭据开放给任意路径；一旦该参数被注入内容影响，",
+        "   凭据就会被用于向任意仓库推送内容（改动对外可见的基础设施）。",
+        "",
+        "如何处理（任选其一）：",
+        f"   1) 不传 --repo，使用仓库自身（当前默认，安全）：{own}",
+        f"   2) 确需部署到另一个仓库时，显式配置白名单（逗号分隔的绝对路径）：",
+        f"      export {env_name}=\"/abs/path/to/repo1,/abs/path/to/repo2\"",
+        "   3) 确认目标无误后，带上上面这行 export 重跑。",
+    ]
+    if allow_raw:
+        lines += ["", f"   当前已配置的白名单：{allow_raw}"]
+    else:
+        lines += [
+            "",
+            f"   （{env_name} 未设置 → 只允许仓库自身，这是默认安全行为）",
+        ]
+    return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 # git 封装（统一处理 MSYS 路径转换）
@@ -97,12 +186,6 @@ def _git(args, cwd=None, check=True):
             f"git {' '.join(args)} 失败 (exit={res.returncode}):\n{res.stderr.strip()}"
         )
     return res
-
-
-def resolve_repo(explicit=None) -> Path:
-    if explicit:
-        return Path(explicit).resolve()
-    return REPO_ROOT
 
 
 # ---------------------------------------------------------------------------

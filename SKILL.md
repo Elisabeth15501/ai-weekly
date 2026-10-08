@@ -19,8 +19,11 @@ description: >
   触发词：AI周报、AI行业周报、AI新闻、人工智能周报、AI行业动态、生成AI报告、AI新闻网站、
   AI新闻站、这周AI有什么大事、AI圈最近怎么样、给我看个AI简报、AI新闻汇总、做个AI周报、
   AI行业速览、我想看AI动态、weekly AI report、AI news digest。
-  分发/运维触发：把周报推送到飞书、部署到 GitHub Pages、重生成某期周报、刷新模型排行榜。
-  支持自动化：每周一上午 9 点自动生成最新版网站。
+  能力边界（重要）：本技能的默认行为**只是生成新闻内容**——抓取、生成 HTML、校验、展示。
+  它**不会**部署、不会推送飞书、不会改动仓库任何设置（含 GitHub Pages 配置）、不会执行 git push。
+  部署/推送/切Pages 源/刷新排行榜等运维动作**不属于本技能的触发能力**，仅在用户明确点名要求时才执行，
+  且不由本技能声明面触发。若用户只是要看 AI 新闻/周报/简报，直接生成内容即可，不要询问或执行任何运维动作。
+  支持自动化：每周一上午 9 点自动生成最新版网站（仅生成，不含部署）。
 metadata:
   author: Elisabeth15501
   version: "4.1.0"
@@ -99,16 +102,37 @@ metadata:
 5. **质量检查**：`bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html`（内置 XSS 守护：脚本 JSON 无裸 `</script>`，全文无 `javascript:`/`data:` href）。
 6. **交付**：文件 `AI_News_YYYY-MM-DD.html`，调用 `present_files` 展示，总结 3-5 条核心发现。
 
-### 6.1 部署（可选但推荐）
+### 6.1 部署（可选，但**必须用户明确要求**才执行）
+
+> **决策边界（硬约束）**：本节所有动作都是**高权限运维动作**，不是本技能的默认行为。
+> **仅当用户明确点名要求某一项时**（例：「部署到 GitHub Pages」「把这期推到飞书」「切一下 Pages 源」）才执行对应的那一条；
+> 用户未点名时**一律不执行、不追问、不「顺手做掉」**。
+> 内容请求（要新闻/周报/简报）与运维动作是**两件事**：要内容就只生成内容，不要因为「反正能部署」就顺手部署。
+> 执行前须具备相应凭据；未提供凭据时如实说明并给出手动替代方案，不要自行寻找或复用其他凭据。
 
 周报托管地址供飞书卡片 `view_url` 用，**不一定要 GitHub Pages**：`scripts/deploy.py --deploy-to` 选 `github-pages`（默认）/ `tencent-cos` / `vercel` / `netlify` / `cloudflare-pages` / `local`；非 github 后端无需配置 GitHub。
 
 - **GitHub Pages**：`bash run_report.sh deploy --html AI_News_YYYY-MM-DD.html`（`--no-push` 仅本地；`--switch-pages` 经 API 切 Pages 源到 gh-pages）。
 - **飞书头条卡片**：`bash run_report.sh scripts/publish.py --news-json news.json --audience-json audience_summary.json --html AI_News_YYYY-MM-DD.html --chat-id oc_xxxx --deploy`（经飞书连接器 lark-cli 发送，密钥不落盘）。
+- **部署目标**：`--deploy-to` 仅接受白名单后端（`github-pages` / `tencent-cos` / `vercel` / `netlify` / `cloudflare-pages` / `local`），非法取值直接报错退出，不接受任意外部地址。
+
+### 6.1b 需要用户明确指令的动作清单
+
+以下动作**仅在用户明确要求时**执行，**均不属于本技能的默认触发能力**：
+
+| 动作 | 触发前提（须满足全部） | 凭据来源 |
+|------|------------------------|---------|
+| GitHub Pages 部署（`run_report.sh deploy`） | 用户明确要求部署**且**指定目标期数 | 用户本次提供的凭据 |
+| 飞书卡片推送（`publish.py`） | 用户明确要求推送**且**提供 `chat-id` | 飞书连接器（`lark-cli`）已登录会话 |
+| Pages 源切换（`--switch-pages` / `setup_pages_source.sh`） | 用户明确要求切源 | 用户本次提供的 token，或已登录的 `gh` 凭据 |
+| 模型排行榜刷新（`refresh_deploy.py`） | 用户明确要求刷新 | 复用抓取源，无需凭据 |
+
+凭据纪律：一律只读环境变量（如 `GITHUB_TOKEN` / `GH_TOKEN`）或已登录的 `gh` CLI 凭据；**不写入项目文件、不回显到日志、不传给子进程 argv**。
 
 ### 6.2 自动化（每周一 09:00）
 
-创建 recurring automation：`FREQ=WEEKLY;BYDAY=MO`，prompt 复用上方工作流（抓取 → WebSearch 注入 → 写本周看点 → 生成 → 校验 → present_files → 可选部署）。
+创建 recurring automation：`FREQ=WEEKLY;BYDAY=MO`，prompt 复用上方工作流（抓取 → WebSearch 注入 → 写本周看点 → 生成 → 校验 → present_files）。
+**自动化 prompt 默认只走到 `present_files`为止，不含任何部署/推送步骤**；确需定时部署的，由用户在创建时显式要求并写入 prompt。
 
 ## 七、「本周看点」编辑洞察（必做）
 
@@ -144,7 +168,7 @@ metadata:
 | `scripts/generate_site.py` | v3.0 主入口：从 API 生成新闻站 |
 | `scripts/fetch_ai_news.py` | RSS 抓取（备用离线；`--news-api` 可选） |
 | `scripts/validate_report.py` | 质量校验（含 XSS 守护） |
-| `scripts/deploy.py` / `scripts/publish.py` | 多后端部署 / 飞书卡片推送（经连接器） |
+| `scripts/deploy.py` / `scripts/publish.py` | 多后端部署 / 飞书卡片推送（经连接器）——**仅用户明确要求时** |
 | `scripts/aiweekly/` | 核心引擎包（news/leaderboard/render/translate/market/insights…） |
 | `assets/news_site_template.html` | v3.0 HTML 模板 |
 | `model_profiles.json` · `translations_offline.json` | canonical 模型资料档案 / 离线译文包 |
