@@ -181,6 +181,14 @@ _ENV_ASSIGN_RE = re.compile(
 _AUTHZ_RE = re.compile(
     r"([Aa]uthorization\s*[=:]\s*)(?:Bearer\s+|Basic\s+|Token\s+)?(?:\"[^\"]*\"|'[^']*'|\S+)"
 )
+# 形如 https://x-access-token:<token>@github.com/ —— **URL userinfo 形态**。
+# 这是一套独立于上面四道防线的必要补充：token 内嵌在 URL 里，既没有 `--flag=`前缀，
+# 也没有 `FOO_TOKEN=` 那种「变量名 + 分隔符」可供定位，纯形态匹配抓不到它。
+# 而它恰恰是 git 的高危场景——`url.<base>.insteadOf` 生效时，remote URL 被改写成
+# 含 token 的形态，git 在部分认证失败场景会把该 URL 回显进 stderr。
+_URL_USERINFO_RE = re.compile(
+    r"((?:[A-Za-z][A-Za-z0-9+.\-]*:)?//[^\s/@:]*:)([^\s/@]*)(@)"
+)
 
 
 def _register_secrets(extra_env: dict[str, str]) -> None:
@@ -201,12 +209,14 @@ def _redact(text: str) -> str:
     命令做一次大正则：token 长度不定，且可能出现在 ``--token=X``（等号）、
     ``--auth X``（空格）、``X-TOKEN=Y``（env 赋值）三种不同位置。
 
-    四道防线（任一命中即打码）：
+    五道防线（任一命中即打码）：
 
     1. **字面量兜底** —— 本进程用过的真实 token 值，治「CLI 原样回显且无前缀」。
     2. ``--token=X`` / ``--auth=X`` 等flag 赋值形态（等号）。
     3. ``--token X`` / ``--auth X`` 等 flag 空格分隔形态。
     4. ``FOO_TOKEN=X`` / ``Authorization: Bearer X`` 等 env 与 header 形态。
+    5. ``https://x-access-token:<token>@host`` 等 URL userinfo 形态（token 内嵌在
+       URL 里，前四道防线都定位不到它；git 的 insteadOf 场景必须靠这道）。
 
     长于 4 字符才登记为字面量，避免短 token 造成大面积误伤。
     """
@@ -218,12 +228,14 @@ def _redact(text: str) -> str:
         if len(secret) > 4 and secret in text:
             text = text.replace(secret, _MASK)
 
-    # 2~4) 形态识别。替换值只保留 flag / 环境变量名 / 分隔符 / header 名，值一律打码。
-    # flag 形态的值在group(2)，env/authz 形态的值在 group(3)（分隔符须保留）。
+    # 2~5) 形态识别。替换值只保留 flag / 环境变量名 / 分隔符 / header 名/ URL 前缀，
+    # 值一律打码。flag 形态的值在group(2)，env/authz 形态的值在 group(3)
+    # （分隔符须保留），URL userinfo 形态的值在 group(2)（前缀与 @ 须保留）。
     text = _FLAG_ASSIGN_RE.sub(lambda m: m.group(1) + _MASK, text)
     text = _FLAG_SEP_RE.sub(lambda m: m.group(1) + _MASK, text)
     text = _ENV_ASSIGN_RE.sub(lambda m: m.group(1) + m.group(2) + _MASK, text)
     text = _AUTHZ_RE.sub(lambda m: m.group(1) + _MASK, text)
+    text = _URL_USERINFO_RE.sub(lambda m: m.group(1) + _MASK + m.group(3), text)
 
     return text
 

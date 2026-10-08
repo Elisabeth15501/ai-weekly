@@ -34,6 +34,16 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# 复用 deploy.py 的凭据脱敏（SEC-5）：失败分支会把 git 的 stderr 原样带进异常文本，
+# 而 `url.<base>.insteadOf` 生效时 remote URL 内嵌 token，git 在部分认证失败场景会
+# 把该 URL 回显进 stderr。脱敏实现只有一份（在 deploy.py 里），此处不重复造轮子。
+# deploy.py 对本模块是**延迟导入**（函数体内的局部 import），故此处顶层导入不会
+# 形成循环依赖：deploy -> deploy_ghpages 只在 deploy 的函数体内发生。
+if __package__ in (None, "") and str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from deploy import _redact, _register_secrets  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGES_BRANCH = "gh-pages"
 
@@ -169,6 +179,10 @@ def _git(args, cwd=None, check=True):
     # 同时清空 credential.helper，避免 wincred 等助手干扰/覆盖。
     token = _resolve_git_token()
     if token and args and args[0] == "push":
+        # 登记为字面量敏感值：`_redact` 的第一道防线靠它兜底，治「git 原样回显
+        # token 且不带任何前缀」的形态（无前缀则形态正则定位不到）。
+        # 登记名沿用 GITHUB_TOKEN（以 _TOKEN结尾，符合 deploy.py 的登记规则）。
+        _register_secrets({"GITHUB_TOKEN": token})
         env["GIT_CONFIG_COUNT"] = "2"
         env["GIT_CONFIG_KEY_0"] = "url.https://github.com/.insteadOf"
         env["GIT_CONFIG_VALUE_0"] = f"https://x-access-token:{token}@github.com/"
@@ -182,8 +196,12 @@ def _git(args, cwd=None, check=True):
         text=True,
     )
     if check and res.returncode != 0:
+        # SEC-5：stderr 原样进异常文本 = 理论泄漏通道。insteadOf 生效时 git 已解析出
+        # 含 token 的 remote URL，认证失败场景下会把它回显在这里。统一过 _redact
+        # （与 deploy.py 的 CLI 失败分支同一条防线），异常文本与终端输出一致脱敏。
         raise RuntimeError(
-            f"git {' '.join(args)} 失败 (exit={res.returncode}):\n{res.stderr.strip()}"
+            f"git {' '.join(args)} 失败 (exit={res.returncode}):\n"
+            f"{_redact(res.stderr.strip())}"
         )
     return res
 
