@@ -1,7 +1,7 @@
 ---
 name: ai-weekly
 slug: ai-weekly
-version: 4.1.1
+version: 4.1.2
 displayName: AI Weekly Report
 summary: 把本周 AI 行业动态做成一个可搜索的单文件 HTML 周报（公开 RSS 取数，无付费 API 依赖）
 tags: [ai, news, report, rss, weekly, 人工智能, 周报]
