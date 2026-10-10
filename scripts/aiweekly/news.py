@@ -99,18 +99,20 @@ def merge_external_news(base_items: list, external_items: list) -> list:
     return merged
 
 
-def format_news_items(api_data: dict) -> list:
+def format_news_items(api_data: dict, truncate: bool = True) -> list:
     """将 API 数据格式化为 JS 数组需要的格式（含信源/摘要归一化）。
 
     Args:
         api_data: 抓取或外部 API 返回的 news 数据（{"items": [...]}）
+        truncate: 是否对超长摘要做截断归一（默认 True，服务于新闻卡片显示兜底）。
+            设为 False 时保留完整清洗后摘要，供「本周看点」等需完整呈现的场景使用。
     返回: 归一化后的新闻列表（NewsItem 形态：含 lang / score / cn_summary 等编辑字段）。
     """
     items = []
     for item in api_data.get("items", []):
         items.append({
             "title": item.get("title", ""),
-            "summary": _normalize_summary(item.get("summary", "")),
+            "summary": _normalize_summary(item.get("summary", ""), truncate=truncate),
             "url": item.get("url") or item.get("permalink", ""),
             "source": _normalize_source(item.get("source", "")),
             "publishedAt": item.get("publishedAt", ""),
@@ -153,14 +155,18 @@ def _detect_lang(title: str, summary: str) -> str:
 
 
 def _normalize_summary(raw: str, max_len: int = SUMMARY_MAX,
-                       target: int = SUMMARY_TARGET) -> str:
-    """把过长（正文搬运型）的 summary 压缩为 ≤target 字的事实句摘要。
+                       target: int = SUMMARY_TARGET,
+                       truncate: bool = True) -> str:
+    """把 RSS 原始 summary 做噪声归一（署名/源站名/空白）。
 
-    - 去除 RSS 抓取噪声（作者/编辑/责编/来源/出品 署名行、开头重复的源站名）；
-    - 空白/换行归一；
-    - ≤max_len 直接保留；
-    - 超长时按句（。！？!?）截取首句，必要时累加第二句，超出则截断加省略号。
-    不编造、不改动事实，仅做长度与可读性归一。
+    - 始终做噪声清洗（作者/编辑署名行、开头重复源站名、空白换行归一）；
+    - truncate=True（默认，历史行为）：超长（>max_len）时按句压缩为 ≤target 字
+      的事实句摘要并加省略号。主要服务于新闻卡片——卡片本身已有 CSS line-clamp
+      作显示兜底，此截断是数据层冗余保险。
+    - truncate=False：只清洗、不截断，返回完整摘要。用于「本周看点」的 analysis
+      字段——用户明确要求看点信息完整呈现，不应被中途掐断。
+
+    不编造、不改动事实，仅做噪声清洗与（可选）长度归一。
     """
     if not raw:
         return ""
@@ -176,6 +182,9 @@ def _normalize_summary(raw: str, max_len: int = SUMMARY_MAX,
             break
     # 清掉署名/源站名剥离后可能残留的行首标点或空格
     text = re.sub(r"^[\s，,、；;：:.。]+", "", text)
+    # 看点或相似场景要求保留全文时，清洗后即返回，不进入截断分支。
+    if not truncate:
+        return text
     if len(text) <= max_len:
         return text
     parts = re.split(r"(?<=[。！？!?])", text)

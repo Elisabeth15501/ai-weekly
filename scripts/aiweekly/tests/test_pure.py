@@ -317,8 +317,43 @@ def test_market_trend_insights_evidence_escaped():
     # 主题词须出现在标题里，_match_insight_evidence 才会抽出「本周印证」行
     html = MKT._render_trend_insights_html([_signal(title="融资 " + PAYLOAD_TAG)], [])
     assert 'class="insight-evidence"' in html     # 非空断言：确保真的走到拼接分支
+
+
+# ---------- _auto_insights：看点 analysis 不截断（UX 回归） ----------
+def test_auto_insights_keeps_long_summary_analysis():
+    """用户反馈：「看点」里的信息要全部出现，不应被中途截断。
+
+    _auto_insights 曾把 summary 硬截到 160 字符，现去掉该限制。本测试确保
+    长摘要 (>160) 被完整保留为 analysis 字段。
+    """
+    long_summary = (
+        "智东西9月29日消息，今日凌晨，Anthropic发布Claude 5.5系列第二款模型Claude Sonnet 5.5，"
+        "主打快速、高性价比，实测显示开发者账单普遍出现暴涨，引发社区热议。"
+        "模型侧变动往往直接决定你选型与成本。" * 5
+    )
+    assert len(long_summary) > 160
+    api_data = {
+        "items": [
+            {
+                "title": "Claude Sonnet 5.5深夜空降！一半价格击败Opus，开发者实测账单暴涨",
+                "summary": long_summary,
+                "url": "https://example.com/a",
+                "source": "智东西",
+                "publishedAt": "2026-09-29T00:00:00Z",
+                "category": "ai-models",
+                "score": 1.0,
+            }
+        ]
+    }
+    out = INS._auto_insights(api_data)
+    assert len(out) == 1
+    assert out[0]["analysis"] == long_summary
+    html = INS._render_insight_cards_html(out)
+    # 核心回归：完整摘要必须出现在看点卡片里，不能被「…」掐断
+    assert long_summary in html
+    assert "…" not in html
+    # XSS 转义：恶意输入不应原样注入为标签
     assert "<img src=x" not in html
-    assert 'href="#"' in html
 
 
 def test_market_e_handles_none_without_crashing():

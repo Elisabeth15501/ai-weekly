@@ -167,9 +167,13 @@ def _find_related(seed: dict, items: list, exclude_titles: set, max_n: int = 2) 
 
 
 def _auto_insights(api_data: dict, top_n: int = 6) -> list:
-    """从新闻 JSON 自动派生基线「本周看点」列表。无网络依赖。"""
+    """从新闻 JSON 自动派生基线「本周看点」列表。无网络依赖。
+
+    truncate=False：看点 analysis 字段须完整呈现摘要原文，用户明确要求
+    「看点里的信息可以全部出现，而不是中途被截断」，故不过数据层截断。
+    """
     try:
-        items = format_news_items(api_data)
+        items = format_news_items(api_data, truncate=False)
     except Exception:
         items = []
     if not items:
@@ -221,8 +225,8 @@ def _auto_insights(api_data: dict, top_n: int = 6) -> list:
         cat = it.get("category", "industry")
         kicker = _AUTO_KICKERS.get(cat, "行业")
         summary = (it.get("summary") or "").strip()
-        if len(summary) > 160:
-            summary = summary[:160] + "…"
+        # UX: 用户要求「看点」信息全部出现，不做 160 字符截断。summary 本身已是 RSS 摘要，
+        # 若原始摘要过长，由模板自然换行即可，不应在数据层人为掐断。
         # 基于类别给一句轻量编辑提示（明确为自动摘要，非人工深度洞察；即「对读者意味着什么」）
         hint = {
             "ai-models": "模型侧变动，往往直接决定你选型与成本。",
