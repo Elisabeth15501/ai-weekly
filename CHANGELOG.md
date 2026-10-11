@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.2 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.3 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -10,6 +10,13 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ---
+
+## [4.1.3] — 2026-10-11
+
+v4.1.3 是 **「本周看点」摘要截断修复**热修版：把用户明确要求「看点信息全部出现」的回归修进发布包。代码形态与 4.1.2 完全一致，仅改动看点数据层截断逻辑 + 新增回归测试。
+
+### Fixed
+- **「本周看点」摘要不再被截断**（UX 回归，提交 `c7c35a9`）：`_auto_insights` 原把摘要硬截到 160 字符、`_normalize_summary` 又对 >120 字摘要按句压缩到 ≤110 字并加 `…`，两层截断导致看点卡片信息中途被掐断。新增 `truncate` 开关：`format_news_items(truncate=False)` / `_normalize_summary(truncate=False)` 仅做噪声清洗、保留完整清洗后摘要；`_auto_insights` 改用 `truncate=False`，看点 `analysis` 字段完整呈现。新增回归测试 `test_auto_insights_keeps_long_summary_analysis`（全量 149 测试通过）。新闻卡片显示仍由模板 CSS `line-clamp` 兜底，不受影响。
 
 ## [4.1.2] — 2026-10-09
 
@@ -29,7 +36,6 @@ v4.1.1 是**安全 P1 欠账清零 + SKILL.md 加载机制重构**版本。把 v
 - **文档一致性四项**（HON-6，提交 `0bc0061`）：模块数改为真实统计（20）、CHANGELOG 版本上限补到 4.1.1、`__init__.py` docstring「10 模块」更正、`data_sources.md` 的 `CRUNCHBASE_KEY` 假接口承诺删除。
 - **死参数与不可达分支**（OPS-2/OPS-3，提交 `eb33302` / `353143d`）：`publish.py --platform` 标注「当前仅支持 feishu」；`deploy_report.py` 删除死代码并修复 `:167` 硬编码使三平台分支全不可达的 bug。
 - **CI 跨平台红**（提交 `87986ab`）：Windows 专属测试补 `@pytest.mark.skipif(os.name != "nt", ...)`，修 Linux runner 上 CI 变红（典型「本地绿 / CI 红」）。
-- **「本周看点」摘要不再被截断**（UX 回归，提交 `c7c35a9`）：`_auto_insights` 原把摘要硬截到 160 字符、`_normalize_summary` 又对 >120 字摘要按句压缩到 ≤110 字并加 `…`，两层截断导致看点卡片信息中途被掐断，用户明确要求「看点里的信息全部出现」。新增 `truncate` 开关：`format_news_items(truncate=False)` / `_normalize_summary(truncate=False)` 仅做噪声清洗、保留完整清洗后摘要；`_auto_insights` 改用 `truncate=False`，看点 `analysis` 字段完整呈现。新增回归测试 `test_auto_insights_keeps_long_summary_analysis`（全量 149 测试通过）。新闻卡片显示仍由模板 CSS `line-clamp` 兜底，不受影响。
 
 ## [4.1.0] — 2026-10-08
 
