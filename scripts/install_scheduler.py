@@ -40,18 +40,21 @@ def _is_windows() -> bool:
     return os.name == "nt" or sys.platform.startswith("win")
 
 
-def _build_inner() -> str:
-    """刷新命令本体（路径带空格已加引号）。"""
+def _build_inner(enable_push: bool = False) -> str:
+    """刷新命令本体（路径带空格已加引号）。
+    安全默认：定时任务仅刷新本地数据，不推送 gh-pages；
+    仅当 enable_push=True（用户显式 --enable-push）才允许定时自动推送。"""
+    push_flag = "--push " if enable_push else ""
     return (f'"{VENV_PY}" "{REFRESH}" --api-json "{NEWS_JSON}" '
-            f'--output "{OUTPUT_HTML}" >> "{LOG_FILE}" 2>&1')
+            f'--output "{OUTPUT_HTML}" {push_flag}>> "{LOG_FILE}" 2>&1')
 
 
-def _install_windows(time: str, dry: bool) -> int:
+def _install_windows(time: str, dry: bool, enable_push: bool = False) -> int:
     if not shutil.which("schtasks"):
         print("  ❌ 未找到 schtasks（仅 Windows 可用）。", flush=True)
         return 1
     # cmd /c "<inner>" —— 外层引号包裹整条命令，内层引号保护带空格路径（Windows 经典转义）
-    tr = f'cmd /c "{_build_inner()}"'
+    tr = f'cmd /c "{_build_inner(enable_push)}"'
     cmd = ["schtasks", "/create", "/tn", TASK_NAME, "/tr", tr,
            "/sc", "daily", "/st", time, "/f"]
     print("  ▶ 注册 Windows 任务计划：", " ".join(cmd), flush=True)
@@ -73,11 +76,12 @@ def _uninstall_windows(dry: bool) -> int:
     return subprocess.call(cmd)
 
 
-def _install_linux(time: str, dry: bool) -> int:
+def _install_linux(time: str, dry: bool, enable_push: bool = False) -> int:
     hh, mm = time.split(":")
+    push_flag = "--push " if enable_push else ""
     line = (f"{mm} {hh} * * * cd \"{SKILL_DIR}\" && \"{VENV_PY}\" \"{REFRESH}\" "
             f'--api-json "{NEWS_JSON}" --output "{OUTPUT_HTML}" '
-            f'>> "{LOG_FILE}" 2>&1  # {TASK_NAME}\n')
+            f'{push_flag}>> "{LOG_FILE}" 2>&1  # {TASK_NAME}\n')
     existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
     cur = existing.stdout if existing.returncode == 0 else ""
     if TASK_NAME in cur:
@@ -115,6 +119,8 @@ def main() -> int:
     ap.add_argument("--uninstall", action="store_true", help="卸载而非安装")
     ap.add_argument("--dry-run", action="store_true", help="仅打印命令不落盘")
     ap.add_argument("--time", default="09:00", help="每日触发时间 HH:MM（默认 09:00）")
+    ap.add_argument("--enable-push", action="store_true",
+                    help="允许定时任务自动推送 gh-pages（默认关闭：定时任务仅本地刷新、不推送）")
     args = ap.parse_args()
 
     # 预检：news.json 必须存在，否则调度任务必然失败
@@ -126,9 +132,17 @@ def main() -> int:
     if args.uninstall:
         rc = _uninstall_windows(args.dry_run) if _is_windows() else _uninstall_linux(args.dry_run)
     else:
-        rc = _install_windows(args.time, args.dry_run) if _is_windows() else _install_linux(args.time, args.dry_run)
+        rc = (_install_windows(args.time, args.dry_run, args.enable_push)
+              if _is_windows()
+              else _install_linux(args.time, args.dry_run, args.enable_push))
     if rc == 0 and not args.uninstall and not args.dry_run:
         print("  💡 系统调度为兜底；WorkBuddy automation 仍可作即时触发。", flush=True)
+        if args.enable_push:
+            print("  ⚠️ 已启用 --enable-push：定时任务将自动推送 gh-pages，"
+                  "依赖环境内可用的 GITHUB_TOKEN/GH_TOKEN 或 git 凭据。", flush=True)
+        else:
+            print("  🔒 定时任务默认仅本地刷新、不推送（安全默认）。"
+                  "如需自动推送，重装时加 --enable-push。", flush=True)
         print(f"     运行日志见：{LOG_FILE}", flush=True)
     return rc
 

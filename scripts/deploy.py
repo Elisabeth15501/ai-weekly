@@ -72,7 +72,7 @@ def _github_pages_view_base(repo: Path) -> str | None:
         if res.returncode != 0:
             return None
         url = res.stdout.strip()
-        m = __import__("re").search(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?$", url)
+        m = re.search(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?$", url)
         if not m:
             return None
         owner, name = m.group(1), m.group(2)
@@ -351,7 +351,7 @@ def _deploy_local(html_path: Path, dry_run: bool, verbose: bool, dest=None, base
 # 分发
 # ---------------------------------------------------------------------------
 def deploy(html_path, backend: str = "github-pages", view_base: str | None = None,
-          no_push: bool = False, dry_run: bool = False, verbose: bool = True,
+          no_push: bool = True, dry_run: bool = False, verbose: bool = True,
           **kwargs) -> dict:
     html_path = Path(html_path)
     if not html_path.exists():
@@ -386,12 +386,13 @@ def main() -> int:
     ap.add_argument("--deploy-to", default="github-pages", choices=BACKENDS,
                     help="部署后端（默认 github-pages，零破坏）")
     ap.add_argument("--view-base", default=None, help="公开基址（覆盖后端推导的 view_base）")
-    ap.add_argument("--no-push", action="store_true", help="仅本地提交/更新，不推送（仅 github-pages）")
+    ap.add_argument("--no-push", action="store_true", help="仅本地提交/更新，不推送（保留以兼容旧调用）")
+    ap.add_argument("--push", action="store_true", help="推送（默认不推送，仅本地生成+提交）")
     ap.add_argument("--dry-run", action="store_true", help="只打印将要执行的动作，不实际部署")
     args = ap.parse_args()
     try:
         res = deploy(args.html, backend=args.deploy_to, view_base=args.view_base,
-                     no_push=args.no_push, dry_run=args.dry_run)
+                     no_push=not args.push, dry_run=args.dry_run)
         if res.get("view_base"):
             print(f"🌐 周报公开基址：{res['view_base']}")
         print(f"✅ 部署完成（pushed={res.get('pushed')}）")

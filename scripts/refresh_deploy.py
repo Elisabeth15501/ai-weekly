@@ -11,15 +11,18 @@
 本脚本把三步合为一：
   1) generate_site.py  —— 实时抓取四榜（默认 live，不传 --ranking-json）+ 复用固定周次新闻
   2) deploy_ghpages.py --no-push —— 把新 HTML 提交到本地 gh-pages worktree
-  3) git push origin gh-pages —— 用 Windows 凭据管理器取 PAT 推送（沙箱无交互凭据时的标准解法）
+  3) （可选）git push origin gh-pages —— 需显式 --push 才推送；默认仅本地、不推送
 
 用法：
-  # 手动刷新（默认推 gh-pages）
+  # 手动刷新（默认仅本地生成+提交，不推送）
   python refresh_deploy.py --api-json ../workspace/news.json \
       --output ../workspace/AI_News_2026-08-31.html
 
-  # 仅本地生成+提交、不推送（离线/调试）
-  python refresh_deploy.py --api-json news.json --output out.html --no-push
+  # 仅本地生成+提交、不推送（离线/调试，等同于默认行为）
+  python refresh_deploy.py --api-json news.json --output out.html
+
+  # 显式推送 gh-pages
+  python refresh_deploy.py --api-json news.json --output out.html --push
 
 设计要点：
   * 新闻用固定 --api-json（周次不变），只有排行榜随每次 live fetch 刷新 ——
@@ -151,11 +154,11 @@ def _generate_with_retry(gen: Path, api_json: Path, output: Path,
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="实时刷新排行榜并重部署到 gh-pages")
+    ap = argparse.ArgumentParser(description="实时刷新排行榜并（可选）重部署到 gh-pages（默认仅本地，不推送）")
     ap.add_argument("--api-json", required=True, help="固定周次新闻 JSON（--api-json）")
     ap.add_argument("--output", required=True, help="生成的 HTML 输出路径")
-    ap.add_argument("--no-push", action="store_true",
-                    help="仅本地生成+提交 gh-pages，不推送")
+    ap.add_argument("--push", action="store_true",
+                    help="推送 gh-pages（默认不推送，仅本地生成+提交）")
     ap.add_argument("--region", default="auto",
                     help="排行榜抓取区域（auto/cn/global），默认 auto")
     ap.add_argument("--ranking-top", type=int, default=15,
@@ -196,16 +199,15 @@ def main() -> int:
     # 2) 本地提交到 gh-pages
     rc = _run([
         str(VENV_PY), str(deploy),
-        "--no-push",
         "--html", str(output),
     ])
     if rc != 0:
         print("  ❌ deploy_ghpages.py 失败，中止。", flush=True)
         return rc
 
-    # 3) 推送
-    if args.no_push:
-        print("  ⏭️ --no-push：跳过推送。待网络恢复后手动："
+    # 3) 推送（默认不推送，需显式 --push）
+    if not args.push:
+        print("  ⏭️ 未指定 --push：跳过推送。待需要时手动："
               "git push origin gh-pages", flush=True)
         return 0
 

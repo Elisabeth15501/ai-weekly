@@ -9,7 +9,7 @@
   * 用 git worktree 操作 gh-pages（不污染 main / 不进 SkillHub 包）。
   * 自动累加维护根 index.html（列出所有周报，最新高亮）。
   * 自动写入 .nojekyll（禁用 Jekyll 并强制 GitHub Pages 重新 build 分支）。
-  * 默认推送 origin gh-pages；--no-push 仅本地提交（离线可跑）。
+  * 默认仅本地提交/更新、不推送；--push 才推送 origin gh-pages。
   * --switch-pages 通过 GitHub API 一次性把 Pages 源切到 gh-pages(/root)。
   * MSYS 路径转换坑：所有 git 子进程注入 MSYS_NO_PATHCONV=1，路径用正斜杠。
   * 免交互推送凭据：优先 `gh auth token`（OAuth，gh 托管、不落盘），
@@ -18,7 +18,7 @@
 
 用法：
   python deploy_ghpages.py --html AI_News_2026-08-17.html
-  python deploy_ghpages.py --html AI_News_2026-08-17.html --no-push
+  python deploy_ghpages.py --html AI_News_2026-08-17.html  # 默认仅本地提交，不推送
   python deploy_ghpages.py --html AI_News_2026-08-17.html --switch-pages
 """
 from __future__ import annotations
@@ -370,7 +370,7 @@ def deploy(
     html_path,
     repo=None,
     branch: str = PAGES_BRANCH,
-    no_push: bool = False,
+    no_push: bool = True,
     dry_run: bool = False,
     switch_pages: bool = False,
     commit_msg: str | None = None,
@@ -455,8 +455,8 @@ def deploy(
 
         if no_push:
             if verbose:
-                print("⏭️ --no-push：跳过推送（本地提交已就绪，待网络恢复后 "
-                      "`git push origin gh-pages`）。")
+                print("⏭️ 默认不推送：本地提交已就绪，需要时手动 "
+                      "`git push origin gh-pages`（或加 --push）。")
             return {"pushed": False, "no_push": True, "reports": reports}
 
         pushed = False
@@ -489,7 +489,8 @@ def main() -> int:
     ap.add_argument("--html", required=True, help="生成的周报 HTML 路径")
     ap.add_argument("--repo", default=None, help="仓库根目录（默认脚本上级目录）")
     ap.add_argument("--branch", default=PAGES_BRANCH, help="Pages 分支（默认 gh-pages）")
-    ap.add_argument("--no-push", action="store_true", help="仅本地提交/更新，不推送")
+    ap.add_argument("--no-push", action="store_true", help="仅本地提交/更新，不推送（默认即如此，保留以兼容旧调用）")
+    ap.add_argument("--push", action="store_true", help="推送（默认不推送，仅本地生成+提交）")
     ap.add_argument("--dry-run", action="store_true",
                     help="只做 worktree+复制+index 预览，不提交不推送")
     ap.add_argument("--switch-pages", action="store_true",
@@ -503,7 +504,7 @@ def main() -> int:
             args.html,
             repo=args.repo,
             branch=args.branch,
-            no_push=args.no_push,
+            no_push=not args.push,
             dry_run=args.dry_run,
             switch_pages=args.switch_pages,
             commit_msg=args.commit_msg,

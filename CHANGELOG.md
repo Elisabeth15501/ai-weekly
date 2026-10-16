@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.4 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.5 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -8,6 +8,24 @@
 > 所有早期版本的功能均已在 `3.1.1` 中可用。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [4.1.5] — 2026-10-13
+
+v4.1.5 是 **安全审计整改版**（针对 ClawHub 4.1.4 安全扫描 `skillspector` / `clawscan` 标记的 HIGH / suspicious 项）。本次所有改动**不改变周报生成形态**，只收紧「发布/分发/调度」类工具的默认行为并校正能力声明，消除扫描器对「描述与代码行为不匹配（TP4）」的 247 条误报。
+
+### Security
+- **`install_scheduler.py` 定时任务默认不再自动推送**（clawscan `Persistence & Privilege` 关注项）：注册的 Windows 任务计划 / cron 命令**默认不传推送标志**（`enable_push=False` → 默认不推送，仅本地刷新排行榜），彻底根除「装了调度器即周期性借用环境凭据静默公开推送」的风险；仅当用户显式 `install_scheduler.py --enable-push` 时才带 `--push` 自动推送，并打印凭据依赖警告。
+- **`refresh_deploy.py` 默认不再推送**（clawscan `Instruction Scope` 关注项）：原 `--no-push` 默认为 False（即默认推送），与 SKILL.md「不会 git push」声明冲突。改为 `--push` 显式 opt-in：默认仅本地生成+提交、**不推送**，需 `--push` 才部署 gh-pages。
+- **`deploy_ghpages.py` 对齐安全默认**：`deploy()` 默认 `no_push=True`（默认仅本地提交、不推送），新增 `--push` 显式 opt-in（原 `--no-push` 作为兼容别名保留）；与 `refresh_deploy.py` 的安全默认姿态一致，根除了「直接调用即默认出网推送」的残留风险。
+- **`deploy.py`（多后端统一分发入口）对齐安全默认**：此前 `deploy()` 默认 `no_push=False`（即 `python scripts/deploy.py` 或 `publish.py --deploy` 默认出网推送），与 `deploy_ghpages.py` / `refresh_deploy.py` 姿态不一致，是第三处未统一的部署工具。本次改为默认 `no_push=True`（默认仅本地生成+提交、**不推送**），新增 `--push` 显式 opt-in、`--no-push` 作兼容别名保留；`publish.py` 的 `--deploy` 分发路径同步改为 `no_push=not args.push`。至此三处部署工具（deploy_ghpages.py / refresh_deploy.py / deploy.py+publish.py）安全默认**完全统一**。
+- **校正能力声明（消除 247 条 TP4 误报的根因）**：SKILL.md 与 README 原把能力边界写得太窄（「不会部署/不会推送/不会 git push」），而包内确实随附 deploy / 飞书推送 / 刷新 / 调度工具。现改为**如实声明**：报告生成是默认行为；deploy / 飞书推送 / 刷新 / 调度是**独立的、需显式调用**的能力，各自有明确安全默认（deploy/refresh 默认不推送、scheduler 默认不推送），绝不会在「生成周报」流程中自动触发。
+- **飞书推送防重复说明**（呼应 4.1.x 实测「一张周报被推两次」）：README / SKILL.md 明确 `publish.py` 与 `feishu_connector.py` 是**等价二选一**入口，同一任务只可跑其一，切勿同跑两次。配套自动化任务（每周一 09:00）已删除冗余的第 6 步 `feishu_connector.py` 推送，仅保留 `publish.py` 单次推送。
+
+### Changed
+- `SKILL.md` frontmatter「能力边界」段落、§四运维动作表（新增「默认安全边界」列）、贯穿性硬约束 #7 同步更新。
+- `README.md` 飞书推送小节与部署/调度小节补「显式才执行、默认不推送」说明。
 
 ---
 

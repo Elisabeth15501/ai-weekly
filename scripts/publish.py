@@ -177,7 +177,8 @@ def main() -> int:
                          "非 github-pages 后端无需配置 GitHub。")
     ap.add_argument("--view-base", default=None,
                     help="周报公开基址（覆盖后端推导的 view_base，用于拼 view_url）")
-    ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（仅 github-pages）")
+    ap.add_argument("--no-push", action="store_true", help="部署时仅本地提交不推送（保留以兼容旧调用）")
+    ap.add_argument("--push", action="store_true", help="部署时推送（默认不推送，仅本地生成+提交）")
     # 注：Pages 源切换（gh-pages/root）请直接用 `python scripts/deploy_ghpages.py --html <file> --switch-pages`。
     # 本脚本曾提供 --switch-pages 转发开关，但 deploy() 的 github-pages 分支并不消费该参数，
     # 传入后会被静默忽略——属于虚假承诺，故移除；需要切源请走上面的真实入口。
@@ -265,7 +266,7 @@ def main() -> int:
                 from deploy import deploy as dispatch_deploy  # noqa: E402
                 dep = dispatch_deploy(
                     args.html, backend=backend, view_base=args.view_base,
-                    no_push=args.no_push, dry_run=args.dry_run,
+                    no_push=not args.push, dry_run=args.dry_run,
                 )
                 # 用后端返回的 view_base 补上 view_url（若本次未显式给 --view-url）
                 if not args.view_url and dep.get("view_base") and report.get("view_url") is None:

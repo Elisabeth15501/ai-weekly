@@ -47,7 +47,7 @@ bash run_report.sh scripts/validate_report.py --html AI_News.html
 
 # 5. 部署到 GitHub Pages（gh-pages 分支；飞书卡片的 view_url 即此地址）
 bash run_report.sh deploy --html AI_News.html
-#   离线仅本地提交：加 --no-push
+#   默认仅本地提交、不推送；需推送请加 --push（--no-push 兼容旧调用）
 #   部署后顺手把 Pages 源切到 gh-pages：加 --switch-pages（需 gh 凭据，见下文）
 ```
 
@@ -136,7 +136,7 @@ gh-pages 分支（Pages 源 = Deploy from a branch: gh-pages / /root）
 发布方式（`run_report.sh deploy` 即封装此脚本）：
 ```bash
 bash run_report.sh deploy --html AI_News.html
-#   --no-push        仅本地提交，不推送（离线可跑，待网络恢复后 git push origin gh-pages）
+#   --push           推送（默认不推送，仅本地生成+提交）；--no-push 兼容旧调用
 #   --switch-pages   部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 gh 凭据）
 #   --dry-run        只做 worktree+复制+index 预览，不提交不推送
 ```
@@ -262,6 +262,10 @@ bash run_report.sh deploy --html AI_News.html
 ## 飞书头条卡片推送（可选）
 
 生成报告后，可把**本周头条速览**以飞书消息卡片推送到群 / 私聊，让情报在"工作者已在用的地方"被消费。卡片由 `delivery/feishu_bot.build_headline_card` 构造，经 **飞书连接器**（lark-cli，密钥由连接器托管、绝不落配置文件）发送——`publish.py` 组装 `report.json` 后自动经连接器推送。
+
+> ⚠️ **一次流水线只推一次（防重复）**：`publish.py` 组装 `report.json` 后**默认就会**经连接器推送一张卡片（只要解析到目标，即 `--chat-id/--user-id` > 环境变量 > `delivery/feishu_target.json`；未解析到目标则仅警告、exit 0 不阻断）。`delivery/feishu_connector.py` 的独立 CLI 只是 **publish.py 的等价替代入口**——两者发的是**同一张**卡片，**只能二选一，切勿在同一任务里两个都跑**，否则同一张周报会发两次（重复卡片）。二者都只推一次、无重试：`publish.py` 仅在其内部那一次调用里发送，`feishu_connector.py` 的 `main()` 也仅调用一次 `send_card()`。
+
+> 🔒 **部署 / 刷新 / 调度同样「显式才执行、默认不推送」**：`deploy_ghpages.py`、`deploy.py`（`publish.py --deploy` 分发入口）、`refresh_deploy.py` 默认都只本地提交、**不推送** gh-pages（`refresh_deploy.py` / `deploy.py` 需显式 `--push` 才推）；`install_scheduler.py` 注册的定时任务**默认仅本地刷新、永不自动推送**，仅 `--enable-push` 才允许定时自动推送。报告生成流程不会自动触发其中任何一项。
 
 ```bash
 # 组装 report.json 并经飞书连接器推送到群（bot 身份）

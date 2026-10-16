@@ -342,7 +342,7 @@ bash run_report.sh scripts/validate_report.py --html AI_News_YYYY-MM-DD.html
 ```bash
 # 流水线封装：底层调用 scripts/deploy_ghpages.py
 bash run_report.sh deploy --html AI_News_YYYY-MM-DD.html
-#   --no-push       仅本地提交不推送（离线可跑；待网络恢复后 git push origin gh-pages）
+#   --push           推送（默认不推送，仅本地生成+提交）；--no-push 兼容旧调用
 #   --switch-pages  部署后通过 GitHub API 把 Pages 源切到 gh-pages / /root（需 GITHUB_TOKEN）
 #   --dry-run       只做 worktree+复制+index 预览，不提交不推送
 ```
@@ -359,7 +359,7 @@ bash run_report.sh scripts/publish.py \
 #   --deploy           生成 report.json 后顺带部署（默认 github-pages）
 #   --deploy-to tencent-cos   改用腾讯云 COS（国内最稳，无需 GitHub）
 #   --deploy-to vercel        改用 Vercel（海外免备案，无需 GitHub）
-#   --no-push          部署时仅本地提交不推送
+#   --push            部署时显式推送（默认仅本地提交不推送）；--no-push 兼容旧调用
 #   --switch-pages     部署时一并把 Pages 源切到 gh-pages
 ```
 

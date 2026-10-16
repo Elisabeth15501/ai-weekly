@@ -25,10 +25,10 @@ fetch_ai_news.py  —  ai-weekly 的自治主数据源（v4.0）
   pip install feedparser requests beautifulsoup4
 
 用法:
-  # 抓取本周新闻 -> news.json（AI HOT 兼容 schema）
+  # 抓取最近 7 天新闻 -> news.json（AI HOT 兼容 schema）
   python scripts/fetch_ai_news.py --output news.json
 
-  # 指定周数
+  # 抓取固定 ISO 周新闻（推荐：生成周报时务必指定，避免内容随运行日期漂移）
   python scripts/fetch_ai_news.py --week 2026-W30 --output news.json
 
   # 检查 RSS 源健康状态
@@ -476,7 +476,9 @@ def save_json(data: dict, output_path: str) -> None:
 
 def main():
     p = argparse.ArgumentParser(description="RSS 抓取 AI 新闻 -> AI HOT 兼容 JSON")
-    p.add_argument("--week", default=None, help="周数，如 2026-W30（默认本周）")
+    p.add_argument("--week", default=None,
+                   help="周数，如 2026-W30（未指定则抓取最近 7 天，不是固定 ISO 周；"
+                        "想生成固定周报请显式传 --week）")
     p.add_argument("--output", "-o", default="news.json", help="输出 JSON 路径")
     p.add_argument("--news-api", action="store_true", help="启用 News API 增强")
     p.add_argument("--no-hf", action="store_true", help="跳过 Hugging Face 排行榜")

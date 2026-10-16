@@ -208,7 +208,7 @@ def evaluate(checks: dict) -> list[str]:
 
 
 def build_exit(problems: list[str]) -> int:
-    """把问题列表转成退出码，并打印人话提示。空列表 -> 0。"""
+    """把问题列表转成退出码，并打印人话说明。空列表 -> 0。"""
     if not problems:
         return EXIT_OK
 
