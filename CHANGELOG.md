@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.5 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.6 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -8,6 +8,15 @@
 > 所有早期版本的功能均已在 `3.1.1` 中可用。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [4.1.6] — 2026-10-17
+
+v4.1.6 是 **展示名修正版**（内容形态与 4.1.5 完全一致，仅修 ClawHub 上架展示名）。
+
+### Fixed
+- **修正 ClawHub 展示名**：4.1.5 首次发布时未传 `--name`，注册表 displayName 取了临时文件夹名「Aiweekly Pkg」。ClawHub 无 displayName 单独更新接口（PATCH/PUT 均 404）、且 4.1.5 版本号已占用无法重发同号，故以 4.1.6 重新发布并显式带 `--name "AI Weekly Report"`。包内 SKILL.md 的 `displayName` 字段本就是 `AI Weekly Report`，本次仅让上架侧展示名与之一致。
 
 ---
 
