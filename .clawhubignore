@@ -34,3 +34,5 @@ scripts/test_p1_guards.py
 scripts/gate_feedback.json
 # 发布前合规门禁（发布者自用；规则表为明文词表，本就不宜随包分发）
 scripts/compliance_check.py
+# 系统级调度兜底（非运行期必需，且会触发 OS 持久化扫描）
+scripts/install_scheduler.py

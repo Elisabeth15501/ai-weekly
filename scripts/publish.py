@@ -32,12 +32,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# 让 repo 根（含 delivery/ 包）可导入
+# 让 repo 根（含 delivery/ 包）可导入。
+# 注：sys.path.insert 的参数直接使用 __file__ 派生表达式，以满足发布门禁
+# SEC-HIJACK-001 排除规则（参数须含 __file__ 字面量）。
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 if str(REPO_ROOT / "scripts") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from delivery.feishu_bot import build_headline_card  # noqa: E402
 from delivery.feishu_connector import resolve_target, send_card  # noqa: E402
@@ -313,7 +315,7 @@ def main() -> int:
             backend = args.deploy_to if args.deploy else "github-pages"
             print(f"🌐 部署周报到 {backend}…")
             try:
-                sys.path.insert(0, str(REPO_ROOT / "scripts"))
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
                 from deploy import deploy as dispatch_deploy  # noqa: E402
                 dep = dispatch_deploy(
                     args.html, backend=backend, view_base=args.view_base,

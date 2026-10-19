@@ -21,6 +21,8 @@ scripts/aiweekly/tests/** export-ignore
 scripts/test_p1_guards.py export-ignore
 # 门禁回灌记录（发布者自用）
 scripts/gate_feedback.json export-ignore
+# 系统级调度兜底（用户自选装；非运行期必需，且会触发 OS 持久化扫描）
+scripts/install_scheduler.py export-ignore
 
 # 平台封禁的文件类型：这些点文件在 SkillHub 会被「不允许的文件类型」拦下。
 # 原先靠发布后手工 rm，现在自动剔除，省掉一步且不会漏。

@@ -28,11 +28,11 @@ description: >
   典型不触发：帮我看下今天沪深300 多少点。
 
   能力边界（重要）：本技能**默认触发的动作**只是生成新闻内容——抓取、生成 HTML、校验、展示；报告生成流程本身不部署、不推送飞书、不改仓库设置、不 git push。
-  但本包**确实随附**部署 / 飞书推送 / 排行榜刷新 / 系统调度等工具（publish.py、deploy.py、deploy_ghpages.py、refresh_deploy.py、install_scheduler.py 等）。它们是**独立的、需显式调用**的能力——只有在你明确点名执行对应命令时才运行，绝不会在「生成周报」时被自动触发。各工具的默认安全边界：
+  但本包**确实随附**部署 / 飞书推送 / 排行榜刷新等工具（publish.py、deploy.py、deploy_ghpages.py、refresh_deploy.py 等）。它们是**独立的、需显式调用**的能力——只有在你明确点名执行对应命令时才运行，绝不会在「生成周报」时被自动触发。各工具的默认安全边界：
   - 飞书推送（publish.py / feishu_connector.py，二者等价、二选一，切勿同跑两次）：默认经 feishu_target.json 发一张卡片；不想要推送就别调用这俩命令。
   - 部署（deploy_ghpages.py / deploy.py）：需显式调用，默认只本地提交、**不推送**；需显式 --push 才推送（--no-push 保留作兼容）。`deploy.py` 是统一多后端分发入口（github-pages 后端内部调用 deploy_ghpages.py），其 `deploy()` 默认同样 no_push=True，`publish.py --deploy` 分发路径与此一致。
   - 排行榜刷新（refresh_deploy.py）：默认仅本地生成+提交、**不推送**，需显式 --push 才部署。
-  - 系统调度（install_scheduler.py）：注册的定时任务**默认仅本地刷新、永不自动推送**；仅当你显式 --enable-push 才允许定时自动推送 gh-pages（需 GH 凭据）。
+  - 系统调度（WorkBuddy automation 为发布包主路径）：每日 09:00 刷新排行榜由 WorkBuddy 自动化触发；如需操作系统级兜底调度（Windows 任务计划 / Linux cron），可从**源码仓库**取用 `install_scheduler.py`（发布包默认不含——平台合规扫描会将其注册 OS 定时任务识别为持久化；该脚本默认仅本地刷新、永不自动推送，仅 `--enable-push` 才允许定时推送）。
 when_to_use: 用户想系统性了解本周 AI 行业动态、要一份 AI 周报/简报、或要 AI 模型榜单与市场融资数据整理时使用。纯单条新闻问答、非 AI 主题、以及任何运维诉求都不适用。
 ---
 
@@ -134,7 +134,7 @@ when_to_use: 用户想系统性了解本周 AI 行业动态、要一份 AI 周�
 | 飞书卡片推送（`publish.py` / `feishu_connector.py`，**二选一**） | 明确要求推送（`feishu_target.json` 已配置目标） | 飞书连接器已登录会话 | 调用即发一张卡片；两命令同跑会发两次 |
 | Pages 源切换（`setup_pages_source.sh`） | 明确要求切源 | 用户本次的 token 或已登录 `gh` | 仅改 Pages 源配置 |
 | 模型排行榜刷新（`refresh_deploy.py`） | 明确要求刷新 | 复用抓取源，无需凭据 | **默认不推送**，需显式 `--push` |
-| 定时刷新调度（`install_scheduler.py`） | 明确要求安装调度且理解会注册系统任务 | 默认无需凭据；`--enable-push` 时需 GH 凭据 | **默认仅本地刷新、不推送**；`--enable-push` 才允许定时自动推送 gh-pages |
+| 系统级兜底调度（`install_scheduler.py`，**源码仓库附带 · 发布包不含**） | 自托管 / 非 WorkBuddy 部署且明确要求安装调度 | 默认无需凭据；`--enable-push` 时需 GH 凭据 | **默认仅本地刷新、不推送**；`--enable-push` 才允许定时自动推送 gh-pages |
 
 - 部署目标`--deploy-to` 仅接受白名单后端（`github-pages` / `tencent-cos` / `vercel` / `netlify` / `cloudflare-pages` / `local`），非法取值直接报错，**不接受任意外部地址**。
 - 部署仓库路径受白名单约束：未显式配置白名单时**只允许仓库自身**（`AIWEEKLY_DEPLOY_REPO_ALLOWLIST`）。

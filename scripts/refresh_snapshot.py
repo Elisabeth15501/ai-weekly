@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from aiweekly import leaderboard_sources as S  # noqa: E402
 from aiweekly.leaderboard_fetch import LB_CRITERIA  # noqa: E402

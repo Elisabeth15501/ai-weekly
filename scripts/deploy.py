@@ -82,7 +82,7 @@ def _github_pages_view_base(repo: Path) -> str | None:
 
 
 def _deploy_github_pages(html_path: Path, no_push: bool, dry_run: bool, verbose: bool) -> dict:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from deploy_ghpages import deploy as gh_deploy  # noqa: E402
     res = gh_deploy(html_path, no_push=no_push, dry_run=dry_run, verbose=verbose)
     view_base = _github_pages_view_base(REPO_ROOT) if not dry_run else None

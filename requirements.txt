@@ -4,3 +4,8 @@ feedparser==6.0.13
 requests==2.34.2
 beautifulsoup4==4.15.0
 pytest==9.1.1
+# 以下为条件依赖（仅在对应功能启用时需要），同样钉版本以避免供应链漂移：
+#   cos-python-sdk-v5  -> import qcloud_cos    （--deploy-to tencent-cos 时启用）
+#   PySocks            -> import socks         （配置 SOCKS 代理 --proxy socks5:// 时启用）
+cos-python-sdk-v5==1.9.44
+PySocks==1.7.1

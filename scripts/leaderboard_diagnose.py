@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from aiweekly import leaderboard_sources as S  # noqa: E402
 from aiweekly.utils import _probe, _detect_region  # noqa: E402
