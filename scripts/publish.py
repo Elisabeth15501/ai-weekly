@@ -66,6 +66,43 @@ def _load(path: str | None) -> dict | None:
         return None
 
 
+def _safe_mtime(path: str | None) -> float | None:
+    """返回文件修改时间（epoch 秒）；不存在/异常返回 None。"""
+    if not path:
+        return None
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return None
+
+
+def _fmt_mtime(ts: float) -> str:
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+def _is_stale_insights(insights: dict, ins_path: str, news_path: str, news: dict) -> bool:
+    """判断传入的 insights.json 是否过期（回退风险）。
+
+    命中任一即视为过期（返回 True 并打印原因）：
+      1) insights.json 修改时间早于 news.json（内容未随本周刷新）；
+      2) insights.json 自带 week 字段且与 news.json 的 week 不一致。
+    仅当两者都无法判定时才放行。
+    """
+    ins_mt = _safe_mtime(ins_path)
+    news_mt = _safe_mtime(news_path)
+    if ins_mt and news_mt and ins_mt < news_mt:
+        print(f"  ⚠️ 过期守卫：insights.json 修改时间({_fmt_mtime(ins_mt)}) 早于 "
+              f"news.json({_fmt_mtime(news_mt)})，疑似历史周静态文件。")
+        return True
+    ins_week = insights.get("week")
+    news_week = (news or {}).get("week")
+    if ins_week and news_week and ins_week != news_week:
+        print(f"  ⚠️ 过期守卫：insights.json 的 week={ins_week} 与 "
+              f"news.json 的 week={news_week} 不一致（跨周静态文件）。")
+        return True
+    return False
+
+
 def _safe_score(item: dict) -> float:
     """从新闻条目安全解析 score（脏数据如 "N/A"、"high" 兜底为 0，不崩）。"""
     try:
@@ -155,7 +192,9 @@ def main() -> int:
     ap.add_argument("--news-json", required=True, help="news.json 路径")
     ap.add_argument("--insights-json", default=None,
                     help="insights.json 路径（可选；缺省时由本周新闻自动派生看点/关键词，"
-                         "与 generate_site.py 行为一致——静态 insights.json 已废弃，勿再传入）")
+                         "与 generate_site.py 行为一致——静态 insights.json 已废弃，勿再传入。"
+                         "若传入，脚本会做过期守卫：文件修改时间早于 news.json、或 week 与本周"
+                         "不一致时自动忽略并改走自动派生，避免「本周看点」回退到旧周）")
     ap.add_argument("--audience-json", default=None, help="audience_summary.json（可选，缺省用 insights.audience_summary）")
     ap.add_argument("--report-json", default=None, help="直接复用已生成的 report.json（跳过组装）")
     ap.add_argument("--chat-id", default=None, help="飞书目标群 chat_id（oc_xxx）；优先于环境变量与 feishu_target.json")
@@ -195,11 +234,23 @@ def main() -> int:
         if not news:
             print("❌ 缺少 news.json，无法组装报告。")
             return 1
-        # insights 缺省时由本周新闻自动派生（与 generate_site 一致）；派生失败则降级为空卡
+        # insights 缺省（或传入的静态文件已过期）时，由本周新闻自动派生
+        # （与 generate_site 一致）；派生失败则降级为空卡。
+        # 防回退守卫：静态 insights.json 常见于历史周（如 W36），一旦其修改时间早于
+        # news.json、或其 week 与本周不一致，即视为过期并丢弃，改走自动派生，
+        # 避免飞书卡片「本周看点」回退到旧周内容（见排查记录 Bug #68）。
+        insights = None
         if args.insights_json:
-            insights = _load(args.insights_json)
-        else:
-            insights = None
+            loaded = _load(args.insights_json)
+            if loaded is None:
+                print("  ⚠️ insights.json 读取失败，改由本周新闻自动派生看点。")
+            elif _is_stale_insights(loaded, args.insights_json, args.news_json, news):
+                # _is_stale_insights 内部已打印具体原因并告警
+                print("  ↪️ 已忽略过期的 insights.json，改由本周新闻自动派生看点。")
+            else:
+                insights = loaded
+
+        if insights is None:
             try:
                 from aiweekly import insights as INS
                 items = news.get("items") or []

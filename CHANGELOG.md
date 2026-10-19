@@ -20,6 +20,24 @@ v4.1.6 是 **展示名修正版**（内容形态与 4.1.5 完全一致，仅修 
 
 ---
 
+## [4.1.7] — 2026-10-19
+
+v4.1.7 是 **飞书卡片「本周看点」回退修复版**（针对实测 Bug：飞书推送的「每日看点」注入了历史周静态 insights.json 内容，与本周新闻错位）。
+
+### Fixed
+- **飞书卡片「本周看点」回退到旧周（Bug #68）**：`publish.py` 此前收到 `--insights-json` 时**无条件**采用该文件内容。一旦传入陈旧的静态 `insights.json`（如 W36 时期文件，mtime 2026-08-12），本周「本周看点 / 关键词 / 本周主线」整体回退为旧周内容，飞书卡片「每日看点」与本周新闻错位。现新增**过期守卫**：
+  - `insights.json` 修改时间早于 `news.json` → 判定为历史周静态文件，打印告警并丢弃，改由本周新闻自动派生；
+  - `insights.json` 自带 `week` 与 `news.json` 的 `week` 不一致 → 同样判定过期并丢弃；
+  - 仅两项都无法判定时才放行，确保「确为本周的 curated 文件」仍可被采用。
+  - 自动派生兜底沿用 `aiweekly.insights._auto_insights/_auto_keywords/_auto_lead`，与 `generate_site.py` 行为一致。
+- **配套清理**：工作区陈旧的 `insights.json`（2026-08-12，W36 时期）与 `insights_w36.json` 已重命名为 `*.ARCHIVED-*` 归档，避免被自动化误传入。`--insights-json` 本就已废弃（见 4.1.x 注释），建议不再传入。
+- **完整周报不可见（Bug #1）**：本地 gh-pages 此前因 `github.com:443` 周期性网络不可达未能推送，导致 `elisabeth15501.github.io/ai-weekly/AI_News_*.html` 404、飞书卡片「查看完整周报」按钮失效。本次已重新推送本地领先的 gh-pages 提交，恢复完整周报访问。
+
+### Changed
+- `scripts/publish.py`：`--insights-json` 帮助文案补充过期守卫说明；新增 `_safe_mtime` / `_fmt_mtime` / `_is_stale_insights` 辅助函数与惰性回退分支。
+
+---
+
 ## [4.1.5] — 2026-10-13
 
 v4.1.5 是 **安全审计整改版**（针对 ClawHub 4.1.4 安全扫描 `skillspector` / `clawscan` 标记的 HIGH / suspicious 项）。本次所有改动**不改变周报生成形态**，只收紧「发布/分发/调度」类工具的默认行为并校正能力声明，消除扫描器对「描述与代码行为不匹配（TP4）」的 247 条误报。
