@@ -1,6 +1,6 @@
 # Changelog
 
-本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.6 的全部变更。
+本文件记录 ai-weekly（AI 行业周报生成技能）从 1.0.0 到 4.1.8 的全部变更。
 
 > **关于版本说明**：`3.1.1` 是本技能的**首个正式公开发行版**（发布于 SkillHub）。
 > 此前的 `1.0.0`–`3.1.0` 为开发迭代历史，仅 `3.0.0`、`3.1.0` 在版本库中留有版本标记；
@@ -8,6 +8,22 @@
 > 所有早期版本的功能均已在 `3.1.1` 中可用。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [4.1.8] — 2026-10-26
+
+v4.1.8 是 **发布包安全门禁清零版**（针对 `skill-publish-gate` 在干净发布包上标记的 MEDIUM 项）。本次**不改变周报生成形态**，只让发布包在平台合规扫描下的判定从 NEEDS_FIX 回到 PASS。
+
+### Fixed
+- **发布包门禁 MEDIUM 清零**（干净包实测 PASS：0 blocker / 0 HIGH / 0 redline / 0 MEDIUM）：
+  - `sys.path.insert(0, …)` 改为基于 `__file__` 的精确自举写法（`scripts/publish.py` ×2、`deploy.py`、`refresh_snapshot.py`、`leaderboard_diagnose.py`），命中 `SEC-HIJACK-001` 的「参数内含 `__file__`」豁免语义，消除路径注入误判。
+  - `scripts/install_scheduler.py` 从发布包剔除（`.gitattributes export-ignore` + `.clawhubignore`），平台合规扫描不再把「注册系统级定时任务」识别为持久化（`SEC-PERSIST-001`）；该脚本仍在源码仓库提供，供需系统级兜底调度的用户自取，默认仅本地刷新、永不自动推送。
+  - `requirements.txt` 补钉条件依赖 `cos-python-sdk-v5==1.9.44` / `PySocks==1.7.1`，SCA 不再把这两个已声明依赖报为未钉版。
+  - `SKILL.md` 三处口径同步：能力清单移除发布包不含的 `install_scheduler.py`；调度条目改为「WorkBuddy automation 为发布包主路径，install_scheduler.py 源码仓库附带·发布包不含」，消除描述与实际包内容不一致。
+
+### Changed
+- **版本号对齐**：`manifest.json` 与 `references/SKILL_full.md` frontmatter 一并同步到 4.1.8（此前分别为 4.1.7 / 4.1.0，与 `SKILL.md` 不一致）。
 
 ---
 
