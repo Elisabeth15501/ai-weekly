@@ -356,6 +356,75 @@ def test_auto_insights_keeps_long_summary_analysis():
     assert "<img src=x" not in html
 
 
+# ---------- Phase 1：summary_full 消灭抓取层 [:300] 半句截断（数据层回归） ----------
+# 背景：抓取层 fetch_ai_news.py 把 summary 硬截到 300 字，W42 news.json 109 条里
+# 64 条 summary 恰好 300 字（半句被掐），看点正文因此在半句处戛然而止。
+# 修复：抓取层另外保留 summary_full（完整清洗后摘要），派生层 analysis 优先取它。
+_P1_BASE = (
+    "智东西10月18日消息，Astroscale 是一家以太空碎片清理起家的日本公司，"
+    "今日宣布完成新一轮融资，用于在轨服务与碎片清除能力的扩张。"
+    "本轮资金将用于研发新一代对接机构与推进系统，并计划明年开展首次商业化演示。"
+)
+
+
+def _p1_item(full: str) -> dict:
+    """构造一条「summary 已被抓取层截到 300 字、但 summary_full 保留全文」的新闻。"""
+    return {
+        "title": "Astroscale 完成新一轮融资，加码在轨服务与碎片清理",
+        "summary": full[:300],
+        "summary_full": full,
+        "url": "https://example.com/astroscale",
+        "source": "智东西",
+        "publishedAt": "2026-10-18T00:00:00Z",
+        "category": "industry",
+        "score": 1.0,
+    }
+
+
+def test_format_news_items_keeps_summary_full_intact():
+    """summary_full 恒不截断：卡片路径（truncate=True）与看点路径（truncate=False）
+    都必须拿到完整清洗后摘要；只有卡片用的 summary 才继续被压缩。"""
+    from aiweekly.news import format_news_items
+
+    full = _P1_BASE * 4
+    assert len(full) > 300
+    data = {"items": [_p1_item(full)]}
+
+    for truncate in (True, False):
+        items = format_news_items(data, truncate=truncate)
+        assert items[0]["summary_full"] == full, (
+            f"truncate={truncate} 时 summary_full 必须保留全文"
+        )
+    # 卡片用的 summary 仍走原压缩语义（本次改动不影响卡片）
+    assert len(format_news_items(data, truncate=True)[0]["summary"]) < len(full)
+
+
+def test_auto_insights_analysis_prefers_summary_full_over_300_cut():
+    """Phase 1 核心回归：analysis 必须取 summary_full 全文，
+    而不是抓取层 [:300] 截断出的半句残文。"""
+    full = _P1_BASE * 4
+    truncated = full[:300]
+    assert len(full) > 300
+    assert len(truncated) == 300
+
+    out = INS._auto_insights({"items": [_p1_item(full)]})
+    assert len(out) == 1
+    analysis = out[0]["analysis"]
+    assert analysis == full, "analysis 必须取 summary_full 全文，而非被掐断的 300 字"
+    assert analysis != truncated
+    assert len(analysis) > 300
+
+
+def test_auto_insights_falls_back_to_summary_without_summary_full():
+    """向后兼容：外部注入 / 旧版 news.json 没有 summary_full 时，退回 summary。"""
+    full = _P1_BASE * 4
+    item = _p1_item(full)
+    item.pop("summary_full")
+    out = INS._auto_insights({"items": [item]})
+    assert len(out) == 1
+    assert out[0]["analysis"] == item["summary"]
+
+
 def test_market_e_handles_none_without_crashing():
     assert MKT._e(None) == ""
     assert MKT._e(None, quote=True) == ""

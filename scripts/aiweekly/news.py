@@ -113,6 +113,9 @@ def format_news_items(api_data: dict, truncate: bool = True) -> list:
         items.append({
             "title": item.get("title", ""),
             "summary": _normalize_summary(item.get("summary", ""), truncate=truncate),
+            # summary_full：完整清洗后摘要，恒不截断（truncate 参数只作用于卡片用的 summary）。
+            # 供「本周看点」等需完整呈现的场景使用；无该字段时返回空串，由消费方退回 summary。
+            "summary_full": _normalize_summary(item.get("summary_full", ""), truncate=False),
             "url": item.get("url") or item.get("permalink", ""),
             "source": _normalize_source(item.get("source", "")),
             "publishedAt": item.get("publishedAt", ""),

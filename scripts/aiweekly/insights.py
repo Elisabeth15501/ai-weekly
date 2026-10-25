@@ -224,9 +224,11 @@ def _auto_insights(api_data: dict, top_n: int = 6) -> list:
         used_topics |= tkeys
         cat = it.get("category", "industry")
         kicker = _AUTO_KICKERS.get(cat, "行业")
-        summary = (it.get("summary") or "").strip()
+        # 优先取 summary_full（抓取层保留的完整清洗后摘要），从根上消灭 [:300] 半句截断；
+        # 无该字段时（外部注入 / 旧版 news.json）退回 summary，保证向后兼容。
         # UX: 用户要求「看点」信息全部出现，不做 160 字符截断。summary 本身已是 RSS 摘要，
         # 若原始摘要过长，由模板自然换行即可，不应在数据层人为掐断。
+        summary = (it.get("summary_full") or it.get("summary") or "").strip()
         # 基于类别给一句轻量编辑提示（明确为自动摘要，非人工深度洞察；即「对读者意味着什么」）
         hint = {
             "ai-models": "模型侧变动，往往直接决定你选型与成本。",

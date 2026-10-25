@@ -231,7 +231,12 @@ def fetch_via_rss(feed_url: str, max_items: int = 30,
                 if not title:
                     continue
                 raw = entry.get("summary") or entry.get("description") or ""
-                summary = BeautifulSoup(raw, "html.parser").get_text()[:300].strip()
+                # 「完整清洗后摘要」与「卡片用 300 字摘要」并存：
+                # 卡片本身有 CSS line-clamp 作显示兜底，沿用 300 字即可；
+                # summary_full 保留全文，供「本周看点」等需完整呈现的场景使用，
+                # 从根上消灭原先 [:300] 硬截断造成的半句被掐。
+                full_text = BeautifulSoup(raw, "html.parser").get_text().strip()
+                summary = full_text[:300].strip()
                 url = entry.get("link", "")
                 date = entry.get("published", entry.get("updated", ""))
                 parsed = parse_date_flexible(date)
@@ -249,6 +254,7 @@ def fetch_via_rss(feed_url: str, max_items: int = 30,
                 articles.append({
                     "title": title,
                     "summary": summary,
+                    "summary_full": full_text,
                     "url": url,
                     "source": feed_title,
                     "publishedAt": parsed.isoformat() if parsed else "",
@@ -310,9 +316,11 @@ def fetch_via_newsapi(query: str, from_date: str, to_date: str,
             title = a.get("title", "")
             if not title:
                 continue
+            desc = (a.get("description") or "").strip()
             out.append({
                 "title": title,
-                "summary": (a.get("description") or "")[:300],
+                "summary": desc[:300],
+                "summary_full": desc,
                 "url": a.get("url", ""),
                 "source": a.get("source", {}).get("name", "NewsAPI"),
                 "publishedAt": (parse_date_flexible(a.get("publishedAt", "")).isoformat()
